@@ -1,0 +1,43 @@
+[
+  {
+    "id": "125428448",
+    "url": "https://civitai.green/images/125428448",
+    "full_metadata_string": "(epic landscape:1.5), masterpiece, highres, high quality, highly detailed,,masterpiece, a landscape,         lushverdant, pastelskies, nimbusoft, ghiblume, soffione, horizonwhisper, miyazake, sharp detailed,( bright colors, rpg game art, landscape by Ivan Shishkin, art by Nicola Samori)\nNegative prompt: Overexposure, static, blurred details, subtitles, paintings, pictures, still, washed out, overall gray, worst quality, low quality, JPEG compression residue, ugly, mutilated, redundant fingers, poorly painted hands, poorly painted faces, deformed, disfigured, deformed limbs, fused fingers, stretched body, stretched waist, cluttered background, three legs, a lot of people in the background, upside down, slow motion, bad movements, unrealistic movements, stretching penis, distorted penis, crossed eyed, eye distortion. Loli, underage, Asian, anime, motion lines, cartoon motion effects, camera frame lines, anal sex, multiple panties, split panties,\nSteps: 30, CFG scale: 2.5, Sampler: DPM++ 2M Karras, Seed: 1394947889, Model: Juggernaut_XL_-_Ragnarok_by_RunDiffusion, width: 1040, height: 1520, originalSampler: dpmpp_2m",
+    "prompt": "(epic landscape:1.5), masterpiece, highres, high quality, highly detailed,,masterpiece, a landscape,         lushverdant, pastelskies, nimbusoft, ghiblume, soffione, horizonwhisper, miyazake, sharp detailed,( bright colors, rpg game art, landscape by Ivan Shishkin, art by Nicola Samori)",
+    "negative_prompt": "Overexposure, static, blurred details, subtitles, paintings, pictures, still, washed out, overall gray, worst quality, low quality, JPEG compression residue, ugly, mutilated, redundant fingers, poorly painted hands, poorly painted faces, deformed, disfigured, deformed limbs, fused fingers, stretched body, stretched waist, cluttered background, three legs, a lot of people in the background, upside down, slow motion, bad movements, unrealistic movements, stretching penis, distorted penis, crossed eyed, eye distortion. Loli, underage, Asian, anime, motion lines, cartoon motion effects, camera frame lines, anal sex, multiple panties, split panties,",
+    "cfgscale": "2.5",
+    "steps": "30",
+    "sampler": "DPM++ 2M KARRAS",
+    "seed": "1394947889",
+    "resources": {
+      "loras": [
+        {
+          "name": "Detail Tweaker XL",
+          "version": "v1.0",
+          "weight": "3"
+        },
+        {
+          "name": "Detailed Perfection style (Hands + Feet + Face + Body + All in one) XL + F1D + SD1.5 + Pony + Illu + zit + zib",
+          "version": "Perfection SDXL v1.0",
+          "weight": "1"
+        },
+        {
+          "name": "Dramatic Lighting Slider",
+          "version": "v1.0",
+          "weight": "0.5"
+        },
+        {
+          "name": "Tiny Things",
+          "version": "v1.0 Illustrious",
+          "weight": "1"
+        }
+      ],
+      "base_model": {
+        "name": "Juggernaut XL",
+        "version": "Ragnarok_by_RunDiffusion"
+      }
+    },
+    "image_url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/9a6b2c9a-c7a2-4808-bf0e-01bee605f87c/original=true,quality=90/0457001-(epic landscape15), masterpiece, highr-Juggernaut_XL_-_Ragnarok_by_RunDiffusion.jpeg",
+    "local_path": "image_125428448.jpg"
+  }
+]
