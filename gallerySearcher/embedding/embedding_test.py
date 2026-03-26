@@ -1,6 +1,7 @@
 import json
 import sys
 import os
+import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -27,8 +28,29 @@ def load_and_clean_data(file_path):
     df = pd.DataFrame(data)
     print(f"原始数据样本数: {len(df)}", flush=True)
     
-    # ... (rest of the cleaning) ...
+    # --- 新增: 提取 Checkpoint(Model) 和 LoRA 信息 ---
+    def extract_model(meta_str):
+        if pd.isna(meta_str): return 'UNKNOWN'
+        match = re.search(r'Model:\s*([^,]+)', str(meta_str))
+        return match.group(1).strip() if match else 'UNKNOWN'
+        
+    def extract_loras(meta_str):
+        if pd.isna(meta_str): return ''
+        loras = re.findall(r'<lora:([^:]+):', str(meta_str))
+        return ' '.join(loras)
+
+    if 'full_metadata_string' in df.columns:
+        df['model'] = df['full_metadata_string'].apply(extract_model)
+        df['loras'] = df['full_metadata_string'].apply(extract_loras)
+    else:
+        df['model'] = 'UNKNOWN'
+        df['loras'] = ''
+        
+    # 强化 Prompt: 将 LoRA 的名称融合进 prompt，引导 CLIP 捕获特定的概念语义
     df['prompt'] = df['prompt'].fillna('')
+    df['enhanced_prompt'] = df['prompt'] + " " + df['loras']
+    
+    # ... (rest of the cleaning) ...
     df['negative_prompt'] = df['negative_prompt'].fillna('')
     df['clipskip'] = df['clipskip'].fillna(2).astype(float)
     df['cfgscale'] = pd.to_numeric(df['cfgscale'], errors='coerce')
@@ -46,31 +68,56 @@ def build_features(df):
     """
     print("\n[阶段一] 正在使用 CLIP 模型提取文本特征 (这可能需要几秒钟)...", flush=True)
     model = SentenceTransformer('clip-ViT-B-32') 
-    prompt_emb = model.encode(df['prompt'].tolist(), show_progress_bar=True)
-    neg_prompt_emb = model.encode(df['negative_prompt'].tolist(), show_progress_bar=True)
-    text_features = np.hstack([prompt_emb, neg_prompt_emb])
-    print(f"原始文本特征维度 (正+负): {text_features.shape}", flush=True)
+    
+    # 【核心改动】：完全抛弃可能带来污染的 negative_prompt，仅编码正面意图与 LoRA
+    text_features = model.encode(df['enhanced_prompt'].tolist(), show_progress_bar=True)
+    print(f"原始文本特征维度 (仅正向+LoRA): {text_features.shape}", flush=True)
 
     print("\n[阶段二] 正在处理生成参数 (数值标准化 & 类别独热编码)...", flush=True)
     scaler = StandardScaler()
     num_features = scaler.fit_transform(df[['cfgscale', 'steps', 'clipskip']])
-    encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-    sampler_features = encoder.fit_transform(df[['sampler']])
+    
+    encoder_sampler = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+    sampler_features = encoder_sampler.fit_transform(df[['sampler']])
+    
+    # 【核心改动】：将 Checkpoint (Model) 作为独立的特征进行独热编码
+    encoder_model = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+    model_features = encoder_model.fit_transform(df[['model']])
     
     print(f"数值特征维度: {num_features.shape}", flush=True)
     print(f"类别特征 (Sampler) 维度: {sampler_features.shape}", flush=True)
-    return text_features, num_features, sampler_features, scaler, encoder
+    print(f"类别特征 (Model) 维度: {model_features.shape}", flush=True)
+    
+    return text_features, num_features, sampler_features, model_features, scaler, encoder_sampler
 
-def perform_two_stage_pca(text_features, num_features, sampler_features, final_dim=8):
+def perform_two_stage_pca(text_features, num_features, sampler_features, model_features, final_dim=8):
     """
-    执行两阶段 PCA 降维
+    执行两阶段 PCA 降维，并加入特征权重平衡
     """
     print(f"\n[阶段三] 执行两阶段 PCA 降维 (目标维度: {final_dim})...", flush=True)
     n_text_components = min(20, text_features.shape[0], text_features.shape[1])
     pca_text = PCA(n_components=n_text_components)
     text_reduced = pca_text.fit_transform(text_features)
     print(f"第一阶段：文本特征被压缩至 {n_text_components} 维", flush=True)
-    combined_features = np.hstack([text_reduced, num_features, sampler_features])
+    
+    # 【核心修复】：模态权重平衡！
+    # 1. 消除文本特征在第一阶段降维后的数值衰减，拉回到同一起跑线
+    scaler_text = StandardScaler()
+    text_reduced_scaled = scaler_text.fit_transform(text_reduced)
+    
+    # 2. 赋予不同模态显式的业务权重 (文本语义决定画面内容，必须占主导)
+    TEXT_WEIGHT = 4.0     # 强化语义特征 (包含 Prompt 和 LoRA，占主导)
+    MODEL_WEIGHT = 3.0    # 强化 Checkpoint 特征 (极大地影响画风，如二次元 vs 写实)
+    PARAM_WEIGHT = 0.5    # 弱化数值参数 (CFG/Steps)
+    SAMPLER_WEIGHT = 0.5  # 弱化采样器特征
+    
+    combined_features = np.hstack([
+        text_reduced_scaled * TEXT_WEIGHT, 
+        model_features * MODEL_WEIGHT,
+        num_features * PARAM_WEIGHT, 
+        sampler_features * SAMPLER_WEIGHT
+    ])
+    
     n_final_components = min(final_dim, combined_features.shape[0], combined_features.shape[1])
     pca_final = PCA(n_components=n_final_components)
     pbo_space = pca_final.fit_transform(combined_features)
@@ -85,7 +132,9 @@ def simulate_pbo_retrieval(pbo_space, df, target_index=0, top_k=5):
     """
     print("\n[阶段四] 模拟 PBO 预测后的 KNN 检索...", flush=True)
     predicted_optimal_point = pbo_space[target_index].reshape(1, -1) 
-    knn = NearestNeighbors(n_neighbors=top_k, metric='euclidean')
+    
+    # 【核心改动】：改用余弦相似度 (Cosine) 计算语义距离
+    knn = NearestNeighbors(n_neighbors=top_k, metric='cosine')
     knn.fit(pbo_space)
     distances, indices = knn.kneighbors(predicted_optimal_point)
     print(f"\n==== 为 LLM Agent 准备的 Top {top_k} 参考 Metadata ====\n", flush=True)
@@ -96,12 +145,15 @@ def simulate_pbo_retrieval(pbo_space, df, target_index=0, top_k=5):
             "distance": round(distances[0][i], 4),
             "id": row.get('id', 'N/A'),
             "prompt": row['prompt'][:100] + "..." if len(row['prompt']) > 100 else row['prompt'],
+            "model": row.get('model', 'UNKNOWN'),
+            "loras": row.get('loras', ''),
             "cfgscale": row['cfgscale'],
             "steps": row['steps'],
             "sampler": row['sampler']
         }
         top_metadata_for_llm.append(metadata_dict)
-        print(f"Rank {i+1} (距离: {metadata_dict['distance']}): ID {metadata_dict['id']}", flush=True)
+        print(f"Rank {i+1} (余弦距离: {metadata_dict['distance']}): ID {metadata_dict['id']}", flush=True)
+        print(f"  - Model: {metadata_dict['model']} | LoRAs: {metadata_dict['loras']}", flush=True)
         print(f"  - Prompt: {metadata_dict['prompt']}", flush=True)
         print(f"  - CFG: {metadata_dict['cfgscale']} | Steps: {metadata_dict['steps']} | Sampler: {metadata_dict['sampler']}", flush=True)
         print("-" * 40, flush=True)
@@ -227,6 +279,7 @@ def run_pbo_loop(pbo_space, df, iterations=10, batch_size=4):
     print(f"\n==== PBO 预测的【最佳生成参数组合】参考 ====", flush=True)
     row = df.iloc[best_idx]
     print(f"ID: {row.get('id', 'N/A')}", flush=True)
+    print(f"Model: {row.get('model', 'UNKNOWN')} | LoRAs: {row.get('loras', '')}", flush=True)
     print(f"Prompt: {row['prompt']}", flush=True)
     print(f"CFG: {row['cfgscale']} | Steps: {row['steps']} | Sampler: {row['sampler']}", flush=True)
     print("============================================\n", flush=True)
@@ -240,8 +293,8 @@ if __name__ == "__main__":
     
     try:
         df = load_and_clean_data(file_path)
-        text_features, num_features, sampler_features, scaler, encoder = build_features(df)
-        pbo_space, pca_text, pca_final = perform_two_stage_pca(text_features, num_features, sampler_features, final_dim=8)
+        text_features, num_features, sampler_features, model_features, scaler, encoder = build_features(df)
+        pbo_space, pca_text, pca_final = perform_two_stage_pca(text_features, num_features, sampler_features, model_features, final_dim=8)
         
         # 步骤 4: 随机选择一个 Target 目标图片作为参考
         target_index = np.random.randint(0, len(df))
