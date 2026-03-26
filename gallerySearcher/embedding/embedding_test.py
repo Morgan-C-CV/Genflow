@@ -105,6 +105,9 @@ def simulate_pbo_retrieval(pbo_space, df, target_index=0, top_k=5):
         print(f"  - Prompt: {metadata_dict['prompt']}", flush=True)
         print(f"  - CFG: {metadata_dict['cfgscale']} | Steps: {metadata_dict['steps']} | Sampler: {metadata_dict['sampler']}", flush=True)
         print("-" * 40, flush=True)
+        
+    print(f"\n[最终展示] 正在根据优化结果显示 Top {top_k} 匹配图片...", flush=True)
+    display_images(df, indices[0].tolist(), title=f"Top {top_k} Recommended Images", filename="pbo_results_top5.png")
     return top_metadata_for_llm
 
 def display_images(df, indices, title="Images", filename="pbo_display.png"):
@@ -157,37 +160,65 @@ def run_pbo_loop(pbo_space, df, iterations=10, batch_size=4):
     gp = GaussianProcessRegressor(kernel=kernel, alpha=0.1, n_restarts_optimizer=5)
     X_train = []
     y_train = []
+    
+    kappa = 1.5 # 默认 UCB 探索系数
+    skip_triggered = False # 标记上一轮是否跳过
+    
     for i in range(iterations):
         print(f"\n--- 第 {i+1} / {iterations} 轮 ---", flush=True)
+        
+        if skip_triggered:
+            # 如果上一轮跳过了，本轮大幅增加探索性 (kappa=5.0)
+            cur_kappa = 5.0
+            print(">>> 强制探索模式激活：正致力于寻找完全不同的图片区域...", flush=True)
+        else:
+            cur_kappa = kappa
+            
         if len(X_train) < 2:
             candidate_indices = np.random.choice(len(pbo_space), batch_size, replace=False).tolist()
         else:
             gp.fit(np.array(X_train), np.array(y_train))
             mu, sigma = gp.predict(pbo_space, return_std=True)
-            ucb = mu + 1.5 * sigma
+            ucb = mu + cur_kappa * sigma
             candidate_indices = np.argsort(ucb)[-batch_size:][::-1].tolist()
-        display_images(df, candidate_indices, title=f"Round {i+1} Candidates (Interactive)", filename=f"pbo_round_{i+1}.png")
+            
+        display_images(df, candidate_indices, title=f"Round {i+1} Candidates (Interactive)", filename=f"pbo_rounds.png")
         print(f"请对以下 {batch_size} 张图片提供偏好反馈 (查看弹出窗口):", flush=True)
         for idx, c_idx in enumerate(candidate_indices):
             row = df.iloc[c_idx]
             print(f"  [{idx+1}] ID: {row.get('id', 'N/A')} | Prompt: {row['prompt'][:80]}...", flush=True)
+            
+        # 3. 获取反馈
         while True:
             try:
-                line = input(f"请输入【最喜欢】和【最不喜欢】的序号 (例如: 1 4): ")
+                line = input(f"请输入【最喜欢】和【最不喜欢】的序号 (例如: 1 4), 或输入 0 跳过本轮: ")
+                line = line.strip()
+                if line == '0':
+                    # 用户跳过本轮
+                    for c_idx in candidate_indices:
+                        X_train.append(pbo_space[c_idx])
+                        y_train.append(0.0) # 全局惩罚：这些全都不行
+                    skip_triggered = True
+                    print(f"已跳过本轮。已记录 4 个惩罚点 (全是 0.0)。", flush=True)
+                    break 
+                
                 parts = line.split()
                 if len(parts) == 2:
                     best_idx = int(parts[0]) - 1
                     worst_idx = int(parts[1]) - 1
                     if 0 <= best_idx < batch_size and 0 <= worst_idx < batch_size:
+                        # 正常反馈
+                        for idx, c_idx in enumerate(candidate_indices):
+                            X_train.append(pbo_space[c_idx])
+                            if idx == best_idx: y_train.append(1.0)
+                            elif idx == worst_idx: y_train.append(0.0)
+                            else: y_train.append(0.5)
+                        skip_triggered = False
                         break
-                print(f"请输入两个 1 到 {batch_size} 之间的数字，用空格隔开。", flush=True)
+                print(f"请输入两个 1 到 {batch_size} 之间的数字，或输入 0 跳过。", flush=True)
             except ValueError:
-                print("请输入有效的数字。", flush=True)
-        for idx, c_idx in enumerate(candidate_indices):
-            X_train.append(pbo_space[c_idx])
-            if idx == best_idx: y_train.append(1.0)
-            elif idx == worst_idx: y_train.append(0.0)
-            else: y_train.append(0.5)
+                print("请输入有效的数字或 0。", flush=True)
+        
         print(f"反馈已记录。当前已收集 {len(X_train)} 个数据点。", flush=True)
     print("\n[优化结束] 正在计算最终推荐结果...", flush=True)
     gp.fit(np.array(X_train), np.array(y_train))
@@ -212,8 +243,10 @@ if __name__ == "__main__":
         text_features, num_features, sampler_features, scaler, encoder = build_features(df)
         pbo_space, pca_text, pca_final = perform_two_stage_pca(text_features, num_features, sampler_features, final_dim=8)
         
-        print("\n[开始前] 显示本次优化的目标/参考图片...", flush=True)
-        display_images(df, [0], title="Target Image (Goal Reference)", filename="pbo_target.png")
+        # 步骤 4: 随机选择一个 Target 目标图片作为参考
+        target_index = np.random.randint(0, len(df))
+        print(f"\n[开始前] 随机选择了索引为 {target_index} 的图片作为本次优化的参考目标...", flush=True)
+        display_images(df, [target_index], title="Target Image (Goal Reference)", filename="pbo_target.png")
         input("查看完目标图片后，按回车开始 PBO 循环...")
         
         best_pbo_index = run_pbo_loop(pbo_space, df, iterations=10, batch_size=4)
@@ -221,7 +254,7 @@ if __name__ == "__main__":
         print("\n[最终结果] 显示 PBO 找到的最佳图片...", flush=True)
         display_images(df, [best_pbo_index], title="Final Optimized Result", filename="pbo_final.png")
         
-        simulate_pbo_retrieval(pbo_space, df, target_index=best_pbo_index, top_k=3)
+        simulate_pbo_retrieval(pbo_space, df, target_index=best_pbo_index, top_k=5)
         
         print("\n🎉 PBO 流程演示完成！", flush=True)
     except FileNotFoundError:
