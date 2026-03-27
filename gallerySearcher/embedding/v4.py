@@ -216,8 +216,9 @@ def run_pbo_loop(pbo_space, df, iterations=10, batch_size=4):
     kappa_base = 1.5 # 基础探索系数
     consecutive_skips = 0 # 连续跳过次数
     
-    for i in range(iterations):
-        print(f"\n--- 第 {i+1} / {iterations} 轮 ---", flush=True)
+    current_iter = 0
+    while current_iter < iterations:
+        print(f"\n--- 第 {current_iter+1} / {iterations} 轮 ---", flush=True)
         
         # 动态调大探索系数 kappa
         cur_kappa = kappa_base + (2.5 * consecutive_skips)
@@ -266,7 +267,7 @@ def run_pbo_loop(pbo_space, df, iterations=10, batch_size=4):
                     candidate_indices.append(best_idx_in_pool)
                     top_k_indices.remove(best_idx_in_pool)
             
-        display_images(df, candidate_indices, title=f"Round {i+1} Candidates (Interactive)", filename=f"pbo_rounds.png")
+        display_images(df, candidate_indices, title=f"Round {current_iter+1} Candidates (Interactive)", filename=f"pbo_rounds.png")
         print(f"请对以下 {batch_size} 张图片提供偏好反馈 (查看弹出窗口):", flush=True)
         for idx, c_idx in enumerate(candidate_indices):
             row = df.iloc[c_idx]
@@ -278,12 +279,13 @@ def run_pbo_loop(pbo_space, df, iterations=10, batch_size=4):
                 line = input(f"请输入【最喜欢】和【最不喜欢】的序号 (例如: 1 4), 或输入 0 跳过本轮: ")
                 line = line.strip()
                 if line == '0':
-                    # 用户跳过本轮
+                    # 用户跳过本轮 (不占用优化轮次)
                     consecutive_skips += 1
                     for c_idx in candidate_indices:
                         X_train.append(pbo_space[c_idx])
                         y_train.append(0.0) # 全局惩罚：这些全都不行
-                    print(f"已跳过本轮。累计连续跳过 {consecutive_skips} 次，已记录惩罚点。", flush=True)
+                    print(f"已跳过本轮。累计连续跳过 {consecutive_skips} 次，已记录惩罚点 (本轮不计入总轮次)。", flush=True)
+                    gp.fit(np.array(X_train), np.array(y_train)) # 强制更新模型
                     break 
                 
                 parts = line.split()
@@ -298,6 +300,7 @@ def run_pbo_loop(pbo_space, df, iterations=10, batch_size=4):
                             if idx == best_idx: y_train.append(1.0)
                             elif idx == worst_idx: y_train.append(0.0)
                             else: y_train.append(0.5)
+                        current_iter += 1 # 只有正常反馈才进入下一轮
                         break
                 print(f"请输入两个 1 到 {batch_size} 之间的数字，或输入 0 跳过。", flush=True)
             except ValueError:
