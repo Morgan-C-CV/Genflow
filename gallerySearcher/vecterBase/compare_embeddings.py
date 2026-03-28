@@ -2,6 +2,7 @@ import sys
 import json
 import os
 import requests
+import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,6 +18,14 @@ SUPABASE_KEY = "sb_publishable_jYjPubXkv_TrVgzlQGMljw_cKjn8zx0"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 GALLERY_DIR = '/Users/mgccvmacair/Myproject/Academic/Genflow/spider/civitai_gallery'
+OUTPUT_DIR = '/Users/mgccvmacair/Myproject/Academic/Genflow/gallerySearcher/vecterBase/comparison_rounds'
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def fetch_all_ids(table_name="image_embeddings"):
+    print(f"Fetching all IDs from {table_name}...")
+    res = supabase.table(table_name).select("id").execute()
+    return [int(row['id']) for row in res.data]
 
 def fetch_vectors(ids, table_name):
     print(f"Fetching vectors from {table_name} for IDs: {ids}")
@@ -41,11 +50,8 @@ def fetch_vectors(ids, table_name):
 
 def load_image(label, meta, zoom=0.15):
     img = None
-    # Priority 1: Check standard local naming image_{id}.jpg
     local_filename_standard = f"image_{label}.jpg"
     full_path_standard = os.path.join(GALLERY_DIR, local_filename_standard)
-    
-    # Priority 2: Check metadata local_path
     local_path_meta = meta.get('local_path')
     
     try:
@@ -67,95 +73,97 @@ def load_image(label, meta, zoom=0.15):
     except Exception as e:
         print(f"Error loading image for {label}: {e}")
     
-    # Return a placeholder if image fails to load
     placeholder = np.ones((100, 100, 3), dtype=np.uint8) * 200 # Light gray
     return OffsetImage(placeholder, zoom=zoom)
 
-def plot_similarity_matrix(vectors, labels, metadata, title, filename):
-    if len(vectors) == 0:
-        print(f"No vectors to plot for {title}")
-        return
-        
-    similarity = cosine_similarity(vectors)
-    n = len(labels)
-    
-    # Create figure with more space for images
-    fig, ax = plt.subplots(figsize=(14, 12))
-    im = ax.imshow(similarity, cmap='YlGnBu')
-    
-    # Set tick positions
-    ax.set_xticks(np.arange(n))
-    ax.set_yticks(np.arange(n))
-    
-    # Hide default tick labels
-    ax.set_xticklabels([])
-    ax.set_yticklabels([])
-    
-    # Add images and text to axes
+def add_images_to_axis(ax, labels, metadata, n, zoom=0.25):
     for i in range(n):
         # Y-axis images (left side)
-        oi_y = load_image(labels[i], metadata[i], zoom=0.35)
-        # Position image to the left of the matrix
-        ab_y = AnnotationBbox(oi_y, (-0.1, i), xybox=(-60, 0), 
+        oi_y = load_image(labels[i], metadata[i], zoom=zoom)
+        ab_y = AnnotationBbox(oi_y, (-0.1, i), xybox=(-45, 0), 
                               frameon=True, xycoords='data', boxcoords="offset points",
                               pad=0.1, arrowprops=None)
         ax.add_artist(ab_y)
         
         # X-axis images (bottom side)
-        oi_x = load_image(labels[i], metadata[i], zoom=0.35)
-        # Position image below the matrix
-        ab_x = AnnotationBbox(oi_x, (i, n-0.9), xybox=(0, -80), 
+        oi_x = load_image(labels[i], metadata[i], zoom=zoom)
+        ab_x = AnnotationBbox(oi_x, (i, n-0.9), xybox=(0, -60), 
                               frameon=True, xycoords='data', boxcoords="offset points",
                               pad=0.1, arrowprops=None)
         ax.add_artist(ab_x)
         
         # Add ID labels
-        ax.text(-1.4, i, str(labels[i]), va='center', ha='right', fontsize=9, fontweight='bold')
-        ax.text(i, n+0.5, str(labels[i]), va='top', ha='center', fontsize=9, fontweight='bold', rotation=45)
+        ax.text(-1.1, i, str(labels[i]), va='center', ha='right', fontsize=8, fontweight='bold')
+        ax.text(i, n+0.4, str(labels[i]), va='top', ha='center', fontsize=8, fontweight='bold', rotation=45)
 
-    # Loop over data dimensions and create text annotations inside the matrix
-    for i in range(n):
-        for j in range(n):
-            ax.text(j, i, f"{similarity[i, j]:.2f}",
-                    ha="center", va="center", color="black", fontsize=11, weight='bold')
+def plot_side_by_side(v4_data, v5_data, round_num, filename):
+    v4_vectors, v4_ids, v4_meta = v4_data
+    v5_vectors, v5_ids, v5_meta = v5_data
     
-    ax.set_title(title, pad=50, fontsize=16, fontweight='bold')
-    
-    # Explicitly set axis limits to ensure images aren't cut off
-    ax.set_xlim(-1.5, n - 0.5)
-    ax.set_ylim(n - 0.5, -0.5)
-    
-    # Adjust layout to accommodate the outer images
-    plt.subplots_adjust(left=0.25, bottom=0.25, top=0.9)
-    
-    # Add colorbar
-    cbar = plt.colorbar(im, fraction=0.046, pad=0.04)
-    cbar.ax.set_ylabel('Cosine Similarity', rotation=-90, va="bottom")
-    
-    plt.savefig(filename, dpi=150, bbox_inches='tight')
-    print(f"Matrix saved to {filename}")
+    if len(v4_vectors) == 0 or len(v5_vectors) == 0:
+        print(f"Skipping round {round_num}: Missing data")
+        return
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 compare_embeddings.py <id1> <id2> <id3> ...")
-        # Default IDs for demo
-        input_ids = [125428448, 6399138, 124624786, 121820705, 125433047]
-    else:
-        input_ids = [int(x) for x in sys.argv[1:]]
-        
-    print(f"Comparing embeddings for IDs: {input_ids}")
+    n = len(v4_ids)
+    v4_sim = cosine_similarity(v4_vectors)
+    v5_sim = cosine_similarity(v5_vectors)
     
-    # Fetch v4 vectors
-    v4_vectors, v4_ids, v4_meta = fetch_vectors(input_ids, "image_embeddings_v4")
-    # Fetch v5 vectors
-    v5_vectors, v5_ids, v5_meta = fetch_vectors(input_ids, "image_embeddings")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(24, 12))
     
     # Plot v4
-    plot_similarity_matrix(v4_vectors, v4_ids, v4_meta, "v4 Embedding Similarity Matrix", "v4_similarity.png")
-    # Plot v5
-    plot_similarity_matrix(v5_vectors, v5_ids, v5_meta, "v5 Embedding Similarity Matrix", "v5_similarity.png")
+    im1 = ax1.imshow(v4_sim, cmap='YlGnBu')
+    ax1.set_title(f"Round {round_num}: v4 Similarity Matrix", pad=50, fontsize=16, fontweight='bold')
+    ax1.set_xticks(np.arange(n))
+    ax1.set_yticks(np.arange(n))
+    ax1.set_xticklabels([])
+    ax1.set_yticklabels([])
+    add_images_to_axis(ax1, v4_ids, v4_meta, n)
     
-    plt.show()
+    # Plot v5
+    im2 = ax2.imshow(v5_sim, cmap='YlGnBu')
+    ax2.set_title(f"Round {round_num}: v5 Similarity Matrix", pad=50, fontsize=16, fontweight='bold')
+    ax2.set_xticks(np.arange(n))
+    ax2.set_yticks(np.arange(n))
+    ax2.set_xticklabels([])
+    ax2.set_yticklabels([])
+    add_images_to_axis(ax2, v5_ids, v5_meta, n)
+    
+    # Add text annotations
+    for i in range(n):
+        for j in range(n):
+            ax1.text(j, i, f"{v4_sim[i, j]:.2f}", ha="center", va="center", color="black", fontsize=10, weight='bold')
+            ax2.text(j, i, f"{v5_sim[i, j]:.2f}", ha="center", va="center", color="black", fontsize=10, weight='bold')
+            
+    # Set limits and adjust layout
+    for ax in [ax1, ax2]:
+        ax.set_xlim(-1.2, n - 0.5)
+        ax.set_ylim(n - 0.5, -0.5)
+    
+    plt.subplots_adjust(left=0.1, right=0.9, bottom=0.2, top=0.85, wspace=0.3)
+    
+    # Add colorbars
+    fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+    fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+    
+    plt.savefig(filename, dpi=120, bbox_inches='tight')
+    plt.close(fig)
+    print(f"Round {round_num} comparison saved to {filename}")
+
+def main():
+    all_ids = fetch_all_ids()
+    if len(all_ids) < 5:
+        print("Not enough IDs in database to pick 5 random.")
+        return
+        
+    for r in range(1, 11):
+        print(f"\n--- Starting Round {r} ---")
+        input_ids = random.sample(all_ids, 5)
+        
+        v4_data = fetch_vectors(input_ids, "image_embeddings_v4")
+        v5_data = fetch_vectors(input_ids, "image_embeddings")
+        
+        filename = os.path.join(OUTPUT_DIR, f"comparison_round_{r}.png")
+        plot_side_by_side(v4_data, v5_data, r, filename)
 
 if __name__ == "__main__":
     main()

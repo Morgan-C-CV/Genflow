@@ -1,0 +1,9 @@
+{
+  "prompt": "Travel poster, vintage aesthetic, Lana Del Rey with signature cat-eye makeup and voluminous 60s hair, retro color palette, nostalgic atmosphere, stylized illustration, elegant typography, text: 'Lana Del Rey' at the bottom, soft grain, mid-century print style.",
+  "negative_prompt": "photorealistic, modern, digital art, blurry, distorted features, bad anatomy, low quality, messy lines, watermark, signature.",
+  "cfgscale": 5.0,
+  "steps": 40,
+  "sampler": "DPM++ 3M SDE EXPONENTIAL",
+  "style": "Vintage travel poster, stylized illustration, retro aesthetic, mid-century graphic design",
+  "loras": "VintageTravelPoster01a_CE_SDXL_64x32x120x2bOT"
+}
