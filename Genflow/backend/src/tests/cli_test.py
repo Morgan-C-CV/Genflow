@@ -80,20 +80,22 @@ def main():
     input(f"\nTarget image saved to 'pbo_target.png'. Press Enter to start the PBO loop...")
 
     # 2. Interactive PBO Loop
-    iterations = 3
+    iterations = 10
     batch_size = 4
     X_train = []
     y_train = []
+    consecutive_skips = 0
     
     print(f"\nStarting Interactive PBO Loop ({iterations} rounds)...")
     
-    for r in range(iterations):
-        print(f"\n--- Round {r+1} / {iterations} ---")
-        candidate_indices = search_engine.run_pbo_round(X_train, y_train, batch_size=batch_size)
+    current_iter = 0
+    while current_iter < iterations:
+        print(f"\n--- Round {current_iter+1} / {iterations} ---")
+        candidate_indices = search_engine.run_pbo_round(X_train, y_train, batch_size=batch_size, consecutive_skips=consecutive_skips)
         
         # Display candidates
         filename = f"pbo_round.png"
-        display_images(df, candidate_indices, title=f"Round {r+1} Candidates", gallery_dir=settings.GALLERY_DIR, filename=filename)
+        display_images(df, candidate_indices, title=f"Round {current_iter+1} Candidates", gallery_dir=settings.GALLERY_DIR, filename=filename)
         
         print(f"Please provide feedback for the following {batch_size} images (Check popup window):")
         for idx, c_idx in enumerate(candidate_indices):
@@ -105,9 +107,11 @@ def main():
                 line = input(f"Enter the numbers for [Best] and [Worst] (e.g., 1 4), or enter 0 to skip: ")
                 line = line.strip()
                 if line == '0':
+                    consecutive_skips += 1
                     for c_idx in candidate_indices:
                         X_train.append(pbo_space[c_idx])
                         y_train.append(0.0)
+                    print(f"Round skipped. Total consecutive skips: {consecutive_skips}. Penalty recorded (This round is not counted).", flush=True)
                     break
                 
                 parts = line.split()
@@ -115,11 +119,13 @@ def main():
                     best_idx = int(parts[0]) - 1
                     worst_idx = int(parts[1]) - 1
                     if 0 <= best_idx < batch_size and 0 <= worst_idx < batch_size:
+                        consecutive_skips = 0
                         for idx, c_idx in enumerate(candidate_indices):
                             X_train.append(pbo_space[c_idx])
                             if idx == best_idx: y_train.append(1.0)
                             elif idx == worst_idx: y_train.append(0.0)
                             else: y_train.append(0.5)
+                        current_iter += 1
                         break
                 print(f"Please enter two numbers between 1 and {batch_size}, or enter 0 to skip.")
             except ValueError:
