@@ -1,98 +1,205 @@
+"""
+LLM Repository — Agent-based design with KV Cache optimization.
+
+Architecture:
+    1. Static system instructions are set ONCE at model construction time,
+       so the Gemini server can cache their KV states across all requests
+       (prefix caching / automatic KV cache reuse).
+    2. Each call only sends the dynamic user-turn content, maximizing
+       cache hit rate on the invariant prefix.
+    3. Two specialized agents (GenerativeModel instances) are created:
+       - summary_agent:  structured Markdown analysis
+       - generation_agent: strict JSON metadata generation
+       Each has its own frozen system_instruction, enabling the server
+       to maintain a dedicated KV cache per agent role.
+"""
+
+import json
 import google.generativeai as genai
+from google.generativeai.types import GenerationConfig
 from app.core.config import settings
 
+
+# ──────────────────────────────────────────────
+#  Static System Instructions  (frozen → KV cached)
+# ──────────────────────────────────────────────
+
+_SUMMARY_SYSTEM_INSTRUCTION = """\
+You are a senior AI-generated-art analyst.
+
+## Role
+Analyze batches of Stable Diffusion / SDXL image-generation metadata and produce
+a structured Markdown report.
+
+## Output Structure (Mandatory)
+1. **Visual Themes & Concepts** — Summarize dominant subjects, moods, color
+   palettes, and artistic references found across the prompts.
+2. **Technical Parameter Analysis** — Compare Model (checkpoint), CFG Scale,
+   Steps, Sampler, LoRAs, and Clip-Skip values. Highlight patterns and outliers.
+3. **Similarity Rationale** — Explain why these results cluster together in our
+   embedding search space (prompt overlap, parameter uniformity, LoRA sharing, etc.).
+
+## Rules
+- Respond ONLY in well-structured Markdown with headings and bullet points.
+- Do NOT include any JSON, code fences, or raw data dumps.
+- Keep the analysis concise but insightful (300-600 words).
+"""
+
+_GENERATION_SYSTEM_INSTRUCTION = """\
+You are a world-class Stable Diffusion Prompt Engineer.
+
+## Role
+Given a set of reference image metadata and a user's creative intent, synthesize
+a NEW, production-ready metadata object that can be fed directly into a Stable
+Diffusion pipeline.
+
+## T2I Engineering Standards
+1. **Prompt Architecture** (order matters for attention):
+   Subject → Style / Medium → Lighting → Color Palette → Composition →
+   Artist References → Quality Boosters (masterpiece, best quality, 8k, ultra-detailed).
+2. **Emphasis Syntax**: Use `(keyword:weight)` for fine control, e.g. `(cinematic lighting:1.3)`.
+   Keep weights in [0.5, 1.5]; avoid extreme values.
+3. **LoRA Integration**: Embed as `<lora:Name:Weight>` INSIDE the prompt string.
+   Choose LoRAs that appear in ≥2 references OR that are clearly relevant to the intent.
+4. **Negative Prompt**: Cover structural artifacts (deformed, bad anatomy, extra limbs),
+   quality issues (blurry, low quality, jpeg artifacts, watermark, text),
+   and style contradictions (e.g. "anime" if references are photorealistic).
+5. **Parameter Selection**:
+   - CFG Scale: match the reference median; typical range 2-8.
+   - Steps: match references; typical sweet-spot 20-40.
+   - Sampler: inherit from the majority reference; keep all-caps format.
+   - Clip Skip: inherit from references; default "2" for SDXL.
+   - Seed: generate a plausible random 10-digit number string.
+   - Model: pick the checkpoint that appears most frequently in references.
+
+## Output Schema (strict JSON, no wrapper)
+```
+{
+  "prompt": "...",
+  "negative_prompt": "...",
+  "cfgscale": "...",
+  "steps": "...",
+  "sampler": "...",
+  "seed": "...",
+  "model": "...",
+  "clipskip": "...",
+  "style": "...",
+  "lora": "...",
+  "full_metadata_string": "..."
+}
+```
+- All values are **strings**.
+- `style`: comma-separated aesthetic keywords extracted from the final prompt.
+- `lora`: comma-separated friendly LoRA names (no version hashes). "none" if unused.
+- `full_metadata_string`: Standard A1111/ComfyUI format summary.
+
+## Rules
+- Return ONLY the raw JSON object.
+- Do NOT wrap it in Markdown code fences or add any commentary.
+"""
+
+
 class LLMRepository:
+    """
+    Repository for LLM interactions.
+
+    Design Decisions (KV Cache Optimization):
+        • system_instruction is set at GenerativeModel construction time.
+          Gemini's server-side prefix caching will store the KV states for
+          these static tokens and reuse them across every request, saving
+          both latency and cost on the invariant prefix.
+        • Two separate model instances are used so each agent's system prompt
+          gets its own dedicated cache slot — no cache eviction when switching
+          between summary and generation tasks.
+        • Dynamic content (references + user intent) is passed only in the
+          user turn of generate_content(), keeping the cached prefix stable.
+    """
+
     def __init__(self):
         genai.configure(api_key=settings.GOOGLE_API_KEY)
-        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
 
-    def generate_summary(self, metadata_list: list):
-        prompt = self._build_prompt(metadata_list)
-        response = self.model.generate_content(prompt)
+        # Agent 1: Summary analysis (Markdown output)
+        self._summary_agent = genai.GenerativeModel(
+            model_name=settings.GEMINI_MODEL,
+            system_instruction=_SUMMARY_SYSTEM_INSTRUCTION,
+        )
+
+        # Agent 2: Metadata generation (strict JSON output)
+        self._generation_agent = genai.GenerativeModel(
+            model_name=settings.GEMINI_MODEL,
+            system_instruction=_GENERATION_SYSTEM_INSTRUCTION,
+            generation_config=GenerationConfig(
+                response_mime_type="application/json",
+                temperature=0.7,
+            ),
+        )
+
+    # ── Public API ──────────────────────────────
+
+    def generate_summary(self, metadata_list: list) -> str:
+        """Analyze a list of search results and return a Markdown report."""
+        user_message = self._build_summary_user_message(metadata_list)
+        response = self._summary_agent.generate_content(user_message)
         return response.text
 
-    def generate_metadata_from_intent(self, metadata_list: list, user_intent: str):
-        prompt = self._build_generation_prompt(metadata_list, user_intent)
-        # Force JSON response if possible, or use a strict instruction
-        response = self.model.generate_content(prompt)
-        # Attempt to extract JSON from response
-        content = response.text
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        return content
+    def generate_metadata_from_intent(
+        self, metadata_list: list, user_intent: str
+    ) -> str:
+        """
+        Generate a T2I metadata JSON string from references + user intent.
 
-    def _build_prompt(self, metadata_list: list):
-        context = ""
-        for i, item in enumerate(metadata_list):
-            context += f"Result {i+1}:\n"
-            context += f"ID: {item.get('id')}\n"
-            context += f"Prompt: {item.get('prompt')}\n"
-            context += f"Model: {item.get('model')}\n"
-            context += f"LoRAs: {item.get('loras')}\n"
-            context += f"CFG Scale: {item.get('cfgscale')}\n"
-            context += f"Steps: {item.get('steps')}\n"
-            context += f"Sampler: {item.get('sampler')}\n"
-            context += "-" * 20 + "\n"
+        Returns:
+            Raw JSON string (already cleaned; no code fences).
+        """
+        user_message = self._build_generation_user_message(
+            metadata_list, user_intent
+        )
+        response = self._generation_agent.generate_content(user_message)
+        return self._extract_json(response.text)
 
-        prompt = f"""
-Below are the top 5 image generation results from our gallery search. 
-Analyze these results and provide:
-1. A summary of the visual themes and concepts present in these images based on their prompts.
-2. An analysis of the common technical parameters (Model, CFG, Steps, Sampler) and their similarities.
-3. Why these images are considered similar in our search space.
+    # ── User-Turn Builders (dynamic only) ───────
 
-Search Results:
-{context}
+    @staticmethod
+    def _build_summary_user_message(metadata_list: list) -> str:
+        """
+        Build the user-turn content for the summary agent.
 
-Please respond in a structured format (Markdown).
-"""
-        return prompt
+        Only the variable data is included here; all instructions live in the
+        frozen system_instruction to maximize KV cache reuse.
+        """
+        items = json.dumps(metadata_list, indent=2, ensure_ascii=False)
+        return (
+            f"Analyze the following {len(metadata_list)} image-generation "
+            f"results and produce your structured report.\n\n"
+            f"<results>\n{items}\n</results>"
+        )
 
-    def _build_generation_prompt(self, metadata_list: list, user_intent: str):
-        # Pass the full original JSON items for maximum context
-        import json
-        context = ""
-        for i, item in enumerate(metadata_list):
-            context += f"Reference {i+1} (Full JSON):\n"
-            context += json.dumps(item, indent=2, ensure_ascii=False) + "\n"
-            context += "-" * 20 + "\n"
+    @staticmethod
+    def _build_generation_user_message(
+        metadata_list: list, user_intent: str
+    ) -> str:
+        """
+        Build the user-turn content for the generation agent.
 
-        prompt = f"""
-You are a world-class AI Image Synthesis Prompt Engineer and Stable Diffusion expert.
-Your goal is to generate a comprehensive metadata object for a new image based on a user's intent and high-quality references.
+        Structured with XML-style delimiters for reliable extraction by the
+        model and clear separation of intent vs. references.
+        """
+        items = json.dumps(metadata_list, indent=2, ensure_ascii=False)
+        return (
+            f"<intent>\n{user_intent}\n</intent>\n\n"
+            f"<references>\n{items}\n</references>"
+        )
 
-### USER'S GENERATION INTENT:
-"{user_intent}"
+    # ── Helpers ─────────────────────────────────
 
-### REFERENCE DATA (FULL CONTEXT):
-{context}
-
-### YOUR MISSION:
-1.  **Analyze Styles**: Identify the common artistic styles, lighting, color palettes, and composition patterns in the references.
-2.  **Extract Model & Parameters**: Note the common Stable Diffusion models (checkpoints), samplers, CFG scales, and LoRAs used.
-3.  **T2I Engineering Best Practices**:
-    -   **Prompt Structuring**: Use a weighted, structured prompt. Start with the subject, followed by artistic style, lighting, artist names, and finally quality tags (e.g., masterpiece, best quality, 8k, ultra-detailed).
-    -   **Weighting**: Use `(keyword:1.2)` syntax for emphasis where appropriate.
-    -   **Negative Prompting**: Construct a robust negative prompt that covers common artifacts (e.g., blurry, out of frame, deformed, low quality, text, watermark).
-    -   **LoRA Integration**: Integrate necessary LoRAs if they appear in the references or are relevant to the style, using `<lora:Name:Weight>` format.
-    -   **Parameter Selection**: Choose a realistic `CFG scale` (4-8 range usually), `Steps` (20-40), and a matching `Sampler` from the references.
-
-### OUTPUT REQUIREMENTS:
-Generate a single JSON object that matches the following schema (aligning with the project's main metadata structure):
-- "prompt": The full detailed T2I prompt (including weights and LoRAs).
-- "negative_prompt": The comprehensive negative prompt.
-- "cfgscale": The recommended CFG scale (string or float).
-- "steps": The recommended steps (string or int).
-- "sampler": The sampler name (all-caps string, e.g., "DPM++ 2M KARRAS").
-- "seed": A random or recommended seed (string, e.g., "1234567890").
-- "model": The recommended Stable Diffusion checkpoint name (string).
-- "clipskip": Recommended clip skip (string or int, usually "1" or "2").
-- "style": A comma-separated string of the aesthetic keywords used.
-- "lora": A comma-separated list of friendly LoRA names used.
-- "full_metadata_string": (Optional) A summary of the settings in standard SD format.
-
-Return ONLY the raw JSON object. NO Markdown formatting tags.
-"""
-        return prompt
+    @staticmethod
+    def _extract_json(text: str) -> str:
+        """Strip Markdown code fences if the model accidentally wraps them."""
+        text = text.strip()
+        if text.startswith("```"):
+            # Remove opening fence (with optional language tag)
+            first_newline = text.index("\n")
+            text = text[first_newline + 1 :]
+            if text.endswith("```"):
+                text = text[: -3]
+        return text.strip()
