@@ -128,17 +128,15 @@ class ImageEmbeddingSearch:
         results = []
         for i, idx in enumerate(indices[0]):
             row = self.df.iloc[idx]
-            results.append({
-                "distance": round(float(distances[0][i]), 4),
-                "id": str(row.get('id', 'N/A')),
-                "prompt": str(row.get('prompt', '')),
-                "model": str(row.get('model', 'UNKNOWN')),
-                "loras": str(row.get('loras', '')),
-                "cfgscale": float(row.get('cfgscale', 0.0)),
-                "steps": int(row.get('steps', 0)),
-                "sampler": str(row.get('sampler', 'UNKNOWN')),
-                "image_url": str(row.get('image_url', ''))
-            })
+            res_dict = row.to_dict()
+            res_dict["distance"] = round(float(distances[0][i]), 4)
+            # Ensure all values are serializable
+            for k, v in res_dict.items():
+                if isinstance(v, (np.integer, np.floating)):
+                    res_dict[k] = float(v) if isinstance(v, np.floating) else int(v)
+                elif pd.isna(v):
+                    res_dict[k] = None
+            results.append(res_dict)
         return results
 
     def run_pbo_round(self, X_train, y_train, batch_size=4, consecutive_skips=0):

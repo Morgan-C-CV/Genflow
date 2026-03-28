@@ -51,39 +51,48 @@ Please respond in a structured format (Markdown).
         return prompt
 
     def _build_generation_prompt(self, metadata_list: list, user_intent: str):
+        # Pass the full original JSON items for maximum context
+        import json
         context = ""
         for i, item in enumerate(metadata_list):
-            context += f"Reference Result {i+1}:\n"
-            context += f"Prompt: {item.get('prompt')}\n"
-            context += f"Style: {item.get('style', 'N/A')}\n"
-            context += f"LoRAs: {item.get('loras', 'N/A')}\n"
-            context += f"CFG Scale: {item.get('cfgscale')}\n"
-            context += f"Steps: {item.get('steps')}\n"
-            context += f"Sampler: {item.get('sampler')}\n"
+            context += f"Reference {i+1} (Full JSON):\n"
+            context += json.dumps(item, indent=2, ensure_ascii=False) + "\n"
             context += "-" * 20 + "\n"
 
         prompt = f"""
-You are an expert AI image generation assistant. 
-Based on the style and technical parameters of the {len(metadata_list)} reference images provided below, generate a new set of metadata for a user's specific intent.
+You are a world-class AI Image Synthesis Prompt Engineer and Stable Diffusion expert.
+Your goal is to generate a comprehensive metadata object for a new image based on a user's intent and high-quality references.
 
-User's Intent: "{user_intent}"
+### USER'S GENERATION INTENT:
+"{user_intent}"
 
-Reference Styles and Parameters:
+### REFERENCE DATA (FULL CONTEXT):
 {context}
 
-Your task:
-1. Extract common style keywords, lighting, and artist names from the reference prompts and styles.
-2. Determine the optimal technical parameters (CFG Scale, Steps, Sampler) based on what worked best for these references.
-3. Combine these style elements with the User's Intent to create a new, high-quality detailed prompt.
-4. Output the result strictly as a JSON object with the following keys:
-   - "prompt": The new detailed image generation prompt.
-   - "negative_prompt": A suitable negative prompt based on common practices.
-   - "cfgscale": Recommended CFG scale (float/int).
-   - "steps": Recommended number of steps (int).
-   - "sampler": Recommended sampler name (string).
-   - "style": Summary of the stylistic keywords used.
-   - "loras": Recommended LoRAs to use (string or list).
+### YOUR MISSION:
+1.  **Analyze Styles**: Identify the common artistic styles, lighting, color palettes, and composition patterns in the references.
+2.  **Extract Model & Parameters**: Note the common Stable Diffusion models (checkpoints), samplers, CFG scales, and LoRAs used.
+3.  **T2I Engineering Best Practices**:
+    -   **Prompt Structuring**: Use a weighted, structured prompt. Start with the subject, followed by artistic style, lighting, artist names, and finally quality tags (e.g., masterpiece, best quality, 8k, ultra-detailed).
+    -   **Weighting**: Use `(keyword:1.2)` syntax for emphasis where appropriate.
+    -   **Negative Prompting**: Construct a robust negative prompt that covers common artifacts (e.g., blurry, out of frame, deformed, low quality, text, watermark).
+    -   **LoRA Integration**: Integrate necessary LoRAs if they appear in the references or are relevant to the style, using `<lora:Name:Weight>` format.
+    -   **Parameter Selection**: Choose a realistic `CFG scale` (4-8 range usually), `Steps` (20-40), and a matching `Sampler` from the references.
 
-Return ONLY the JSON object.
+### OUTPUT REQUIREMENTS:
+Generate a single JSON object that matches the following schema (aligning with the project's main metadata structure):
+- "prompt": The full detailed T2I prompt (including weights and LoRAs).
+- "negative_prompt": The comprehensive negative prompt.
+- "cfgscale": The recommended CFG scale (string or float).
+- "steps": The recommended steps (string or int).
+- "sampler": The sampler name (all-caps string, e.g., "DPM++ 2M KARRAS").
+- "seed": A random or recommended seed (string, e.g., "1234567890").
+- "model": The recommended Stable Diffusion checkpoint name (string).
+- "clipskip": Recommended clip skip (string or int, usually "1" or "2").
+- "style": A comma-separated string of the aesthetic keywords used.
+- "lora": A comma-separated list of friendly LoRA names used.
+- "full_metadata_string": (Optional) A summary of the settings in standard SD format.
+
+Return ONLY the raw JSON object. NO Markdown formatting tags.
 """
         return prompt
