@@ -136,7 +136,9 @@ def ingest_to_supabase(df, prompt_embs, style_embs, pbo_embs, model_features, sa
             "pbo_embedding": pbo_embs[i].tolist(),
             "metadata": {
                 "loras": row['loras_extracted'],
-                "negative_prompt": row['negative_prompt']
+                "negative_prompt": row['negative_prompt'],
+                "image_url": row.get('image_url', ''),
+                "local_path": row.get('local_path', '')
             }
         }
         records.append(record)

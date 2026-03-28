@@ -168,6 +168,32 @@ def main():
         display_images(df, [best_discovered_index] + [int(df[df['id'] == r['id']].index[0]) for r in results_data['top_results']], 
                       title="Best Result + Similar Recommendations", gallery_dir=settings.GALLERY_DIR, filename="pbo_final_results.png")
         
+        # 5. NEW: Generate metadata based on intent
+        print("\n" + "*"*50)
+        print("GENERATE NEW IMAGE PARAMETERS")
+        print("*"*50)
+        print("Now that we've found your style preference, what would you like to generate?")
+        user_intent = input("Enter your generation intent (e.g., 'a cat drawn in crayons'): ").strip()
+        
+        if user_intent:
+            print(f"\nGenerating metadata for: '{user_intent}'...", flush=True)
+            generated_json_str = search_service.generate_image_metadata(results_data["top_results"], user_intent)
+            
+            try:
+                # Verify it's valid JSON and pretty print it
+                generated_json = json.loads(generated_json_str)
+                print("\nSuccessfully Generated Metadata:")
+                print(json.dumps(generated_json, indent=2, ensure_ascii=False))
+                
+                # Save to a file for convenience
+                with open("generated_metadata.json", "w", encoding="utf-8") as f:
+                    json.dump(generated_json, f, indent=2, ensure_ascii=False)
+                print(f"\nMetadata saved to: {os.path.abspath('generated_metadata.json')}")
+            except json.JSONDecodeError:
+                print("\nError: The LLM did not return a valid JSON string.")
+                print("Raw Response:")
+                print(generated_json_str)
+        
     except Exception as e:
         print(f"Error during backend summarization: {e}")
         import traceback
