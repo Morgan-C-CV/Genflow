@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+google-generativeai
+pandas
+numpy
+sentence-transformers
+scikit-learn
+python-dotenv
+pydantic-settings
+matplotlib
+pillow
+requests
