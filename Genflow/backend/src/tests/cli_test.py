@@ -37,7 +37,7 @@ except Exception as exc:
     settings = None
     BACKEND_IMPORT_ERROR = exc
 
-def display_images(df, indices, title="Images", gallery_dir=None, filename="display.png", cols=4):
+def display_images(df, indices, title="Images", gallery_dir=None, filename="display.png", cols=4, show=True):
     n = len(indices)
     cols = max(1, min(cols, n))
     rows = int(ceil(n / cols))
@@ -85,6 +85,8 @@ def display_images(df, indices, title="Images", gallery_dir=None, filename="disp
     
     plt.tight_layout()
     plt.savefig(filename)
+    if show:
+        plt.show()
     plt.close()
     print(f"[{title}] Images saved to: {os.path.abspath(filename)}")
 
