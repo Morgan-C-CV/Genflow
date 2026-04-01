@@ -9,8 +9,10 @@ from supabase import create_client, Client
 import os
 
 # Supabase configuration
-SUPABASE_URL = "https://jxuyiqdunphnvevkhpsf.supabase.co"
-SUPABASE_KEY = "sb_publishable_jYjPubXkv_TrVgzlQGMljw_cKjn8zx0"
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("Missing SUPABASE_URL/SUPABASE_KEY in environment")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def load_and_clean_data_v4(file_path):

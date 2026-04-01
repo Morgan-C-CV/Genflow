@@ -72,6 +72,11 @@ def main():
     search_engine = search_repo.search_engine
     pbo_space = search_engine.pbo_space
     
+    if getattr(search_engine, "pca_final", None) is None and getattr(search_engine, "text_features", None) is None:
+        print("\nPBO embedding source: precomputed database (no runtime embedding).", flush=True)
+    else:
+        print("\nPBO embedding source: runtime embedding (slow). Set SUPABASE_URL/SUPABASE_KEY to use the precomputed v4 database.", flush=True)
+
     print(f"\nSuccessfully loaded {len(df)} images into the search engine.")
     
     # Optional: Display a target image as a reference (like v4.py)

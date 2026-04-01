@@ -7,7 +7,6 @@ import pandas as pd
 import requests
 from io import BytesIO
 from PIL import Image
-from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
@@ -34,24 +33,27 @@ class ImageEmbeddingSearch:
 
     def _load_and_initialize(self):
         print(f"Initializing ImageEmbeddingSearch with: {self.metadata_path}", flush=True)
+        if self._try_load_precomputed_pbo_space():
+            print("Initialization complete (precomputed PBO space).", flush=True)
+            return
+
         self.df = self.load_and_clean_data(self.metadata_path)
         self.text_features, self.num_features, self.sampler_features, self.model_features, self.scaler, self.encoder_sampler = self.build_features(self.df)
         self.pbo_space, self.pca_text, self.pca_final = self.perform_two_stage_pca(self.text_features, self.num_features, self.sampler_features, self.model_features, final_dim=8)
         print("Initialization complete.", flush=True)
 
-    def load_and_clean_data(self, file_path):
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        df = pd.DataFrame(data)
-        
+    def _clean_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+
         def extract_model(meta_str):
-            if pd.isna(meta_str): return 'UNKNOWN'
+            if pd.isna(meta_str):
+                return 'UNKNOWN'
             match = re.search(r'Model:\s*([^,]+)', str(meta_str))
             return match.group(1).strip() if match else 'UNKNOWN'
-            
+
         def extract_loras(meta_str):
-            if pd.isna(meta_str): return ''
+            if pd.isna(meta_str):
+                return ''
             loras = re.findall(r'<lora:([^:]+):', str(meta_str))
             return ' '.join(loras)
 
@@ -59,23 +61,154 @@ class ImageEmbeddingSearch:
             df['model'] = df['full_metadata_string'].apply(extract_model)
             df['loras'] = df['full_metadata_string'].apply(extract_loras)
         else:
-            df['model'] = 'UNKNOWN'
-            df['loras'] = ''
-            
+            if 'model' not in df.columns:
+                df['model'] = 'UNKNOWN'
+            if 'loras' not in df.columns:
+                df['loras'] = ''
+
+        if 'prompt' not in df.columns:
+            df['prompt'] = ''
         df['prompt'] = df['prompt'].fillna('')
-        df['enhanced_prompt'] = df['prompt'] + " " + df['loras']
-        
+        df['enhanced_prompt'] = df['prompt'] + " " + df['loras'].fillna('')
+
+        if 'negative_prompt' not in df.columns:
+            df['negative_prompt'] = ''
         df['negative_prompt'] = df['negative_prompt'].fillna('')
+
+        if 'clipskip' not in df.columns:
+            df['clipskip'] = 2
         df['clipskip'] = df['clipskip'].fillna(2).astype(float)
+
+        if 'cfgscale' not in df.columns:
+            df['cfgscale'] = np.nan
         df['cfgscale'] = pd.to_numeric(df['cfgscale'], errors='coerce')
-        df['cfgscale'] = df['cfgscale'].fillna(df['cfgscale'].median())
+        if df['cfgscale'].isna().all():
+            df['cfgscale'] = 7.0
+        else:
+            df['cfgscale'] = df['cfgscale'].fillna(df['cfgscale'].median())
+
+        if 'steps' not in df.columns:
+            df['steps'] = np.nan
         df['steps'] = pd.to_numeric(df['steps'], errors='coerce')
-        df['steps'] = df['steps'].fillna(df['steps'].median())
-        df['sampler'] = df['sampler'].fillna('UNKNOWN').str.upper()
-        
+        if df['steps'].isna().all():
+            df['steps'] = 20
+        else:
+            df['steps'] = df['steps'].fillna(df['steps'].median())
+
+        if 'sampler' not in df.columns:
+            df['sampler'] = 'UNKNOWN'
+        df['sampler'] = df['sampler'].fillna('UNKNOWN').astype(str).str.upper()
+
+        if 'id' not in df.columns:
+            df['id'] = df.index.astype(str)
+        df['id'] = df['id'].astype(str)
+
         return df
 
+    def load_and_clean_data(self, file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        df = pd.DataFrame(data)
+        return self._clean_df(df)
+
+    def _try_load_precomputed_pbo_space(self) -> bool:
+        supabase_url = os.getenv("SUPABASE_URL", "").strip()
+        supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+        table = os.getenv("SUPABASE_PBO_TABLE", "image_embeddings_v4").strip()
+        page_size_env = os.getenv("SUPABASE_PAGE_SIZE", "").strip()
+        page_size = int(page_size_env) if page_size_env.isdigit() else 1000
+
+        if not supabase_url or not supabase_key:
+            return False
+
+        records = self._fetch_supabase_embeddings(
+            supabase_url=supabase_url,
+            supabase_key=supabase_key,
+            table_name=table,
+            page_size=page_size,
+        )
+        if not records:
+            raise ValueError(f"Supabase table '{table}' returned no records")
+
+        vectors = []
+        metas = []
+        for row in records:
+            vec = row.get("pbo_embedding")
+            meta = row.get("metadata")
+            if vec is None or meta is None:
+                continue
+
+            if isinstance(vec, str):
+                vec = json.loads(vec)
+            if isinstance(meta, str):
+                meta = json.loads(meta)
+            if not isinstance(meta, dict):
+                meta = {"metadata": meta}
+
+            if "id" not in meta and "id" in row:
+                meta["id"] = str(row["id"])
+
+            vectors.append(vec)
+            metas.append(meta)
+
+        if not vectors:
+            raise ValueError(f"Supabase table '{table}' has no usable (pbo_embedding, metadata) rows")
+
+        pbo_space = np.asarray(vectors, dtype=float)
+        df = pd.DataFrame(metas)
+        df = self._clean_df(df)
+
+        if len(df) != len(pbo_space):
+            raise ValueError(f"Supabase data length mismatch: df={len(df)} pbo_space={len(pbo_space)}")
+
+        self.df = df.reset_index(drop=True)
+        self.pbo_space = pbo_space
+        self.text_features = None
+        self.num_features = None
+        self.sampler_features = None
+        self.model_features = None
+        self.scaler = None
+        self.encoder_sampler = None
+        self.pca_text = None
+        self.pca_final = None
+
+        print(f"Loaded precomputed PBO space from Supabase table '{table}' ({len(self.df)} rows).", flush=True)
+        return True
+
+    def _fetch_supabase_embeddings(self, supabase_url: str, supabase_key: str, table_name: str, page_size: int):
+        base_url = supabase_url.rstrip("/")
+        url = f"{base_url}/rest/v1/{table_name}"
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Accept": "application/json",
+        }
+
+        all_rows = []
+        offset = 0
+        while True:
+            params = {
+                "select": "id,pbo_embedding,metadata",
+                "order": "id.asc",
+                "limit": str(page_size),
+                "offset": str(offset),
+            }
+            resp = requests.get(url, headers=headers, params=params, timeout=60)
+            resp.raise_for_status()
+            batch = resp.json()
+            if not batch:
+                break
+            all_rows.extend(batch)
+            offset += len(batch)
+            if len(batch) < page_size:
+                break
+
+        return all_rows
+
     def build_features(self, df):
+        from sentence_transformers import SentenceTransformer
+
         model = SentenceTransformer('clip-ViT-B-32') 
         text_features = model.encode(df['enhanced_prompt'].tolist(), show_progress_bar=False)
 
