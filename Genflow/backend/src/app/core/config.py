@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -37,6 +37,8 @@ def _compute_repo_relative_defaults():
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
     METADATA_PATH: str = ""
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite-preview-02-05")
@@ -61,8 +63,5 @@ class Settings(BaseSettings):
             pass
         elif default_gallery:
             self.GALLERY_DIR = default_gallery
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()

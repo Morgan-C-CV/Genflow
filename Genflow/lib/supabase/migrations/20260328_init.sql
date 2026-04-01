@@ -2,7 +2,7 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Table to store image metadata and embeddings
-CREATE TABLE IF NOT EXISTS public.image_embeddings (
+CREATE TABLE IF NOT EXISTS public.image_embeddings_v4 (
     id BIGINT PRIMARY KEY, -- Civitai ID
     prompt TEXT,
     style TEXT,

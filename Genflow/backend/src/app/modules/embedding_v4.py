@@ -12,6 +12,7 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
+from requests import HTTPError
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -116,20 +117,32 @@ class ImageEmbeddingSearch:
         supabase_url = os.getenv("SUPABASE_URL", "").strip()
         supabase_key = os.getenv("SUPABASE_KEY", "").strip()
         table = os.getenv("SUPABASE_PBO_TABLE", "image_embeddings_v4").strip()
+        schema = os.getenv("SUPABASE_SCHEMA", "").strip()
         page_size_env = os.getenv("SUPABASE_PAGE_SIZE", "").strip()
         page_size = int(page_size_env) if page_size_env.isdigit() else 1000
+        strict_env = os.getenv("SUPABASE_STRICT", "").strip().lower()
+        strict = strict_env in {"1", "true", "yes", "y"}
 
         if not supabase_url or not supabase_key:
             return False
 
-        records = self._fetch_supabase_embeddings(
-            supabase_url=supabase_url,
-            supabase_key=supabase_key,
-            table_name=table,
-            page_size=page_size,
-        )
+        try:
+            records = self._fetch_supabase_embeddings(
+                supabase_url=supabase_url,
+                supabase_key=supabase_key,
+                table_name=table,
+                schema=schema,
+                page_size=page_size,
+            )
+        except Exception as e:
+            if strict:
+                raise
+            print(f"Failed to load precomputed PBO space from Supabase ({e}). Falling back to local embedding.", flush=True)
+            return False
+
         if not records:
-            raise ValueError(f"Supabase table '{table}' returned no records")
+            print(f"Supabase table '{table}' returned no records. Falling back to local embedding.", flush=True)
+            return False
 
         vectors = []
         metas = []
@@ -176,7 +189,7 @@ class ImageEmbeddingSearch:
         print(f"Loaded precomputed PBO space from Supabase table '{table}' ({len(self.df)} rows).", flush=True)
         return True
 
-    def _fetch_supabase_embeddings(self, supabase_url: str, supabase_key: str, table_name: str, page_size: int):
+    def _fetch_supabase_embeddings(self, supabase_url: str, supabase_key: str, table_name: str, schema: str, page_size: int):
         base_url = supabase_url.rstrip("/")
         url = f"{base_url}/rest/v1/{table_name}"
         headers = {
@@ -184,6 +197,8 @@ class ImageEmbeddingSearch:
             "Authorization": f"Bearer {supabase_key}",
             "Accept": "application/json",
         }
+        if schema:
+            headers["Accept-Profile"] = schema
 
         all_rows = []
         offset = 0
@@ -195,7 +210,19 @@ class ImageEmbeddingSearch:
                 "offset": str(offset),
             }
             resp = requests.get(url, headers=headers, params=params, timeout=60)
-            resp.raise_for_status()
+            try:
+                resp.raise_for_status()
+            except HTTPError as e:
+                detail = ""
+                try:
+                    detail = resp.text
+                except Exception:
+                    detail = ""
+
+                schema_hint = f" (schema={schema})" if schema else ""
+                raise ValueError(
+                    f"Supabase REST fetch failed: status={resp.status_code} table={table_name}{schema_hint} url={url} detail={detail}"
+                ) from e
             batch = resp.json()
             if not batch:
                 break

@@ -8,12 +8,31 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.decomposition import PCA
 import re
 import warnings
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+base_dir = os.path.dirname(os.path.abspath(__file__))
+dotenv_paths = [
+    os.path.join(base_dir, "../../backend/src/.env"),
+    os.path.join(base_dir, ".env"),
+    os.path.join(os.getcwd(), ".env")
+]
+
+for dp in dotenv_paths:
+    if os.path.exists(dp):
+        load_dotenv(dp)
+        break
 
 warnings.filterwarnings('ignore')
 
 # Supabase configuration
-SUPABASE_URL = "https://jxuyiqdunphnvevkhpsf.supabase.co"
-SUPABASE_KEY = "sb_publishable_jYjPubXkv_TrVgzlQGMljw_cKjn8zx0" # Use the provided anon/publishable key
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("Error: SUPABASE_URL and SUPABASE_KEY must be set in environment variables or .env file.")
+    exit(1)
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def load_and_clean_data(file_path):
@@ -145,17 +164,37 @@ def ingest_to_supabase(df, prompt_embs, style_embs, pbo_embs, model_features, sa
         
         # Batch insert every 50 records (larger payloads due to vector size)
         if len(records) >= 50:
-            supabase.table("image_embeddings").upsert(records).execute()
+            supabase.table("image_embeddings_v4").upsert(records).execute()
             records = []
             print(f"Progress: {i+1}/{len(df)}")
             
     if records:
-        supabase.table("image_embeddings").upsert(records).execute()
+        supabase.table("image_embeddings_v4").upsert(records).execute()
     
     print("Ingestion complete!")
 
 if __name__ == "__main__":
-    meta_path = "/Users/mgccvmacair/Myproject/Academic/Genflow/Genflow/lib/metadata.json"
+    # Candidate paths for metadata.json
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate_paths = [
+        os.path.join(base_dir, "../../../spider/civitai_gallery/metadata.json"),
+        os.path.join(base_dir, "../../../spider/civitai_gallery_res/metadata.json"),
+        os.path.join(base_dir, "../metadata.json"),
+        "spider/civitai_gallery/metadata.json",
+        "metadata.json"
+    ]
+    
+    meta_path = None
+    for path in candidate_paths:
+        if os.path.exists(path):
+            meta_path = path
+            break
+            
+    if not meta_path:
+        print("Error: metadata.json not found in candidate paths.")
+        exit(1)
+        
+    print(f"Using metadata: {meta_path}")
     df = load_and_clean_data(meta_path)
     prompt_embs, style_embs = build_embeddings(df)
     

@@ -7,13 +7,34 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.decomposition import PCA
 from supabase import create_client, Client
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+base_dir = os.path.dirname(os.path.abspath(__file__))
+dotenv_paths = [
+    os.path.join(base_dir, "../../backend/src/.env"),
+    os.path.join(base_dir, ".env"),
+    os.path.join(os.getcwd(), ".env")
+]
+
+for dp in dotenv_paths:
+    if os.path.exists(dp):
+        load_dotenv(dp)
+        break
 
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Missing SUPABASE_URL/SUPABASE_KEY in environment")
+    print("Error: SUPABASE_URL and SUPABASE_KEY must be set in environment variables or .env file.")
+    exit(1)
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def _to_pgvector_literal(values) -> str:
+    arr = np.asarray(values, dtype=float).reshape(-1)
+    return "[" + ",".join(str(float(x)) for x in arr.tolist()) + "]"
 
 def load_and_clean_data_v4(file_path):
     print(f"Loading data: {file_path}")
@@ -40,6 +61,7 @@ def load_and_clean_data_v4(file_path):
         df['loras'] = ''
         
     df['prompt'] = df['prompt'].fillna('')
+    df['style'] = df.get('style', pd.Series([''] * len(df))).fillna('')
     df['enhanced_prompt'] = df['prompt'] + " " + df['loras']
     df['negative_prompt'] = df['negative_prompt'].fillna('')
     df['clipskip'] = df.get('clipskip', pd.Series([2] * len(df))).fillna(2).astype(float)
@@ -95,7 +117,7 @@ def calculate_pca_v4(text_features, num_features, sampler_features, model_featur
 def ingest_to_supabase_v4(df, text_features, model_features, sampler_features, num_features, pbo_embs):
     print(f"Ingesting {len(df)} records for v4 version...")
     
-    TARGET_DIM = 700
+    TARGET_DIM = 1200
     records = []
     
     for i in range(len(df)):
@@ -118,13 +140,14 @@ def ingest_to_supabase_v4(df, text_features, model_features, sampler_features, n
         record = {
             "id": int(row['id']),
             "prompt": row['prompt'],
+            "style": row.get('style', ''),
             "model": row['model'],
             "sampler": row['sampler'],
             "cfgscale": float(row['cfgscale']),
             "steps": int(row['steps']),
             "clipskip": float(row['clipskip']),
-            "original_embedding": original_combined.tolist(),
-            "pbo_embedding": pbo_embs[i].tolist(),
+            "original_embedding": _to_pgvector_literal(original_combined),
+            "pbo_embedding": _to_pgvector_literal(pbo_embs[i]),
             "metadata": {
                 "loras": row['loras'],
                 "negative_prompt": row['negative_prompt'],
@@ -144,7 +167,23 @@ def ingest_to_supabase_v4(df, text_features, model_features, sampler_features, n
     print("Ingestion v4 complete!")
 
 if __name__ == "__main__":
-    meta_path = "/Users/mgccvmacair/Myproject/Academic/Genflow/Genflow/lib/metadata.json"
+    meta_path = os.getenv("METADATA_PATH", "").strip()
+    if not meta_path or not os.path.isfile(meta_path):
+        candidates = [
+            os.path.join(os.getcwd(), "spider", "civitai_gallery", "metadata.json"),
+            os.path.join(os.getcwd(), "spider", "civitai_gallery_res", "metadata.json"),
+            os.path.join(os.getcwd(), "Genflow", "lib", "metadata.json"),
+            os.path.join(os.path.dirname(__file__), "..", "metadata.json"),
+        ]
+        meta_path = ""
+        for p in candidates:
+            p = os.path.abspath(p)
+            if os.path.isfile(p):
+                meta_path = p
+                break
+    if not meta_path:
+        raise FileNotFoundError("metadata.json not found; set METADATA_PATH or run from repo root")
+
     df = load_and_clean_data_v4(meta_path)
     text_embs, num_feat, samp_feat, mod_feat = build_features_v4(df)
     pbo_embs = calculate_pca_v4(text_embs, num_feat, samp_feat, mod_feat)
