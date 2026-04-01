@@ -155,22 +155,16 @@ def main():
     print(f"ID: {row.get('id', 'N/A')}")
     print(f"Prompt: {row.get('prompt')}")
     
-    # 4. Use SearchService to get summary and similar results
-    print("\nRequesting Gemini-powered summary and similarity analysis...", flush=True)
+    # 4. Get similar results and skip summary
+    print("\nRetrieving similar results for generation...", flush=True)
     try:
-        results_data = search_service.summarize_search_results(best_discovered_index, top_k=5)
-        
-        print("\n" + "="*50)
-        print("GEMINI SEARCH ANALYSIS")
-        print("="*50)
-        print(results_data["llm_summary"])
-        print("="*50)
+        top_results = search_repo.search_by_index(best_discovered_index, top_k=5)
         
         print("\nTop 5 Similar Results Found:")
-        for i, res in enumerate(results_data["top_results"]):
-            print(f"{i+1}. ID {res['id']} | Distance: {res['distance']} | Prompt: {res['prompt'][:60]}...")
+        for i, res in enumerate(top_results):
+            print(f"{i+1}. ID {res['id']} | Distance: {res['distance']:.4f} | Prompt: {res['prompt'][:60]}...")
             
-        display_images(df, [best_discovered_index] + [int(df[df['id'] == r['id']].index[0]) for r in results_data['top_results']], 
+        display_images(df, [best_discovered_index] + [int(df[df['id'] == r['id']].index[0]) for r in top_results], 
                       title="Best Result + Similar Recommendations", gallery_dir=settings.GALLERY_DIR, filename="pbo_final_results.png")
         
         # 5. NEW: Generate metadata based on intent
@@ -182,7 +176,7 @@ def main():
         
         if user_intent:
             print(f"\nGenerating metadata for: '{user_intent}'...", flush=True)
-            generated_json_str = search_service.generate_image_metadata(results_data["top_results"], user_intent)
+            generated_json_str = search_service.generate_image_metadata(top_results, user_intent)
             
             try:
                 # Verify it's valid JSON and pretty print it
