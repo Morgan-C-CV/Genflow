@@ -28,6 +28,9 @@ class ImageEmbeddingSearch:
         self.model_features = None
         self.scaler = None
         self.encoder_sampler = None
+        self.encoder_model = None
+        self.text_model = None
+        self.text_scaler = None
         self.pca_text = None
         self.pca_final = None
         self._load_and_initialize()
@@ -39,7 +42,7 @@ class ImageEmbeddingSearch:
             return
 
         self.df = self.load_and_clean_data(self.metadata_path)
-        self.text_features, self.num_features, self.sampler_features, self.model_features, self.scaler, self.encoder_sampler = self.build_features(self.df)
+        self.text_features, self.num_features, self.sampler_features, self.model_features, self.scaler, self.encoder_sampler, self.encoder_model, self.text_model = self.build_features(self.df)
         self.pbo_space, self.pca_text, self.pca_final = self.perform_two_stage_pca(self.text_features, self.num_features, self.sampler_features, self.model_features, final_dim=8)
         print("Initialization complete.", flush=True)
 
@@ -183,6 +186,9 @@ class ImageEmbeddingSearch:
         self.model_features = None
         self.scaler = None
         self.encoder_sampler = None
+        self.encoder_model = None
+        self.text_model = None
+        self.text_scaler = None
         self.pca_text = None
         self.pca_final = None
 
@@ -236,8 +242,8 @@ class ImageEmbeddingSearch:
     def build_features(self, df):
         from sentence_transformers import SentenceTransformer
 
-        model = SentenceTransformer('clip-ViT-B-32') 
-        text_features = model.encode(df['enhanced_prompt'].tolist(), show_progress_bar=False)
+        text_model = SentenceTransformer('clip-ViT-B-32')
+        text_features = text_model.encode(df['enhanced_prompt'].tolist(), show_progress_bar=False)
 
         scaler = StandardScaler()
         num_features = scaler.fit_transform(df[['cfgscale', 'steps', 'clipskip']])
@@ -248,7 +254,7 @@ class ImageEmbeddingSearch:
         encoder_model = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
         model_features = encoder_model.fit_transform(df[['model']])
         
-        return text_features, num_features, sampler_features, model_features, scaler, encoder_sampler
+        return text_features, num_features, sampler_features, model_features, scaler, encoder_sampler, encoder_model, text_model
 
     def perform_two_stage_pca(self, text_features, num_features, sampler_features, model_features, final_dim=8):
         n_text_components = min(20, text_features.shape[0], text_features.shape[1])
@@ -257,6 +263,7 @@ class ImageEmbeddingSearch:
         
         scaler_text = StandardScaler()
         text_reduced_scaled = scaler_text.fit_transform(text_reduced)
+        self.text_scaler = scaler_text
         
         TEXT_WEIGHT = 4.0
         MODEL_WEIGHT = 3.0
@@ -275,6 +282,62 @@ class ImageEmbeddingSearch:
         pbo_space = pca_final.fit_transform(combined_features)
         return pbo_space, pca_text, pca_final
 
+    def _default_query_profile(self):
+        model_mode = "UNKNOWN"
+        sampler_mode = "DPM++ 2M KARRAS"
+        if self.df is not None and len(self.df) > 0:
+            if "model" in self.df.columns and not self.df["model"].empty:
+                try:
+                    model_mode = str(self.df["model"].mode().iloc[0])
+                except Exception:
+                    model_mode = str(self.df["model"].iloc[0])
+            if "sampler" in self.df.columns and not self.df["sampler"].empty:
+                try:
+                    sampler_mode = str(self.df["sampler"].mode().iloc[0])
+                except Exception:
+                    sampler_mode = str(self.df["sampler"].iloc[0])
+        return {
+            "cfgscale": float(self.df["cfgscale"].median()) if self.df is not None and "cfgscale" in self.df.columns else 5.0,
+            "steps": float(self.df["steps"].median()) if self.df is not None and "steps" in self.df.columns else 30.0,
+            "clipskip": float(self.df["clipskip"].median()) if self.df is not None and "clipskip" in self.df.columns else 2.0,
+            "sampler": sampler_mode,
+            "model": model_mode,
+        }
+
+    def transform_query_to_pbo(self, prompt: str, cfgscale=None, steps=None, clipskip=None, sampler=None, model=None):
+        if self.text_model is None or self.pca_text is None or self.pca_final is None or self.text_scaler is None:
+            raise RuntimeError("Query projection requires local embedding/PCA state. Precomputed-only mode cannot transform new prompts.")
+
+        profile = self._default_query_profile()
+        cfgscale = profile["cfgscale"] if cfgscale is None else cfgscale
+        steps = profile["steps"] if steps is None else steps
+        clipskip = profile["clipskip"] if clipskip is None else clipskip
+        sampler = profile["sampler"] if sampler is None else sampler
+        model = profile["model"] if model is None else model
+
+        text_features = self.text_model.encode([prompt], show_progress_bar=False)
+        text_reduced = self.pca_text.transform(text_features)
+        text_reduced_scaled = self.text_scaler.transform(text_reduced)
+
+        numeric = np.array([[cfgscale, steps, clipskip]], dtype=float)
+        num_features = self.scaler.transform(numeric)
+
+        sampler_features = self.encoder_sampler.transform(pd.DataFrame({"sampler": [str(sampler).upper()]}))
+        model_features = self.encoder_model.transform(pd.DataFrame({"model": [str(model)]}))
+
+        TEXT_WEIGHT = 4.0
+        MODEL_WEIGHT = 3.0
+        PARAM_WEIGHT = 0.5
+        SAMPLER_WEIGHT = 0.5
+
+        combined_features = np.hstack([
+            text_reduced_scaled * TEXT_WEIGHT,
+            model_features * MODEL_WEIGHT,
+            num_features * PARAM_WEIGHT,
+            sampler_features * SAMPLER_WEIGHT,
+        ])
+        return self.pca_final.transform(combined_features)[0]
+
     def search_top_k(self, query_index=None, query_vector=None, top_k=5):
         if query_vector is None and query_index is not None:
             query_vector = self.pbo_space[query_index].reshape(1, -1)
@@ -289,6 +352,7 @@ class ImageEmbeddingSearch:
         for i, idx in enumerate(indices[0]):
             row = self.df.iloc[idx]
             res_dict = row.to_dict()
+            res_dict["index"] = int(idx)
             res_dict["distance"] = round(float(distances[0][i]), 4)
             # Ensure all values are serializable
             for k, v in res_dict.items():
