@@ -116,12 +116,10 @@ class LLMRepository:
     """
 
     def __init__(self):
-        self._enabled = bool(settings.GOOGLE_API_KEY.strip())
-        self._summary_agent = None
-        self._generation_agent = None
-
-        if not self._enabled:
-            return
+        if not settings.GOOGLE_API_KEY.strip():
+            raise RuntimeError(
+                "GOOGLE_API_KEY is required to initialize LLMRepository."
+            )
 
         genai.configure(api_key=settings.GOOGLE_API_KEY)
 
@@ -145,8 +143,6 @@ class LLMRepository:
 
     def generate_summary(self, metadata_list: list) -> str:
         """Analyze a list of search results and return a Markdown report."""
-        if not self._enabled or self._summary_agent is None:
-            return self._fallback_summary(metadata_list)
         user_message = self._build_summary_user_message(metadata_list)
         response = self._summary_agent.generate_content(user_message)
         return response.text
@@ -160,11 +156,6 @@ class LLMRepository:
         Returns:
             Raw JSON string (already cleaned; no code fences).
         """
-        if not self._enabled or self._generation_agent is None:
-            return json.dumps(
-                self._fallback_metadata(metadata_list, user_intent),
-                ensure_ascii=False,
-            )
         user_message = self._build_generation_user_message(
             metadata_list, user_intent
         )
@@ -217,59 +208,3 @@ class LLMRepository:
             if text.endswith("```"):
                 text = text[: -3]
         return text.strip()
-
-    @staticmethod
-    def _fallback_summary(metadata_list: list) -> str:
-        if not metadata_list:
-            return "# Search Summary\n\n- No reference results were provided."
-
-        top = metadata_list[0]
-        return (
-            "# Search Summary\n\n"
-            "## Visual Themes & Concepts\n"
-            f"- Top reference prompt: {top.get('prompt', '')[:220]}\n\n"
-            "## Technical Parameter Analysis\n"
-            f"- Model: {top.get('model', 'UNKNOWN')}\n"
-            f"- Sampler: {top.get('sampler', 'UNKNOWN')}\n"
-            f"- Steps: {top.get('steps', 'N/A')}\n"
-            f"- CFG: {top.get('cfgscale', 'N/A')}\n\n"
-            "## Similarity Rationale\n"
-            "- These references cluster by prompt semantics and shared generation settings."
-        )
-
-    @staticmethod
-    def _fallback_metadata(metadata_list: list, user_intent: str) -> dict:
-        reference = metadata_list[0] if metadata_list else {}
-        prompt = reference.get("prompt", "").strip()
-        if prompt:
-            prompt = f"{user_intent}, {prompt}"
-        else:
-            prompt = user_intent
-
-        negative_prompt = reference.get("negative_prompt") or "low quality, blurry, bad anatomy, watermark, text"
-        cfgscale = str(reference.get("cfgscale", "5"))
-        steps = str(reference.get("steps", "30"))
-        sampler = str(reference.get("sampler", "DPM++ 2M Karras")).upper()
-        seed = str(reference.get("seed", "1234567890"))
-        model = str(reference.get("model", "UNKNOWN"))
-        clipskip = str(reference.get("clipskip", "2"))
-        style = str(reference.get("style", ""))
-        lora = str(reference.get("lora", "none"))
-        full_metadata_string = (
-            f"{prompt}\n"
-            f"Negative prompt: {negative_prompt}\n"
-            f"Steps: {steps}, CFG scale: {cfgscale}, Sampler: {sampler}, Seed: {seed}, Model: {model}, Clip skip: {clipskip}"
-        )
-        return {
-            "prompt": prompt,
-            "negative_prompt": negative_prompt,
-            "cfgscale": cfgscale,
-            "steps": steps,
-            "sampler": sampler,
-            "seed": seed,
-            "model": model,
-            "clipskip": clipskip,
-            "style": style,
-            "lora": lora,
-            "full_metadata_string": full_metadata_string,
-        }

@@ -166,12 +166,19 @@ def main():
     # 2. ReAct-based creative intake and divergent candidate retrieval
     clarified_intent, intent_plan = prompt_user_intent(creative_agent)
     resources = creative_agent.load_resources()
-    expansions = creative_agent.build_axis_expansions(clarified_intent, intent_plan, resources)
+    resource_recommendation = creative_agent.recommend_resources(intent_plan, resources)
+    expansions = creative_agent.build_axis_expansions(
+        clarified_intent,
+        intent_plan,
+        resources,
+        recommendation=resource_recommendation,
+    )
 
     print("\n[Resource RAG] 资源推荐：")
-    print(f"- Checkpoint: {resources.recommended_checkpoint(intent_plan)}")
-    print(f"- Sampler: {resources.recommended_sampler(intent_plan)}")
-    print(f"- LoRAs: {', '.join(resources.recommended_loras(intent_plan))}")
+    print(f"- Checkpoint: {resource_recommendation.checkpoint}")
+    print(f"- Sampler: {resource_recommendation.sampler}")
+    print(f"- LoRAs: {', '.join(resource_recommendation.loras) if resource_recommendation.loras else 'none'}")
+    print(f"- Reasoning: {resource_recommendation.reasoning_summary}")
     print("\n[Agent ReAct] 4 个发散查询已生成：")
     for i, expansion in enumerate(expansions, start=1):
         print(f"  {i}. {expansion.label}")
