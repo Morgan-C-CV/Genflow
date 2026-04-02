@@ -413,30 +413,39 @@ def main():
                       title="Best Result + Similar Recommendations", gallery_dir=settings.GALLERY_DIR, filename="pbo_final_results.png", cols=3)
         
         # 5. NEW: Generate metadata based on intent
-        print("\n" + "*"*50)
+        print("\n" + "*" * 50)
         print("GENERATE NEW IMAGE PARAMETERS")
-        print("*"*50)
-        print("Now that we've found your style preference, what would you like to generate?")
-        user_intent = input("Enter your generation intent (e.g., 'a cat drawn in crayons'): ").strip()
-        
-        if user_intent:
-            print(f"\nGenerating metadata for: '{user_intent}'...", flush=True)
-            generated_json_str = search_service.generate_image_metadata(top_results, user_intent)
-            
+        print("*" * 50)
+        auto_intent = clarified_intent.split("|")[0].strip()
+        if not auto_intent:
+            auto_intent = "high quality image generation"
+        print(f"Auto generation intent: {auto_intent}")
+        print(f"\nGenerating metadata for: '{auto_intent}'...", flush=True)
+        generated_json_str = ""
+        generated_json = None
+        validation_error = ""
+        for attempt in range(3):
+            generated_json_str = search_service.generate_image_metadata(
+                top_results,
+                auto_intent,
+                previous_output=generated_json_str,
+                validation_error=validation_error,
+            )
             try:
-                # Verify it's valid JSON and pretty print it
                 generated_json = json.loads(generated_json_str)
-                print("\nSuccessfully Generated Metadata:")
-                print(json.dumps(generated_json, indent=2, ensure_ascii=False))
-                
-                # Save to a file for convenience
-                with open("generated_metadata.json", "w", encoding="utf-8") as f:
-                    json.dump(generated_json, f, indent=2, ensure_ascii=False)
-                print(f"\nMetadata saved to: {os.path.abspath('generated_metadata.json')}")
-            except json.JSONDecodeError:
-                print("\nError: The LLM did not return a valid JSON string.")
-                print("Raw Response:")
-                print(generated_json_str)
+                break
+            except json.JSONDecodeError as exc:
+                validation_error = f"JSONDecodeError: {str(exc)}"
+                print(color_text(f"Metadata JSON invalid, regenerating with LLM feedback (attempt {attempt + 1}/3)...", CliColor.YELLOW))
+
+        if generated_json is not None:
+            print("\nSuccessfully Generated Metadata:")
+            print(json.dumps(generated_json, indent=2, ensure_ascii=False))
+            with open("generated_metadata.json", "w", encoding="utf-8") as f:
+                json.dump(generated_json, f, indent=2, ensure_ascii=False)
+            print(f"\nMetadata saved to: {os.path.abspath('generated_metadata.json')}")
+        else:
+            print(color_text("Failed to generate valid metadata JSON after retries.", CliColor.RED, bold=True))
         
     except Exception as e:
         print(f"Error during backend summarization: {e}")

@@ -146,7 +146,11 @@ class LLMRepository:
         return response.text
 
     def generate_metadata_from_intent(
-        self, metadata_list: list, user_intent: str
+        self,
+        metadata_list: list,
+        user_intent: str,
+        previous_output: str = "",
+        validation_error: str = "",
     ) -> str:
         """
         Generate a T2I metadata JSON string from references + user intent.
@@ -155,7 +159,10 @@ class LLMRepository:
             Raw JSON string (already cleaned; no code fences).
         """
         user_message = self._build_generation_user_message(
-            metadata_list, user_intent
+            metadata_list,
+            user_intent,
+            previous_output=previous_output,
+            validation_error=validation_error,
         )
         response = self._generation_agent.generate_content(user_message)
         return self._extract_json(response.text)
@@ -179,7 +186,10 @@ class LLMRepository:
 
     @staticmethod
     def _build_generation_user_message(
-        metadata_list: list, user_intent: str
+        metadata_list: list,
+        user_intent: str,
+        previous_output: str = "",
+        validation_error: str = "",
     ) -> str:
         """
         Build the user-turn content for the generation agent.
@@ -188,9 +198,19 @@ class LLMRepository:
         model and clear separation of intent vs. references.
         """
         items = json.dumps(metadata_list, indent=2, ensure_ascii=False)
+        retry_block = ""
+        if previous_output.strip() or validation_error.strip():
+            retry_block = (
+                f"\n<validation_error>\n{validation_error.strip()}\n</validation_error>\n\n"
+                f"<previous_invalid_output>\n{previous_output.strip()}\n</previous_invalid_output>\n\n"
+                "<regeneration_rule>\n"
+                "The previous output is invalid. Regenerate from scratch and return ONLY one valid raw JSON object.\n"
+                "</regeneration_rule>"
+            )
         return (
             f"<intent>\n{user_intent}\n</intent>\n\n"
             f"<references>\n{items}\n</references>"
+            f"{retry_block}"
         )
 
     # ── Helpers ─────────────────────────────────

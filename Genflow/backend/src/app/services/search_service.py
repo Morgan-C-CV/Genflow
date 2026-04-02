@@ -19,7 +19,17 @@ class SearchService:
             "llm_summary": summary
         }
 
-    def generate_image_metadata(self, results: list, user_intent: str):
-        # Call LLM repository to generate metadata based on search results and intent
-        metadata_json = self.llm_repo.generate_metadata_from_intent(results, user_intent)
+    def generate_image_metadata(
+        self,
+        results: list,
+        user_intent: str,
+        previous_output: str = "",
+        validation_error: str = "",
+    ):
+        metadata_json = self.llm_repo.generate_metadata_from_intent(
+            results,
+            user_intent,
+            previous_output=previous_output,
+            validation_error=validation_error,
+        )
         return metadata_json
