@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import re
 from collections import Counter
@@ -10,6 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import silhouette_score
 
 from app.core.config import settings
@@ -275,6 +277,8 @@ class CreativeAgent:
             ]
         ).strip()
         intent_counter, intent_norm = self._tokenize_to_counter(intent_text)
+        intent_row_scores = self._score_intent_against_gallery_rows(df, intent_text)
+        intent_seed = int(hashlib.md5(intent_text.encode("utf-8")).hexdigest()[:8], 16)
         previous_checkpoints = {
             (e.checkpoint or "").strip().lower()
             for e in (previous_expansions or [])
@@ -296,12 +300,15 @@ class CreativeAgent:
                 [dominant_model, dominant_sampler, " ".join(dominant_loras), " ".join(signature_terms)]
             ).strip()
             profile_counter, profile_norm = self._tokenize_to_counter(profile_text)
-            relevance = self._cosine_from_counters(
+            profile_relevance = self._cosine_from_counters(
                 intent_counter,
                 intent_norm,
                 profile_counter,
                 profile_norm,
             )
+            cluster_scores = intent_row_scores[member_indices] if len(member_indices) else np.asarray([])
+            row_relevance = float(np.percentile(cluster_scores, 75)) if cluster_scores.size > 0 else 0.0
+            relevance = 0.2 * float(profile_relevance) + 0.8 * float(row_relevance)
             profile_rows.append(
                 {
                     "cluster_id": int(cluster_id),
@@ -321,7 +328,11 @@ class CreativeAgent:
                 }
             )
 
-        selected = self._select_clusters_for_expansion(profile_rows, pick_count=8)
+        selected = self._select_clusters_for_expansion(
+            profile_rows,
+            pick_count=8,
+            intent_seed=intent_seed,
+        )
         if not selected:
             return {}
 
@@ -353,16 +364,53 @@ class CreativeAgent:
         gallery_awareness: Dict[str, Any],
     ) -> List[ExpandedQuery]:
         selected = gallery_awareness.get("selected_clusters", []) if gallery_awareness else []
-        selected_ids = [
-            int(item.get("cluster_id"))
+        selected_items = [
+            item
             for item in selected
             if isinstance(item, dict) and str(item.get("cluster_id", "")).isdigit()
         ]
-        if not selected_ids:
+        selected_ids = [int(item.get("cluster_id")) for item in selected_items]
+        if not selected_items:
             return expansions
-        for i, item in enumerate(expansions):
-            if item.target_cluster_id not in selected_ids:
-                item.target_cluster_id = selected_ids[i % len(selected_ids)]
+
+        cluster_profiles: Dict[int, Tuple[Counter, float]] = {}
+        for item in selected_items:
+            cluster_id = int(item.get("cluster_id"))
+            profile_text = " ".join(
+                [
+                    str(item.get("dominant_model", "")),
+                    str(item.get("dominant_sampler", "")),
+                    " ".join(item.get("dominant_loras", []) if isinstance(item.get("dominant_loras"), list) else []),
+                    " ".join(item.get("signature_terms", []) if isinstance(item.get("signature_terms"), list) else []),
+                ]
+            )
+            cluster_profiles[cluster_id] = CreativeAgent._tokenize_to_counter(profile_text)
+
+        used_cluster_ids: set[int] = set()
+        for i, expansion in enumerate(expansions):
+            if expansion.target_cluster_id in selected_ids and expansion.target_cluster_id not in used_cluster_ids:
+                used_cluster_ids.add(int(expansion.target_cluster_id))
+                continue
+            query_counter, query_norm = CreativeAgent._tokenize_to_counter(expansion.prompt or expansion.label or "")
+            best_cluster_id = None
+            best_score = -1.0
+            for cluster_id in selected_ids:
+                if cluster_id in used_cluster_ids:
+                    continue
+                profile_counter, profile_norm = cluster_profiles.get(cluster_id, (Counter(), 1.0))
+                score = CreativeAgent._cosine_from_counters(
+                    query_counter,
+                    query_norm,
+                    profile_counter,
+                    profile_norm,
+                )
+                if score > best_score:
+                    best_score = score
+                    best_cluster_id = cluster_id
+            if best_cluster_id is None:
+                best_cluster_id = selected_ids[i % len(selected_ids)]
+            expansion.target_cluster_id = int(best_cluster_id)
+            used_cluster_ids.add(int(best_cluster_id))
         return expansions
 
     @staticmethod
@@ -419,7 +467,6 @@ class CreativeAgent:
                 [
                     str(row.get("prompt", "")),
                     str(row.get("style", "")),
-                    str(row.get("negative_prompt", "")),
                 ]
             )
             term_counter, _ = self._tokenize_to_counter(text)
@@ -457,6 +504,7 @@ class CreativeAgent:
         self,
         profile_rows: List[Dict[str, Any]],
         pick_count: int = 8,
+        intent_seed: int = 0,
     ) -> List[Dict[str, Any]]:
         if not profile_rows:
             return []
@@ -468,7 +516,14 @@ class CreativeAgent:
             best_score = -10.0
             for row in remaining:
                 size_bonus = float(row["size"]) / float(total_size)
-                base = 0.72 * float(row["relevance"]) + 0.18 * size_bonus - float(row["_refresh_penalty"])
+                tie_break_seed = f"{intent_seed}:{int(row['cluster_id'])}"
+                tie_break_noise = (int(hashlib.md5(tie_break_seed.encode("utf-8")).hexdigest()[:6], 16) % 1000) / 1000.0
+                base = (
+                    0.72 * float(row["relevance"])
+                    + 0.18 * size_bonus
+                    - float(row["_refresh_penalty"])
+                    + 0.06 * tie_break_noise
+                )
                 if not selected:
                     score = base
                 else:
@@ -542,6 +597,7 @@ class CreativeAgent:
         for expansion in expansions:
             query_labels.append(expansion.label)
             candidates = self._rank_gallery_candidates(search_engine, expansion, top_k=top_k)
+            candidates = self._rotate_candidates_for_expansion(candidates, expansion)
             group: List[int] = []
             for candidate in candidates:
                 idx = candidate["index"]
@@ -556,6 +612,7 @@ class CreativeAgent:
                 for idx in self._fallback_pool(
                     search_engine,
                     seen_indices,
+                    expansion=expansion,
                     target_cluster_id=expansion.target_cluster_id,
                 ):
                     if idx in seen_indices or idx in blocked_indices:
@@ -569,6 +626,7 @@ class CreativeAgent:
                 for idx in self._fallback_pool(
                     search_engine,
                     seen_indices,
+                    expansion=expansion,
                     target_cluster_id=None,
                 ):
                     if idx in seen_indices:
@@ -634,12 +692,33 @@ class CreativeAgent:
     ) -> List[Dict[str, Any]]:
         df = search_engine.df
         corpus = self._gallery_corpus(df)
-        query_counter, query_norm = self._tokenize_to_counter(expansion.prompt)
+        query_text = " ".join(
+            [
+                expansion.label or "",
+                expansion.prompt or "",
+                expansion.checkpoint or "",
+                expansion.sampler or "",
+                " ".join(expansion.loras or []),
+            ]
+        )
         scored: List[Tuple[int, float]] = []
-        for idx, doc in enumerate(corpus):
-            doc_counter, doc_norm = self._tokenize_to_counter(doc)
-            score = self._cosine_from_counters(query_counter, query_norm, doc_counter, doc_norm)
-            scored.append((idx, score))
+        try:
+            vectorizer = TfidfVectorizer(
+                lowercase=True,
+                ngram_range=(1, 2),
+                token_pattern=r"(?u)\b[\w\-\+']+\b",
+                max_features=8000,
+            )
+            doc_matrix = vectorizer.fit_transform(corpus)
+            query_vec = vectorizer.transform([query_text])
+            tfidf_scores = (doc_matrix @ query_vec.T).toarray().ravel()
+            scored = [(idx, float(score)) for idx, score in enumerate(tfidf_scores.tolist())]
+        except Exception:
+            query_counter, query_norm = self._tokenize_to_counter(query_text)
+            for idx, doc in enumerate(corpus):
+                doc_counter, doc_norm = self._tokenize_to_counter(doc)
+                score = self._cosine_from_counters(query_counter, query_norm, doc_counter, doc_norm)
+                scored.append((idx, score))
         scored.sort(key=lambda item: item[1], reverse=True)
         score_map = {idx: score for idx, score in scored}
         results: List[Dict[str, Any]] = []
@@ -654,9 +733,39 @@ class CreativeAgent:
         self,
         search_engine: Any,
         seen_indices: set[int],
+        expansion: Optional[ExpandedQuery] = None,
         target_cluster_id: Optional[int] = None,
     ) -> List[int]:
         if hasattr(search_engine, "df"):
+            corpus = self._gallery_corpus(search_engine.df)
+            query_counter: Optional[Counter] = None
+            query_norm: float = 1.0
+            if expansion is not None:
+                query_text = " ".join(
+                    [
+                        expansion.label or "",
+                        expansion.prompt or "",
+                        expansion.checkpoint or "",
+                        expansion.sampler or "",
+                        " ".join(expansion.loras or []),
+                    ]
+                )
+                query_counter, query_norm = self._tokenize_to_counter(query_text)
+
+            def _rank_indices(candidates: List[int]) -> List[int]:
+                if not candidates:
+                    return []
+                if not query_counter:
+                    return self._rotate_indices_for_expansion(candidates, expansion)
+                scored: List[Tuple[int, float]] = []
+                for idx in candidates:
+                    doc_counter, doc_norm = self._tokenize_to_counter(corpus[idx])
+                    score = self._cosine_from_counters(query_counter, query_norm, doc_counter, doc_norm)
+                    scored.append((idx, score))
+                scored.sort(key=lambda item: item[1], reverse=True)
+                ranked = [idx for idx, _ in scored]
+                return self._rotate_indices_for_expansion(ranked, expansion)
+
             if target_cluster_id is not None:
                 labels = self._resolve_cluster_labels(search_engine)
                 if labels is not None and len(labels) == len(search_engine.df):
@@ -666,8 +775,9 @@ class CreativeAgent:
                         if int(c) == int(target_cluster_id) and i not in seen_indices
                     ]
                     if cluster_members:
-                        return cluster_members
-            return [int(i) for i in range(len(search_engine.df)) if i not in seen_indices]
+                        return _rank_indices(cluster_members)
+            all_candidates = [int(i) for i in range(len(search_engine.df)) if i not in seen_indices]
+            return _rank_indices(all_candidates)
         return []
 
     def _filter_candidates_by_cluster(
@@ -931,7 +1041,6 @@ class CreativeAgent:
         for _, row in df.iterrows():
             parts = [
                 str(row.get("prompt", "")),
-                str(row.get("negative_prompt", "")),
                 str(row.get("style", "")),
                 str(row.get("lora", "")),
                 str(row.get("sampler", "")),
@@ -939,6 +1048,72 @@ class CreativeAgent:
             ]
             corpus.append(" ".join(part for part in parts if part))
         return corpus
+
+    def _score_intent_against_gallery_rows(self, df: Any, intent_text: str) -> np.ndarray:
+        corpus = self._gallery_corpus(df)
+        if not corpus:
+            return np.zeros(0, dtype=float)
+        try:
+            vectorizer = TfidfVectorizer(
+                lowercase=True,
+                ngram_range=(1, 2),
+                token_pattern=r"(?u)\b[\w\-\+']+\b",
+                max_features=9000,
+            )
+            doc_matrix = vectorizer.fit_transform(corpus)
+            query_vec = vectorizer.transform([intent_text])
+            scores = (doc_matrix @ query_vec.T).toarray().ravel()
+            return np.asarray(scores, dtype=float)
+        except Exception:
+            query_counter, query_norm = self._tokenize_to_counter(intent_text)
+            scores: List[float] = []
+            for doc in corpus:
+                doc_counter, doc_norm = self._tokenize_to_counter(doc)
+                score = self._cosine_from_counters(query_counter, query_norm, doc_counter, doc_norm)
+                scores.append(float(score))
+            return np.asarray(scores, dtype=float)
+
+    @staticmethod
+    def _rotation_seed(expansion: Optional[ExpandedQuery]) -> int:
+        if expansion is None:
+            return 0
+        seed_text = "|".join(
+            [
+                expansion.label or "",
+                expansion.prompt or "",
+                expansion.checkpoint or "",
+                expansion.sampler or "",
+                ",".join(expansion.loras or []),
+            ]
+        )
+        digest = hashlib.md5(seed_text.encode("utf-8")).hexdigest()
+        return int(digest[:8], 16)
+
+    def _rotate_candidates_for_expansion(
+        self,
+        candidates: List[Dict[str, Any]],
+        expansion: Optional[ExpandedQuery],
+    ) -> List[Dict[str, Any]]:
+        if len(candidates) <= 2:
+            return candidates
+        window = len(candidates)
+        seed = self._rotation_seed(expansion)
+        offset = seed % window
+        head = candidates[:window]
+        return head[offset:] + head[:offset] + candidates[window:]
+
+    def _rotate_indices_for_expansion(
+        self,
+        indices: List[int],
+        expansion: Optional[ExpandedQuery],
+    ) -> List[int]:
+        if len(indices) <= 2:
+            return indices
+        window = len(indices)
+        seed = self._rotation_seed(expansion)
+        offset = seed % window
+        head = indices[:window]
+        return head[offset:] + head[:offset] + indices[window:]
 
     @staticmethod
     def _extract_bullets(markdown: str, heading: str) -> List[str]:
