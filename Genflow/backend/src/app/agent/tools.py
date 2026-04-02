@@ -43,6 +43,7 @@ class AgentToolsService:
             recommendation=recommendation,
             previous_expansions=previous_expansions,
             force_refresh=force_refresh,
+            search_engine=self.search_repo.search_engine,
         )
 
     def build_candidate_wall(
@@ -50,12 +51,14 @@ class AgentToolsService:
         expansions: List[ExpandedQuery],
         per_query_k: int = 2,
         top_k: int = 12,
+        avoid_indices: Optional[List[int]] = None,
     ) -> CandidateWall:
         return self.creative_agent.build_candidate_wall(
             search_engine=self.search_repo.search_engine,
             expansions=expansions,
             per_query_k=per_query_k,
             top_k=top_k,
+            avoid_indices=avoid_indices,
         )
 
     def describe_wall(self, wall: CandidateWall) -> str:

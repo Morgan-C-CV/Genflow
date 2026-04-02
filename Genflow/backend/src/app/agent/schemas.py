@@ -32,6 +32,7 @@ class AgentExpansionView(BaseModel):
     label: str
     prompt: str
     axis_focus: List[str]
+    target_cluster_id: int | None = None
     checkpoint: str
     sampler: str
     loras: List[str]

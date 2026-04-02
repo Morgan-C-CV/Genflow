@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 from app.core.config import settings
 from app.agents.prompts import EXPANSION_SYSTEM_INSTRUCTION, PLANNER_SYSTEM_INSTRUCTION
@@ -58,6 +60,7 @@ class ExpandedQuery:
     checkpoint: Optional[str] = None
     sampler: Optional[str] = None
     loras: List[str] = field(default_factory=list)
+    target_cluster_id: Optional[int] = None
 
 
 @dataclass
@@ -115,6 +118,8 @@ class CreativeAgent:
         default_path = Path(__file__).with_name("resources.md")
         self.resources_path = Path(resources_path) if resources_path else default_path
         self._resource_cache: Optional[ResourceContext] = None
+        self._latest_cluster_labels: Optional[np.ndarray] = None
+        self._latest_cluster_count: Optional[int] = None
 
     def load_resources(self) -> ResourceContext:
         if self._resource_cache is not None:
@@ -182,7 +187,15 @@ class CreativeAgent:
         recommendation: Optional[ResourceRecommendation] = None,
         previous_expansions: Optional[List[ExpandedQuery]] = None,
         force_refresh: bool = False,
+        search_engine: Optional[Any] = None,
     ) -> List[ExpandedQuery]:
+        gallery_awareness = self._build_gallery_awareness(
+            search_engine=search_engine,
+            user_intent=user_intent,
+            plan=plan,
+            previous_expansions=previous_expansions,
+            force_refresh=force_refresh,
+        )
         payload = {
             "user_intent": user_intent.strip(),
             "fixed_constraints": plan.fixed_constraints,
@@ -198,6 +211,8 @@ class CreativeAgent:
             },
             "resource_inventory": resources.to_context_block(),
         }
+        if gallery_awareness:
+            payload["gallery_awareness"] = gallery_awareness
         if recommendation is not None:
             payload["resource_hint"] = {
                 "checkpoint": recommendation.checkpoint,
@@ -219,6 +234,7 @@ class CreativeAgent:
         response = self._expander_model.generate_content(self._build_json_payload(payload))
         data = self._parse_json(response.text, "build_axis_expansions")
         expansions = self._coerce_expansions(data, resources)
+        expansions = self._bind_selected_clusters(expansions, gallery_awareness)
         expansions = self._rebalance_expansions(
             expansions=expansions,
             resources=resources,
@@ -227,6 +243,253 @@ class CreativeAgent:
         if len(expansions) != 8:
             raise ValueError(f"Expected 8 expansions, got {len(expansions)}")
         return expansions
+
+    def _build_gallery_awareness(
+        self,
+        search_engine: Optional[Any],
+        user_intent: str,
+        plan: CreativeIntentPlan,
+        previous_expansions: Optional[List[ExpandedQuery]] = None,
+        force_refresh: bool = False,
+    ) -> Dict[str, Any]:
+        if search_engine is None or not hasattr(search_engine, "df") or not hasattr(search_engine, "pbo_space"):
+            return {}
+        df = search_engine.df
+        vectors = np.asarray(search_engine.pbo_space) if search_engine.pbo_space is not None else None
+        if vectors is None or len(vectors) < 2 or df is None or len(df) < 2:
+            return {}
+
+        target_k = self._select_cluster_k(vectors, min_k=12, max_k=16)
+        kmeans = KMeans(n_clusters=target_k, n_init=12, random_state=42)
+        labels = kmeans.fit_predict(vectors)
+        self._latest_cluster_labels = labels.astype(int)
+        self._latest_cluster_count = int(target_k)
+
+        profile_rows: List[Dict[str, Any]] = []
+        intent_text = " ".join(
+            [
+                user_intent.strip(),
+                " ".join(f"{k}:{v}" for k, v in plan.fixed_constraints.items()),
+                " ".join(plan.free_variables),
+                " ".join(plan.unclear_axes),
+            ]
+        ).strip()
+        intent_counter, intent_norm = self._tokenize_to_counter(intent_text)
+        previous_checkpoints = {
+            (e.checkpoint or "").strip().lower()
+            for e in (previous_expansions or [])
+            if (e.checkpoint or "").strip()
+        }
+
+        for cluster_id in range(target_k):
+            member_indices = np.where(labels == cluster_id)[0].tolist()
+            if not member_indices:
+                continue
+            cluster_df = df.iloc[member_indices]
+            centroid = vectors[member_indices].mean(axis=0)
+            centroid_norm = float(np.linalg.norm(centroid) or 1.0)
+            dominant_model = self._mode_text(cluster_df, "model")
+            dominant_sampler = self._mode_text(cluster_df, "sampler")
+            dominant_loras = self._top_terms(cluster_df, "loras", top_n=3, split_words=False)
+            signature_terms = self._cluster_signature_terms(cluster_df, top_n=6)
+            profile_text = " ".join(
+                [dominant_model, dominant_sampler, " ".join(dominant_loras), " ".join(signature_terms)]
+            ).strip()
+            profile_counter, profile_norm = self._tokenize_to_counter(profile_text)
+            relevance = self._cosine_from_counters(
+                intent_counter,
+                intent_norm,
+                profile_counter,
+                profile_norm,
+            )
+            profile_rows.append(
+                {
+                    "cluster_id": int(cluster_id),
+                    "size": int(len(member_indices)),
+                    "dominant_model": dominant_model,
+                    "dominant_sampler": dominant_sampler,
+                    "dominant_loras": dominant_loras,
+                    "signature_terms": signature_terms,
+                    "relevance": float(relevance),
+                    "_centroid": centroid,
+                    "_centroid_norm": centroid_norm,
+                    "_refresh_penalty": (
+                        0.25
+                        if force_refresh and dominant_model.strip().lower() in previous_checkpoints
+                        else 0.0
+                    ),
+                }
+            )
+
+        selected = self._select_clusters_for_expansion(profile_rows, pick_count=8)
+        if not selected:
+            return {}
+
+        selected_payload = []
+        for rank, row in enumerate(selected, start=1):
+            selected_payload.append(
+                {
+                    "rank": rank,
+                    "cluster_id": row["cluster_id"],
+                    "size": row["size"],
+                    "dominant_model": row["dominant_model"],
+                    "dominant_sampler": row["dominant_sampler"],
+                    "dominant_loras": row["dominant_loras"],
+                    "signature_terms": row["signature_terms"],
+                    "relevance": round(float(row["relevance"]), 4),
+                }
+            )
+
+        return {
+            "cluster_count": int(len(profile_rows)),
+            "selected_cluster_count": int(len(selected_payload)),
+            "selection_policy": "mmr_relevance_diversity",
+            "selected_clusters": selected_payload,
+        }
+
+    @staticmethod
+    def _bind_selected_clusters(
+        expansions: List[ExpandedQuery],
+        gallery_awareness: Dict[str, Any],
+    ) -> List[ExpandedQuery]:
+        selected = gallery_awareness.get("selected_clusters", []) if gallery_awareness else []
+        selected_ids = [
+            int(item.get("cluster_id"))
+            for item in selected
+            if isinstance(item, dict) and str(item.get("cluster_id", "")).isdigit()
+        ]
+        if not selected_ids:
+            return expansions
+        for i, item in enumerate(expansions):
+            if item.target_cluster_id not in selected_ids:
+                item.target_cluster_id = selected_ids[i % len(selected_ids)]
+        return expansions
+
+    @staticmethod
+    def _select_cluster_k(vectors: np.ndarray, min_k: int = 12, max_k: int = 16) -> int:
+        n_samples = int(len(vectors))
+        upper = max(2, min(max_k, n_samples - 1))
+        lower = min(min_k, upper)
+        candidates = list(range(lower, upper + 1))
+        if len(candidates) == 1:
+            return candidates[0]
+
+        if n_samples > 1200:
+            rng = np.random.default_rng(42)
+            sample_indices = rng.choice(n_samples, size=1200, replace=False)
+            sample_vectors = vectors[sample_indices]
+        else:
+            sample_vectors = vectors
+
+        best_k = candidates[0]
+        best_score = -1.0
+        for k in candidates:
+            if len(sample_vectors) <= k:
+                continue
+            model = KMeans(n_clusters=k, n_init=8, random_state=42)
+            labels = model.fit_predict(sample_vectors)
+            if len(set(labels)) < 2:
+                continue
+            try:
+                score = float(silhouette_score(sample_vectors, labels, metric="euclidean"))
+            except Exception:
+                score = -1.0
+            if score > best_score:
+                best_score = score
+                best_k = k
+        return int(best_k)
+
+    @staticmethod
+    def _mode_text(df: Any, column: str) -> str:
+        if column not in df.columns or df.empty:
+            return "UNKNOWN"
+        series = df[column].fillna("").astype(str)
+        series = series[series.str.strip() != ""]
+        if series.empty:
+            return "UNKNOWN"
+        try:
+            return str(series.mode().iloc[0]).strip() or "UNKNOWN"
+        except Exception:
+            return str(series.iloc[0]).strip() or "UNKNOWN"
+
+    def _cluster_signature_terms(self, df: Any, top_n: int = 6) -> List[str]:
+        counter = Counter()
+        for _, row in df.head(min(len(df), 220)).iterrows():
+            text = " ".join(
+                [
+                    str(row.get("prompt", "")),
+                    str(row.get("style", "")),
+                    str(row.get("negative_prompt", "")),
+                ]
+            )
+            term_counter, _ = self._tokenize_to_counter(text)
+            counter.update(term_counter)
+        blocked = {
+            "best", "quality", "masterpiece", "high", "ultra", "detailed", "detail", "8k",
+            "prompt", "style", "lighting", "background", "color", "negative",
+        }
+        terms = [t for t, _ in counter.most_common(top_n * 4) if t not in blocked and len(t) > 1]
+        return terms[:top_n]
+
+    @staticmethod
+    def _top_terms(df: Any, column: str, top_n: int = 3, split_words: bool = True) -> List[str]:
+        if column not in df.columns or df.empty:
+            return []
+        counter = Counter()
+        for value in df[column].fillna("").astype(str).tolist():
+            text = value.strip()
+            if not text:
+                continue
+            if split_words:
+                for token in re.split(r"[,\s]+", text):
+                    token = token.strip()
+                    if token:
+                        counter[token] += 1
+            else:
+                counter[text] += 1
+        return [term for term, _ in counter.most_common(top_n)]
+
+    @staticmethod
+    def _centroid_cosine(a: np.ndarray, a_norm: float, b: np.ndarray, b_norm: float) -> float:
+        return float(np.dot(a, b) / ((a_norm or 1.0) * (b_norm or 1.0)))
+
+    def _select_clusters_for_expansion(
+        self,
+        profile_rows: List[Dict[str, Any]],
+        pick_count: int = 8,
+    ) -> List[Dict[str, Any]]:
+        if not profile_rows:
+            return []
+        total_size = max(1, sum(int(row["size"]) for row in profile_rows))
+        selected: List[Dict[str, Any]] = []
+        remaining = list(profile_rows)
+        while remaining and len(selected) < pick_count:
+            best_row = None
+            best_score = -10.0
+            for row in remaining:
+                size_bonus = float(row["size"]) / float(total_size)
+                base = 0.72 * float(row["relevance"]) + 0.18 * size_bonus - float(row["_refresh_penalty"])
+                if not selected:
+                    score = base
+                else:
+                    similarity = max(
+                        self._centroid_cosine(
+                            row["_centroid"],
+                            row["_centroid_norm"],
+                            s["_centroid"],
+                            s["_centroid_norm"],
+                        )
+                        for s in selected
+                    )
+                    score = base - 0.22 * max(0.0, similarity)
+                if score > best_score:
+                    best_score = score
+                    best_row = row
+            if best_row is None:
+                break
+            selected.append(best_row)
+            remaining = [row for row in remaining if row["cluster_id"] != best_row["cluster_id"]]
+        return selected
 
     @staticmethod
     def summarize_expansion_resources(expansions: Sequence[ExpandedQuery]) -> ResourceRecommendation:
@@ -268,10 +531,12 @@ class CreativeAgent:
         expansions: Sequence[ExpandedQuery],
         per_query_k: int = 4,
         top_k: int = 12,
+        avoid_indices: Optional[Sequence[int]] = None,
     ) -> CandidateWall:
         groups: List[List[int]] = []
         flat_indices: List[int] = []
         seen_indices: set[int] = set()
+        blocked_indices: set[int] = {int(i) for i in (avoid_indices or [])}
         query_labels: List[str] = []
 
         for expansion in expansions:
@@ -280,7 +545,7 @@ class CreativeAgent:
             group: List[int] = []
             for candidate in candidates:
                 idx = candidate["index"]
-                if idx in seen_indices:
+                if idx in seen_indices or idx in blocked_indices:
                     continue
                 group.append(idx)
                 seen_indices.add(idx)
@@ -288,7 +553,24 @@ class CreativeAgent:
                 if len(group) == per_query_k:
                     break
             if len(group) < per_query_k:
-                for idx in self._fallback_pool(search_engine, seen_indices):
+                for idx in self._fallback_pool(
+                    search_engine,
+                    seen_indices,
+                    target_cluster_id=expansion.target_cluster_id,
+                ):
+                    if idx in seen_indices or idx in blocked_indices:
+                        continue
+                    group.append(idx)
+                    seen_indices.add(idx)
+                    flat_indices.append(idx)
+                    if len(group) == per_query_k:
+                        break
+            if len(group) < per_query_k:
+                for idx in self._fallback_pool(
+                    search_engine,
+                    seen_indices,
+                    target_cluster_id=None,
+                ):
                     if idx in seen_indices:
                         continue
                     group.append(idx)
@@ -326,14 +608,26 @@ class CreativeAgent:
                     sampler=expansion.sampler,
                     model=expansion.checkpoint,
                 )
-                return search_engine.search_top_k(
+                results = search_engine.search_top_k(
                     query_vector=np.asarray(query_vector).reshape(1, -1),
+                    top_k=max(top_k * 4, top_k),
+                )
+                return self._filter_candidates_by_cluster(
+                    search_engine=search_engine,
+                    candidates=results,
+                    target_cluster_id=expansion.target_cluster_id,
                     top_k=top_k,
                 )
             except Exception:
                 pass
 
-        return self._rank_gallery_candidates_text(search_engine, expansion, top_k=top_k)
+        results = self._rank_gallery_candidates_text(search_engine, expansion, top_k=max(top_k * 4, top_k))
+        return self._filter_candidates_by_cluster(
+            search_engine=search_engine,
+            candidates=results,
+            target_cluster_id=expansion.target_cluster_id,
+            top_k=top_k,
+        )
 
     def _rank_gallery_candidates_text(
         self, search_engine: Any, expansion: ExpandedQuery, top_k: int = 12
@@ -356,10 +650,67 @@ class CreativeAgent:
             results.append(row)
         return results
 
-    def _fallback_pool(self, search_engine: Any, seen_indices: set[int]) -> List[int]:
+    def _fallback_pool(
+        self,
+        search_engine: Any,
+        seen_indices: set[int],
+        target_cluster_id: Optional[int] = None,
+    ) -> List[int]:
         if hasattr(search_engine, "df"):
+            if target_cluster_id is not None:
+                labels = self._resolve_cluster_labels(search_engine)
+                if labels is not None and len(labels) == len(search_engine.df):
+                    cluster_members = [
+                        int(i)
+                        for i, c in enumerate(labels)
+                        if int(c) == int(target_cluster_id) and i not in seen_indices
+                    ]
+                    if cluster_members:
+                        return cluster_members
             return [int(i) for i in range(len(search_engine.df)) if i not in seen_indices]
         return []
+
+    def _filter_candidates_by_cluster(
+        self,
+        search_engine: Any,
+        candidates: List[Dict[str, Any]],
+        target_cluster_id: Optional[int],
+        top_k: int,
+    ) -> List[Dict[str, Any]]:
+        if target_cluster_id is None:
+            return candidates[:top_k]
+        labels = self._resolve_cluster_labels(search_engine)
+        if labels is None:
+            return candidates[:top_k]
+        in_cluster = []
+        out_cluster = []
+        for item in candidates:
+            idx = int(item.get("index", -1))
+            if 0 <= idx < len(labels) and int(labels[idx]) == int(target_cluster_id):
+                in_cluster.append(item)
+            else:
+                out_cluster.append(item)
+        if in_cluster:
+            return in_cluster[:top_k]
+        return out_cluster[:top_k]
+
+    def _resolve_cluster_labels(self, search_engine: Any) -> Optional[np.ndarray]:
+        if not hasattr(search_engine, "pbo_space") or search_engine.pbo_space is None:
+            return None
+        vectors = np.asarray(search_engine.pbo_space)
+        if len(vectors) < 2:
+            return None
+        if (
+            self._latest_cluster_labels is not None
+            and len(self._latest_cluster_labels) == len(vectors)
+            and self._latest_cluster_count is not None
+        ):
+            return self._latest_cluster_labels
+        cluster_k = self._select_cluster_k(vectors, min_k=12, max_k=16)
+        labels = KMeans(n_clusters=cluster_k, n_init=10, random_state=42).fit_predict(vectors).astype(int)
+        self._latest_cluster_labels = labels
+        self._latest_cluster_count = int(cluster_k)
+        return labels
 
     @staticmethod
     def _build_json_payload(payload: Dict[str, Any]) -> str:
@@ -481,6 +832,12 @@ class CreativeAgent:
             checkpoint = str(item.get("checkpoint", "")).strip()
             sampler = str(item.get("sampler", "")).strip()
             loras = [str(v).strip() for v in item.get("loras", []) if str(v).strip()]
+            raw_cluster_id = item.get("cluster_id")
+            target_cluster_id = None
+            if isinstance(raw_cluster_id, int):
+                target_cluster_id = int(raw_cluster_id)
+            elif isinstance(raw_cluster_id, str) and raw_cluster_id.strip().isdigit():
+                target_cluster_id = int(raw_cluster_id.strip())
             if resources.checkpoints and checkpoint not in resources.checkpoints:
                 checkpoint = resources.checkpoints[i % len(resources.checkpoints)]
             if resources.samplers and sampler not in resources.samplers:
@@ -496,6 +853,7 @@ class CreativeAgent:
                     checkpoint=checkpoint or (resources.checkpoints[i % len(resources.checkpoints)] if resources.checkpoints else "UNKNOWN"),
                     sampler=sampler or (resources.samplers[i % len(resources.samplers)] if resources.samplers else "UNKNOWN"),
                     loras=loras,
+                    target_cluster_id=target_cluster_id,
                 )
             )
         return expansions
@@ -598,6 +956,9 @@ class CreativeAgent:
             stripped = line.strip()
             if stripped.startswith("## "):
                 break
-            if stripped.startswith("- "):
-                bullets.append(stripped[2:].strip())
-        return bullets
+            if line.startswith("- "):
+                value = line[2:].strip()
+                value = re.sub(r"^`(.+)`$", r"\1", value)
+                if value:
+                    bullets.append(value)
+        return list(dict.fromkeys(bullets))

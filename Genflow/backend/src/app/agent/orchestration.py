@@ -67,6 +67,9 @@ class AgentOrchestrationService:
 
         if refresh and session.latest_expansions:
             session.previous_expansions.extend(session.latest_expansions)
+        if refresh and session.latest_wall is not None:
+            merged = list(dict.fromkeys(session.previous_wall_indices + session.latest_wall.flat_indices))
+            session.previous_wall_indices = merged
 
         expansions = self.tools_service.build_axis_expansions(
             user_intent=session.clarified_intent,
@@ -79,6 +82,7 @@ class AgentOrchestrationService:
             expansions=expansions,
             per_query_k=per_query_k,
             top_k=top_k,
+            avoid_indices=session.previous_wall_indices if refresh else None,
         )
         session.resource_recommendation = self.tools_service.creative_agent.summarize_expansion_resources(expansions)
         session.latest_expansions = expansions

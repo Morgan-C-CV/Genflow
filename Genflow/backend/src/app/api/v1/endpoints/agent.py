@@ -123,6 +123,7 @@ def generate_agent_candidates(
                 label=item.label,
                 prompt=item.prompt,
                 axis_focus=item.axis_focus,
+                target_cluster_id=item.target_cluster_id,
                 checkpoint=item.checkpoint or "",
                 sampler=item.sampler or "",
                 loras=item.loras,

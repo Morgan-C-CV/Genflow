@@ -204,6 +204,7 @@ def main():
     resources = creative_agent.load_resources()
     
     previous_expansions = []
+    previous_wall_indices = []
     force_refresh = False
     while True:
         expansions = creative_agent.build_axis_expansions(
@@ -213,8 +214,10 @@ def main():
             recommendation=None,
             previous_expansions=previous_expansions,
             force_refresh=force_refresh,
+            search_engine=search_engine,
         )
         resource_recommendation = creative_agent.summarize_expansion_resources(expansions)
+        use_avoid_indices = force_refresh
         force_refresh = False
 
         print("\n[Resource Assignment] 候选资源分配摘要：")
@@ -225,11 +228,18 @@ def main():
         print("\n[Agent ReAct] 8 个发散查询（每个候选独立资源）已生成：")
         for i, expansion in enumerate(expansions, start=1):
             lora_text = ", ".join(expansion.loras) if expansion.loras else "none"
+            cluster_text = f" | Cluster: {expansion.target_cluster_id}" if expansion.target_cluster_id is not None else ""
             print(f"  {i}. {expansion.label}")
             print(f"     {expansion.prompt[:220]}...")
-            print(f"     Checkpoint: {expansion.checkpoint} | Sampler: {expansion.sampler} | LoRAs: {lora_text}")
+            print(f"     Checkpoint: {expansion.checkpoint} | Sampler: {expansion.sampler} | LoRAs: {lora_text}{cluster_text}")
 
-        wall = creative_agent.build_candidate_wall(search_engine, expansions, per_query_k=2, top_k=12)
+        wall = creative_agent.build_candidate_wall(
+            search_engine,
+            expansions,
+            per_query_k=2,
+            top_k=12,
+            avoid_indices=previous_wall_indices if use_avoid_indices else None,
+        )
         if len(wall.flat_indices) < 16:
             raise RuntimeError(f"Initial wall only produced {len(wall.flat_indices)} candidates; expected 16.")
 
@@ -251,6 +261,7 @@ def main():
             if selected_raw == "0":
                 print("\n[Agent ReAct] 正在为您更换一批候选方案（强制变换风格与资源组合）...")
                 previous_expansions.extend(expansions)
+                previous_wall_indices = list(dict.fromkeys(previous_wall_indices + wall.flat_indices))
                 force_refresh = True
                 break_outer = False
                 break

@@ -53,8 +53,13 @@ Goals:
 5. If provided with "previous_expansions", ensure the new ones are significantly
    different to provide a "refresh" experience. In refresh mode, avoid reusing
    prior resource combinations unless strictly necessary.
-6. Output JSON only. No markdown, no code fences, no commentary.
-7. Prefer a mix of model families across the 8 candidates. Do not collapse to a
+6. If "gallery_awareness" is provided, treat its selected_clusters as hard
+   grounding context. Use those clusters to distribute the 8 candidates across
+   distinct gallery regions instead of collapsing near one style pocket.
+7. In gallery-aware mode, each candidate should be explainable by one selected
+   cluster's dominant model/sampler/signature_terms while still matching the user intent.
+8. Output JSON only. No markdown, no code fences, no commentary.
+9. Prefer a mix of model families across the 8 candidates. Do not collapse to a
    single checkpoint unless the inventory only has one viable option.
 
 Output schema:
@@ -65,6 +70,7 @@ Output schema:
       "label": "...",
       "prompt": "...",
       "axis_focus": ["style", "lighting_vibe"],
+      "cluster_id": 3,
       "checkpoint": "...",
       "sampler": "...",
       "loras": ["..."],
@@ -79,4 +85,6 @@ Constraints:
   subject, style, composition, lighting_vibe, background_setting, color_palette
 - Choose loras and checkpoint from the inventory you are given.
 - At least 3 different checkpoints should appear when inventory allows.
+- In gallery-aware mode, map candidates to different selected cluster_ids when possible.
+- If selected_clusters are provided, each expansion should set a cluster_id from that list.
 """

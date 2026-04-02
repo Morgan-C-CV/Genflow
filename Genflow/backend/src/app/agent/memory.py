@@ -21,6 +21,7 @@ class AgentSessionState:
     plan: Optional[CreativeIntentPlan] = None
     resource_recommendation: Optional[ResourceRecommendation] = None
     previous_expansions: List[ExpandedQuery] = field(default_factory=list)
+    previous_wall_indices: List[int] = field(default_factory=list)
     latest_expansions: List[ExpandedQuery] = field(default_factory=list)
     latest_wall: Optional[CandidateWall] = None
 
