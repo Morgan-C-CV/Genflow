@@ -68,19 +68,19 @@ class AgentOrchestrationService:
         if refresh and session.latest_expansions:
             session.previous_expansions.extend(session.latest_expansions)
 
-        recommendation = self.tools_service.recommend_resources(session.plan)
         expansions = self.tools_service.build_axis_expansions(
             user_intent=session.clarified_intent,
             plan=session.plan,
-            recommendation=recommendation,
+            recommendation=None,
             previous_expansions=session.previous_expansions,
+            force_refresh=refresh,
         )
         wall = self.tools_service.build_candidate_wall(
             expansions=expansions,
             per_query_k=per_query_k,
             top_k=top_k,
         )
-        session.resource_recommendation = recommendation
+        session.resource_recommendation = self.tools_service.creative_agent.summarize_expansion_resources(expansions)
         session.latest_expansions = expansions
         session.latest_wall = wall
         return self.memory_service.save_session(session)

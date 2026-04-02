@@ -33,6 +33,7 @@ class AgentToolsService:
         plan: CreativeIntentPlan,
         recommendation: Optional[ResourceRecommendation] = None,
         previous_expansions: Optional[List[ExpandedQuery]] = None,
+        force_refresh: bool = False,
     ) -> List[ExpandedQuery]:
         resources = self.creative_agent.load_resources()
         return self.creative_agent.build_axis_expansions(
@@ -41,6 +42,7 @@ class AgentToolsService:
             resources=resources,
             recommendation=recommendation,
             previous_expansions=previous_expansions,
+            force_refresh=force_refresh,
         )
 
     def build_candidate_wall(

@@ -46,19 +46,19 @@ Goals:
 1. Preserve the user intent and the fixed constraints.
 2. Generate eight clearly different prompts that expand along different latent
    axes.
-3. Use the provided resource inventory to choose a checkpoint, sampler, and
-   LoRAs that fit the intent.
+3. You must assign resources per candidate. Every candidate must explicitly
+   choose its own checkpoint, sampler, and LoRAs that fit its style direction.
 4. Keep the eight candidates diverse enough for gallery retrieval, but still
    semantically tied to the user's request.
 5. If provided with "previous_expansions", ensure the new ones are significantly
-   different to provide a "refresh" experience.
+   different to provide a "refresh" experience. In refresh mode, avoid reusing
+   prior resource combinations unless strictly necessary.
 6. Output JSON only. No markdown, no code fences, no commentary.
+7. Prefer a mix of model families across the 8 candidates. Do not collapse to a
+   single checkpoint unless the inventory only has one viable option.
 
 Output schema:
 {
-  "recommended_checkpoint": "...",
-  "recommended_sampler": "...",
-  "recommended_loras": ["..."],
   "reasoning_summary": "...",
   "expansions": [
     {
@@ -67,7 +67,8 @@ Output schema:
       "axis_focus": ["style", "lighting_vibe"],
       "checkpoint": "...",
       "sampler": "...",
-      "loras": ["..."]
+      "loras": ["..."],
+      "resource_reason": "why this resource set matches this candidate"
     }
   ]
 }
@@ -77,4 +78,5 @@ Constraints:
 - Axis focus values must use only these axes:
   subject, style, composition, lighting_vibe, background_setting, color_palette
 - Choose loras and checkpoint from the inventory you are given.
+- At least 3 different checkpoints should appear when inventory allows.
 """

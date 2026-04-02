@@ -202,27 +202,32 @@ def main():
     # 2. ReAct-based creative intake and divergent candidate retrieval
     clarified_intent, intent_plan = prompt_user_intent(creative_agent)
     resources = creative_agent.load_resources()
-    resource_recommendation = creative_agent.recommend_resources(intent_plan, resources)
     
     previous_expansions = []
+    force_refresh = False
     while True:
         expansions = creative_agent.build_axis_expansions(
             clarified_intent,
             intent_plan,
             resources,
-            recommendation=resource_recommendation,
+            recommendation=None,
             previous_expansions=previous_expansions,
+            force_refresh=force_refresh,
         )
+        resource_recommendation = creative_agent.summarize_expansion_resources(expansions)
+        force_refresh = False
 
-        print("\n[Resource RAG] 资源推荐：")
-        print(f"- Checkpoint: {resource_recommendation.checkpoint}")
-        print(f"- Sampler: {resource_recommendation.sampler}")
-        print(f"- LoRAs: {', '.join(resource_recommendation.loras) if resource_recommendation.loras else 'none'}")
+        print("\n[Resource Assignment] 候选资源分配摘要：")
+        print(f"- Dominant Checkpoint: {resource_recommendation.checkpoint}")
+        print(f"- Dominant Sampler: {resource_recommendation.sampler}")
+        print(f"- Top LoRAs: {', '.join(resource_recommendation.loras) if resource_recommendation.loras else 'none'}")
         print(f"- Reasoning: {resource_recommendation.reasoning_summary}")
-        print("\n[Agent ReAct] 8 个发散查询已生成：")
+        print("\n[Agent ReAct] 8 个发散查询（每个候选独立资源）已生成：")
         for i, expansion in enumerate(expansions, start=1):
+            lora_text = ", ".join(expansion.loras) if expansion.loras else "none"
             print(f"  {i}. {expansion.label}")
             print(f"     {expansion.prompt[:220]}...")
+            print(f"     Checkpoint: {expansion.checkpoint} | Sampler: {expansion.sampler} | LoRAs: {lora_text}")
 
         wall = creative_agent.build_candidate_wall(search_engine, expansions, per_query_k=2, top_k=12)
         if len(wall.flat_indices) < 16:
@@ -244,9 +249,9 @@ def main():
             selected_raw = input("> ").strip()
             
             if selected_raw == "0":
-                print("\n[Agent ReAct] 正在为您更换一批候选方案...")
+                print("\n[Agent ReAct] 正在为您更换一批候选方案（强制变换风格与资源组合）...")
                 previous_expansions.extend(expansions)
-                # We break the inner loop to continue the outer expansion loop
+                force_refresh = True
                 break_outer = False
                 break
             

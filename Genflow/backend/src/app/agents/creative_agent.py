@@ -181,32 +181,80 @@ class CreativeAgent:
         resources: ResourceContext,
         recommendation: Optional[ResourceRecommendation] = None,
         previous_expansions: Optional[List[ExpandedQuery]] = None,
+        force_refresh: bool = False,
     ) -> List[ExpandedQuery]:
-        recommendation = recommendation or self.recommend_resources(plan, resources)
         payload = {
             "user_intent": user_intent.strip(),
             "fixed_constraints": plan.fixed_constraints,
             "free_variables": plan.free_variables,
             "unclear_axes": plan.unclear_axes,
-            "recommendation": {
-                "recommended_checkpoint": recommendation.checkpoint,
-                "recommended_sampler": recommendation.sampler,
-                "recommended_loras": recommendation.loras,
+            "resource_assignment_mode": "per_candidate",
+            "refresh_mode": force_refresh,
+            "diversity_constraints": {
+                "target_candidate_count": 8,
+                "prefer_distinct_resource_signatures": True,
+                "prefer_distinct_checkpoints": True,
+                "minimum_unique_checkpoints": min(3, max(1, len(resources.checkpoints))),
             },
             "resource_inventory": resources.to_context_block(),
-            "target_candidate_count": 8,
         }
+        if recommendation is not None:
+            payload["resource_hint"] = {
+                "checkpoint": recommendation.checkpoint,
+                "sampler": recommendation.sampler,
+                "loras": recommendation.loras,
+            }
         if previous_expansions:
             payload["previous_expansions"] = [
-                {"label": e.label, "prompt": e.prompt} for e in previous_expansions
+                {
+                    "label": e.label,
+                    "prompt": e.prompt,
+                    "checkpoint": e.checkpoint,
+                    "sampler": e.sampler,
+                    "loras": e.loras,
+                }
+                for e in previous_expansions
             ]
 
         response = self._expander_model.generate_content(self._build_json_payload(payload))
         data = self._parse_json(response.text, "build_axis_expansions")
-        expansions = self._coerce_expansions(data, recommendation)
+        expansions = self._coerce_expansions(data, resources)
+        expansions = self._rebalance_expansions(
+            expansions=expansions,
+            resources=resources,
+            previous_expansions=previous_expansions if force_refresh else None,
+        )
         if len(expansions) != 8:
             raise ValueError(f"Expected 8 expansions, got {len(expansions)}")
         return expansions
+
+    @staticmethod
+    def summarize_expansion_resources(expansions: Sequence[ExpandedQuery]) -> ResourceRecommendation:
+        if not expansions:
+            return ResourceRecommendation(
+                checkpoint="UNKNOWN",
+                sampler="UNKNOWN",
+                loras=[],
+                reasoning_summary="No expansion resources available.",
+            )
+        checkpoint_counts = Counter((item.checkpoint or "").strip() for item in expansions if (item.checkpoint or "").strip())
+        sampler_counts = Counter((item.sampler or "").strip() for item in expansions if (item.sampler or "").strip())
+        lora_counts = Counter(
+            lora.strip() for item in expansions for lora in item.loras if lora.strip()
+        )
+        checkpoint = checkpoint_counts.most_common(1)[0][0] if checkpoint_counts else "UNKNOWN"
+        sampler = sampler_counts.most_common(1)[0][0] if sampler_counts else "UNKNOWN"
+        loras = [name for name, _ in lora_counts.most_common(3)]
+        reasoning_summary = (
+            f"Per-candidate resource assignment enabled; "
+            f"{len(checkpoint_counts)} checkpoints used across {len(expansions)} candidates."
+        )
+        return ResourceRecommendation(
+            checkpoint=checkpoint,
+            sampler=sampler,
+            loras=loras,
+            reasoning_summary=reasoning_summary,
+        )
 
     def describe_wall(self, wall: CandidateWall) -> str:
         lines = ["16 图发散矩阵的 8 个轴向分组："]
@@ -319,17 +367,48 @@ class CreativeAgent:
 
     @staticmethod
     def _parse_json(text: str, context: str) -> Dict[str, Any]:
-        text = text.strip()
-        if text.startswith("```"):
-            first_newline = text.find("\n")
-            if first_newline != -1:
-                text = text[first_newline + 1 :]
-            if text.endswith("```"):
-                text = text[:-3]
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"{context}: model returned invalid JSON: {text[:400]}") from exc
+        raw_text = text.strip()
+        for candidate in CreativeAgent._json_candidates(raw_text):
+            try:
+                parsed = json.loads(candidate)
+                return CreativeAgent._coerce_json_payload(parsed, context)
+            except json.JSONDecodeError:
+                pass
+            parsed = CreativeAgent._decode_first_json(candidate)
+            if parsed is not None:
+                return CreativeAgent._coerce_json_payload(parsed, context)
+        raise ValueError(f"{context}: model returned invalid JSON: {raw_text[:400]}")
+
+    @staticmethod
+    def _json_candidates(text: str) -> List[str]:
+        candidates: List[str] = []
+        if text:
+            candidates.append(text)
+        for match in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text, flags=re.IGNORECASE):
+            block = match.group(1).strip()
+            if block:
+                candidates.append(block)
+        return candidates
+
+    @staticmethod
+    def _decode_first_json(text: str) -> Optional[Any]:
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"[\{\[]", text):
+            start = match.start()
+            try:
+                obj, _ = decoder.raw_decode(text, idx=start)
+                return obj
+            except json.JSONDecodeError:
+                continue
+        return None
+
+    @staticmethod
+    def _coerce_json_payload(parsed: Any, context: str) -> Dict[str, Any]:
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, list) and context == "build_axis_expansions":
+            return {"expansions": parsed}
+        raise ValueError(f"{context}: model returned non-object JSON: {str(parsed)[:200]}")
 
     @staticmethod
     def _coerce_plan(
@@ -391,25 +470,79 @@ class CreativeAgent:
 
     @staticmethod
     def _coerce_expansions(
-        data: Dict[str, Any], recommendation: ResourceRecommendation
+        data: Dict[str, Any], resources: ResourceContext
     ) -> List[ExpandedQuery]:
         items = data.get("expansions", [])
         expansions: List[ExpandedQuery] = []
-        for item in items:
+        for i, item in enumerate(items):
             if not isinstance(item, dict):
                 continue
             axis_focus = [axis for axis in item.get("axis_focus", []) if axis in AXES]
+            checkpoint = str(item.get("checkpoint", "")).strip()
+            sampler = str(item.get("sampler", "")).strip()
             loras = [str(v).strip() for v in item.get("loras", []) if str(v).strip()]
+            if resources.checkpoints and checkpoint not in resources.checkpoints:
+                checkpoint = resources.checkpoints[i % len(resources.checkpoints)]
+            if resources.samplers and sampler not in resources.samplers:
+                sampler = resources.samplers[i % len(resources.samplers)]
+            if resources.loras:
+                loras = [l for l in loras if l in resources.loras]
+            loras = list(dict.fromkeys(loras))
             expansions.append(
                 ExpandedQuery(
                     label=str(item.get("label", "Expansion")).strip(),
                     prompt=str(item.get("prompt", "")).strip(),
                     axis_focus=axis_focus,
-                    checkpoint=str(item.get("checkpoint", recommendation.checkpoint)).strip() or recommendation.checkpoint,
-                    sampler=str(item.get("sampler", recommendation.sampler)).strip() or recommendation.sampler,
-                    loras=list(dict.fromkeys(loras or recommendation.loras[:2])),
+                    checkpoint=checkpoint or (resources.checkpoints[i % len(resources.checkpoints)] if resources.checkpoints else "UNKNOWN"),
+                    sampler=sampler or (resources.samplers[i % len(resources.samplers)] if resources.samplers else "UNKNOWN"),
+                    loras=loras,
                 )
             )
+        return expansions
+
+    @staticmethod
+    def _rebalance_expansions(
+        expansions: List[ExpandedQuery],
+        resources: ResourceContext,
+        previous_expansions: Optional[List[ExpandedQuery]] = None,
+    ) -> List[ExpandedQuery]:
+        if not expansions:
+            return expansions
+        available_checkpoints = resources.checkpoints or [item.checkpoint or "UNKNOWN" for item in expansions]
+        target_unique = min(max(1, len(available_checkpoints)), min(4, len(expansions)))
+        used_checkpoints = {item.checkpoint for item in expansions if item.checkpoint}
+        if len(used_checkpoints) < target_unique:
+            pool = [cp for cp in available_checkpoints if cp not in used_checkpoints]
+            cursor = 0
+            for i, item in enumerate(expansions):
+                if len(used_checkpoints) >= target_unique or cursor >= len(pool):
+                    break
+                if i < len(expansions) and item.checkpoint in used_checkpoints and sum(1 for e in expansions if e.checkpoint == item.checkpoint) > 1:
+                    item.checkpoint = pool[cursor]
+                    used_checkpoints.add(item.checkpoint)
+                    cursor += 1
+        if previous_expansions:
+            previous_signatures = {
+                (
+                    (e.checkpoint or "").strip().lower(),
+                    (e.sampler or "").strip().lower(),
+                    tuple(sorted((l or "").strip().lower() for l in e.loras if (l or "").strip())),
+                )
+                for e in previous_expansions
+            }
+            replacement_checkpoints = iter(available_checkpoints)
+            for item in expansions:
+                signature = (
+                    (item.checkpoint or "").strip().lower(),
+                    (item.sampler or "").strip().lower(),
+                    tuple(sorted((l or "").strip().lower() for l in item.loras if (l or "").strip())),
+                )
+                if signature not in previous_signatures:
+                    continue
+                for candidate in replacement_checkpoints:
+                    if candidate and candidate.lower() != (item.checkpoint or "").strip().lower():
+                        item.checkpoint = candidate
+                        break
         return expansions
 
     @staticmethod
