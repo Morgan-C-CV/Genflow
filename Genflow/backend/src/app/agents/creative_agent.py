@@ -8,12 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-import google.generativeai as genai
 import numpy as np
-from google.generativeai.types import GenerationConfig
 
 from app.core.config import settings
 from app.agents.prompts import EXPANSION_SYSTEM_INSTRUCTION, PLANNER_SYSTEM_INSTRUCTION
+from app.core.genai_client import GenAIModel
 
 
 AXES = [
@@ -94,24 +93,23 @@ class CreativeAgent:
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY is required for CreativeAgent.")
 
-        genai.configure(api_key=api_key)
+        from google import genai
+        self._client = genai.Client(api_key=api_key)
 
         self.model_name = model_name or settings.GEMINI_MODEL
-        self._planner_model = genai.GenerativeModel(
+        self._planner_model = GenAIModel(
+            client=self._client,
             model_name=self.model_name,
             system_instruction=PLANNER_SYSTEM_INSTRUCTION,
-            generation_config=GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0.2,
-            ),
+            response_mime_type="application/json",
+            temperature=0.2,
         )
-        self._expander_model = genai.GenerativeModel(
+        self._expander_model = GenAIModel(
+            client=self._client,
             model_name=self.model_name,
             system_instruction=EXPANSION_SYSTEM_INSTRUCTION,
-            generation_config=GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0.7,
-            ),
+            response_mime_type="application/json",
+            temperature=0.7,
         )
 
         default_path = Path(__file__).with_name("resources.md")

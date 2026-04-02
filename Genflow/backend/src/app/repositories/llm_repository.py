@@ -15,9 +15,8 @@ Architecture:
 """
 
 import json
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
 from app.core.config import settings
+from app.core.genai_client import GenAIModel
 
 
 # ──────────────────────────────────────────────
@@ -121,22 +120,21 @@ class LLMRepository:
                 "GOOGLE_API_KEY is required to initialize LLMRepository."
             )
 
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        from google import genai
+        self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 
-        # Agent 1: Summary analysis (Markdown output)
-        self._summary_agent = genai.GenerativeModel(
+        self._summary_agent = GenAIModel(
+            client=self._client,
             model_name=settings.GEMINI_MODEL,
             system_instruction=_SUMMARY_SYSTEM_INSTRUCTION,
         )
 
-        # Agent 2: Metadata generation (strict JSON output)
-        self._generation_agent = genai.GenerativeModel(
+        self._generation_agent = GenAIModel(
+            client=self._client,
             model_name=settings.GEMINI_MODEL,
             system_instruction=_GENERATION_SYSTEM_INSTRUCTION,
-            generation_config=GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0.7,
-            ),
+            response_mime_type="application/json",
+            temperature=0.7,
         )
 
     # ── Public API ──────────────────────────────
