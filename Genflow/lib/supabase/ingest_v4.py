@@ -1,190 +1,234 @@
 import json
+import os
 import re
+from typing import Dict, List
+
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.decomposition import PCA
-from supabase import create_client, Client
-import os
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from supabase import Client, create_client
 
-# Load environment variables from .env file
-base_dir = os.path.dirname(os.path.abspath(__file__))
-dotenv_paths = [
-    os.path.join(base_dir, "../../backend/src/.env"),
-    os.path.join(base_dir, ".env"),
-    os.path.join(os.getcwd(), ".env")
-]
 
-for dp in dotenv_paths:
-    if os.path.exists(dp):
-        load_dotenv(dp)
-        break
+def _load_env() -> None:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dotenv_paths = [
+        os.path.join(base_dir, "../../backend/src/.env"),
+        os.path.join(base_dir, ".env"),
+        os.path.join(os.getcwd(), ".env"),
+    ]
+    for dp in dotenv_paths:
+        if os.path.exists(dp):
+            load_dotenv(dp)
+            return
 
-# Supabase configuration
+
+_load_env()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
-
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip() or os.getenv("SUPABASE_KEY", "").strip()
+EMBED_TABLE = os.getenv("SUPABASE_PBO_TABLE", "image_embeddings_v4").strip()
+ARTIFACT_TABLE = os.getenv("SUPABASE_ARTIFACT_TABLE", "embedding_projection_artifacts").strip()
 if not SUPABASE_URL or not SUPABASE_KEY:
-    print("Error: SUPABASE_URL and SUPABASE_KEY must be set in environment variables or .env file.")
-    exit(1)
-
+    raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set.")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def _to_pgvector_literal(values) -> str:
+
+def _to_pgvector_literal(values: np.ndarray) -> str:
     arr = np.asarray(values, dtype=float).reshape(-1)
     return "[" + ",".join(str(float(x)) for x in arr.tolist()) + "]"
 
-def load_and_clean_data_v4(file_path):
-    print(f"Loading data: {file_path}")
-    with open(file_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    df = pd.DataFrame(data)
-    
-    def extract_model(meta_str):
-        if pd.isna(meta_str): return 'UNKNOWN'
-        match = re.search(r'Model:\s*([^,]+)', str(meta_str))
-        return match.group(1).strip() if match else 'UNKNOWN'
-        
-    def extract_loras(meta_str):
-        if pd.isna(meta_str): return ''
-        loras = re.findall(r'<lora:([^:]+):', str(meta_str))
-        return ' '.join(loras)
 
-    if 'full_metadata_string' in df.columns:
-        df['model'] = df['full_metadata_string'].apply(extract_model)
-        df['loras'] = df['full_metadata_string'].apply(extract_loras)
+def _extract_model(meta_str: str) -> str:
+    if pd.isna(meta_str):
+        return "UNKNOWN"
+    match = re.search(r"Model:\s*([^,]+)", str(meta_str))
+    return match.group(1).strip() if match else "UNKNOWN"
+
+
+def _extract_loras(meta_str: str) -> str:
+    if pd.isna(meta_str):
+        return ""
+    loras = re.findall(r"<lora:([^:]+):", str(meta_str))
+    return " ".join(loras)
+
+
+def load_and_clean_data_v4(file_path: str) -> pd.DataFrame:
+    with open(file_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    df = pd.DataFrame(data)
+    if "full_metadata_string" in df.columns:
+        df["model"] = df["full_metadata_string"].apply(_extract_model)
+        df["loras"] = df["full_metadata_string"].apply(_extract_loras)
     else:
-        df['model'] = 'UNKNOWN'
-        df['loras'] = ''
-        
-    df['prompt'] = df['prompt'].fillna('')
-    df['style'] = df.get('style', pd.Series([''] * len(df))).fillna('')
-    df['enhanced_prompt'] = df['prompt'] + " " + df['loras']
-    df['negative_prompt'] = df['negative_prompt'].fillna('')
-    df['clipskip'] = df.get('clipskip', pd.Series([2] * len(df))).fillna(2).astype(float)
-    df['cfgscale'] = pd.to_numeric(df['cfgscale'], errors='coerce').fillna(7.0)
-    df['steps'] = pd.to_numeric(df['steps'], errors='coerce').fillna(20)
-    df['sampler'] = df['sampler'].fillna('UNKNOWN').str.upper()
-    
-    df = df.drop_duplicates(subset=['id'])
+        df["model"] = "UNKNOWN"
+        df["loras"] = ""
+    df["prompt"] = df.get("prompt", pd.Series([""] * len(df))).fillna("")
+    df["style"] = df.get("style", pd.Series([""] * len(df))).fillna("")
+    df["enhanced_prompt"] = (df["prompt"] + " " + df["loras"]).str.strip()
+    df["negative_prompt"] = df.get("negative_prompt", pd.Series([""] * len(df))).fillna("")
+    df["clipskip"] = df.get("clipskip", pd.Series([2] * len(df))).fillna(2).astype(float)
+    df["cfgscale"] = pd.to_numeric(df.get("cfgscale", pd.Series([7.0] * len(df))), errors="coerce").fillna(7.0)
+    df["steps"] = pd.to_numeric(df.get("steps", pd.Series([20] * len(df))), errors="coerce").fillna(20)
+    df["sampler"] = df.get("sampler", pd.Series(["UNKNOWN"] * len(df))).fillna("UNKNOWN").astype(str).str.upper()
+    df = df.drop_duplicates(subset=["id"]).reset_index(drop=True)
     return df
 
-def build_features_v4(df):
-    print("Generating CLIP embeddings (v4 style)...")
-    model = SentenceTransformer('clip-ViT-B-32')
-    text_features = model.encode(df['enhanced_prompt'].tolist(), show_progress_bar=True)
-    
-    scaler = StandardScaler()
-    num_features = scaler.fit_transform(df[['cfgscale', 'steps', 'clipskip']])
-    
-    enc_sampler = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-    sampler_features = enc_sampler.fit_transform(df[['sampler']])
-    
-    enc_model = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-    model_features = enc_model.fit_transform(df[['model']])
-    
-    return text_features, num_features, sampler_features, model_features
 
-def calculate_pca_v4(text_features, num_features, sampler_features, model_features):
-    print("Performing two-stage PCA (v4 logic)...")
-    
-    # Stage 1: Text compression to 20
+def build_projection_bundle_v4(df: pd.DataFrame) -> Dict[str, np.ndarray]:
+    text_model_name = "clip-ViT-B-32"
+    text_model = SentenceTransformer(text_model_name)
+    text_features = text_model.encode(df["enhanced_prompt"].tolist(), show_progress_bar=True)
+
+    scaler_num = StandardScaler()
+    num_features = scaler_num.fit_transform(df[["cfgscale", "steps", "clipskip"]])
+
+    enc_sampler = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+    sampler_features = enc_sampler.fit_transform(df[["sampler"]])
+
+    enc_model = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+    model_features = enc_model.fit_transform(df[["model"]])
+
     pca_text = PCA(n_components=min(20, text_features.shape[0], text_features.shape[1]))
     text_reduced = pca_text.fit_transform(text_features)
-    text_reduced_scaled = StandardScaler().fit_transform(text_reduced)
-    
-    # Weights from v4.py
-    TEXT_WEIGHT = 4.0
-    MODEL_WEIGHT = 3.0
-    PARAM_WEIGHT = 0.5
-    SAMPLER_WEIGHT = 0.5
-    
-    combined_features = np.hstack([
-        text_reduced_scaled * TEXT_WEIGHT, 
-        model_features * MODEL_WEIGHT,
-        num_features * PARAM_WEIGHT, 
-        sampler_features * SAMPLER_WEIGHT
-    ])
-    
-    pca_final = PCA(n_components=8)
-    pbo_space = pca_final.fit_transform(combined_features)
-    
-    return pbo_space
+    scaler_text = StandardScaler()
+    text_reduced_scaled = scaler_text.fit_transform(text_reduced)
 
-def ingest_to_supabase_v4(df, text_features, model_features, sampler_features, num_features, pbo_embs):
-    print(f"Ingesting {len(df)} records for v4 version...")
-    
-    TARGET_DIM = 1200
-    records = []
-    
+    weights = {"text": 4.0, "model": 3.0, "param": 0.5, "sampler": 0.5}
+    combined_features = np.hstack(
+        [
+            text_reduced_scaled * weights["text"],
+            model_features * weights["model"],
+            num_features * weights["param"],
+            sampler_features * weights["sampler"],
+        ]
+    )
+    pca_final = PCA(n_components=min(8, combined_features.shape[0], combined_features.shape[1]))
+    pbo_space = pca_final.fit_transform(combined_features)
+
+    return {
+        "text_model_name": text_model_name,
+        "text_features": text_features,
+        "num_features": num_features,
+        "sampler_features": sampler_features,
+        "model_features": model_features,
+        "pbo_space": pbo_space,
+        "scaler_num": scaler_num,
+        "enc_sampler": enc_sampler,
+        "enc_model": enc_model,
+        "pca_text": pca_text,
+        "scaler_text": scaler_text,
+        "pca_final": pca_final,
+        "weights": weights,
+    }
+
+
+def _serialize_projection_artifacts(bundle: Dict[str, np.ndarray]) -> Dict[str, object]:
+    enc_sampler = bundle["enc_sampler"]
+    enc_model = bundle["enc_model"]
+    scaler_num = bundle["scaler_num"]
+    pca_text = bundle["pca_text"]
+    scaler_text = bundle["scaler_text"]
+    pca_final = bundle["pca_final"]
+    return {
+        "model_version": "v4",
+        "text_model_name": bundle["text_model_name"],
+        "weights": bundle["weights"],
+        "numeric_columns": ["cfgscale", "steps", "clipskip"],
+        "sampler_categories": enc_sampler.categories_[0].tolist(),
+        "model_categories": enc_model.categories_[0].tolist(),
+        "scaler_num_mean": scaler_num.mean_.tolist(),
+        "scaler_num_scale": scaler_num.scale_.tolist(),
+        "pca_text_components": pca_text.components_.tolist(),
+        "pca_text_mean": pca_text.mean_.tolist(),
+        "scaler_text_mean": scaler_text.mean_.tolist(),
+        "scaler_text_scale": scaler_text.scale_.tolist(),
+        "pca_final_components": pca_final.components_.tolist(),
+        "pca_final_mean": pca_final.mean_.tolist(),
+    }
+
+
+def ingest_embeddings(df: pd.DataFrame, bundle: Dict[str, np.ndarray], batch_size: int = 50) -> None:
+    target_dim = 1200
+    rows: List[Dict[str, object]] = []
+    text_features = bundle["text_features"]
+    model_features = bundle["model_features"]
+    sampler_features = bundle["sampler_features"]
+    num_features = bundle["num_features"]
+    pbo_space = bundle["pbo_space"]
+
     for i in range(len(df)):
         row = df.iloc[i]
-        
-        # Build original combined vector: prompt(512) + model + sampler + num(3)
-        original_combined = np.concatenate([
-            text_features[i],
-            model_features[i],
-            sampler_features[i],
-            num_features[i]
-        ])
-        
-        # Padding
-        if len(original_combined) < TARGET_DIM:
-            original_combined = np.pad(original_combined, (0, TARGET_DIM - len(original_combined)))
+        original_combined = np.concatenate(
+            [text_features[i], model_features[i], sampler_features[i], num_features[i]]
+        )
+        if len(original_combined) < target_dim:
+            original_combined = np.pad(original_combined, (0, target_dim - len(original_combined)))
         else:
-            original_combined = original_combined[:TARGET_DIM]
-            
-        record = {
-            "id": int(row['id']),
-            "prompt": row['prompt'],
-            "style": row.get('style', ''),
-            "model": row['model'],
-            "sampler": row['sampler'],
-            "cfgscale": float(row['cfgscale']),
-            "steps": int(row['steps']),
-            "clipskip": float(row['clipskip']),
-            "original_embedding": _to_pgvector_literal(original_combined),
-            "pbo_embedding": _to_pgvector_literal(pbo_embs[i]),
-            "metadata": {
-                "loras": row['loras'],
-                "negative_prompt": row['negative_prompt'],
-                "image_url": row.get('image_url', ''),
-                "local_path": row.get('local_path', '')
+            original_combined = original_combined[:target_dim]
+        rows.append(
+            {
+                "id": int(row["id"]),
+                "prompt": str(row.get("prompt", "")),
+                "style": str(row.get("style", "")),
+                "model": str(row.get("model", "UNKNOWN")),
+                "sampler": str(row.get("sampler", "UNKNOWN")),
+                "cfgscale": float(row.get("cfgscale", 7.0)),
+                "steps": int(row.get("steps", 20)),
+                "clipskip": float(row.get("clipskip", 2)),
+                "original_embedding": _to_pgvector_literal(original_combined),
+                "pbo_embedding": _to_pgvector_literal(pbo_space[i]),
+                "metadata": {
+                    "loras": str(row.get("loras", "")),
+                    "negative_prompt": str(row.get("negative_prompt", "")),
+                    "image_url": str(row.get("image_url", "")),
+                    "local_path": str(row.get("local_path", "")),
+                },
             }
+        )
+        if len(rows) >= batch_size:
+            supabase.table(EMBED_TABLE).upsert(rows).execute()
+            rows = []
+    if rows:
+        supabase.table(EMBED_TABLE).upsert(rows).execute()
+
+
+def upsert_projection_artifacts(bundle: Dict[str, np.ndarray]) -> None:
+    payload = _serialize_projection_artifacts(bundle)
+    supabase.table(ARTIFACT_TABLE).upsert(
+        {
+            "model_version": payload["model_version"],
+            "artifacts": payload,
         }
-        records.append(record)
-        
-        if len(records) >= 50:
-            supabase.table("image_embeddings_v4").upsert(records).execute()
-            records = []
-            
-    if records:
-        supabase.table("image_embeddings_v4").upsert(records).execute()
-    
-    print("Ingestion v4 complete!")
+    ).execute()
+
+
+def resolve_metadata_path() -> str:
+    meta_path = os.getenv("METADATA_PATH", "").strip()
+    if meta_path and os.path.isfile(meta_path):
+        return meta_path
+    candidates = [
+        os.path.join(os.getcwd(), "spider", "civitai_gallery", "metadata.json"),
+        os.path.join(os.getcwd(), "spider", "civitai_gallery_res", "metadata.json"),
+        os.path.join(os.getcwd(), "Genflow", "lib", "metadata.json"),
+        os.path.join(os.path.dirname(__file__), "..", "metadata.json"),
+    ]
+    for path in candidates:
+        full = os.path.abspath(path)
+        if os.path.isfile(full):
+            return full
+    raise FileNotFoundError("metadata.json not found; set METADATA_PATH")
+
+
+def main() -> None:
+    meta_path = resolve_metadata_path()
+    df = load_and_clean_data_v4(meta_path)
+    bundle = build_projection_bundle_v4(df)
+    ingest_embeddings(df, bundle)
+    upsert_projection_artifacts(bundle)
+    print(f"ingested={len(df)} table={EMBED_TABLE} artifacts_table={ARTIFACT_TABLE}")
+
 
 if __name__ == "__main__":
-    meta_path = os.getenv("METADATA_PATH", "").strip()
-    if not meta_path or not os.path.isfile(meta_path):
-        candidates = [
-            os.path.join(os.getcwd(), "spider", "civitai_gallery", "metadata.json"),
-            os.path.join(os.getcwd(), "spider", "civitai_gallery_res", "metadata.json"),
-            os.path.join(os.getcwd(), "Genflow", "lib", "metadata.json"),
-            os.path.join(os.path.dirname(__file__), "..", "metadata.json"),
-        ]
-        meta_path = ""
-        for p in candidates:
-            p = os.path.abspath(p)
-            if os.path.isfile(p):
-                meta_path = p
-                break
-    if not meta_path:
-        raise FileNotFoundError("metadata.json not found; set METADATA_PATH or run from repo root")
-
-    df = load_and_clean_data_v4(meta_path)
-    text_embs, num_feat, samp_feat, mod_feat = build_features_v4(df)
-    pbo_embs = calculate_pca_v4(text_embs, num_feat, samp_feat, mod_feat)
-    ingest_to_supabase_v4(df, text_embs, mod_feat, samp_feat, num_feat, pbo_embs)
+    main()

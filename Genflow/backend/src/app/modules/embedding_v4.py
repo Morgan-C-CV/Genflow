@@ -118,7 +118,8 @@ class ImageEmbeddingSearch:
 
     def _try_load_precomputed_pbo_space(self) -> bool:
         supabase_url = os.getenv("SUPABASE_URL", "").strip()
-        supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+        service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        supabase_key = service_role_key or os.getenv("SUPABASE_KEY", "").strip()
         table = os.getenv("SUPABASE_PBO_TABLE", "image_embeddings_v4").strip()
         schema = os.getenv("SUPABASE_SCHEMA", "").strip()
         page_size_env = os.getenv("SUPABASE_PAGE_SIZE", "").strip()
@@ -144,7 +145,14 @@ class ImageEmbeddingSearch:
             return False
 
         if not records:
-            print(f"Supabase table '{table}' returned no records. Falling back to local embedding.", flush=True)
+            print(
+                f"Supabase table '{table}' returned no records with current key. "
+                f"url={supabase_url.rstrip('/')} schema={(schema or 'public')} "
+                f"key_type={'service_role' if service_role_key else 'publishable_or_anon'}. "
+                "Possible causes: RLS blocks SELECT for this key, wrong project URL, or empty table. "
+                "Falling back to local embedding.",
+                flush=True,
+            )
             return False
 
         vectors = []
