@@ -37,7 +37,7 @@ except Exception as exc:
     settings = None
     BACKEND_IMPORT_ERROR = exc
 
-def display_images(df, indices, title="Images", gallery_dir=None, filename="display.png", cols=4, show=True):
+def display_images(df, indices, title="Images", gallery_dir=None, filename="display.png", cols=4):
     n = len(indices)
     cols = max(1, min(cols, n))
     rows = int(ceil(n / cols))
@@ -85,8 +85,6 @@ def display_images(df, indices, title="Images", gallery_dir=None, filename="disp
     
     plt.tight_layout()
     plt.savefig(filename)
-    if show:
-        plt.show()
     plt.close()
     print(f"[{title}] Images saved to: {os.path.abspath(filename)}")
 
@@ -302,7 +300,7 @@ def main():
         filename = f"pbo_round.png"
         display_images(df, candidate_indices, title=f"Round {current_iter+1} Candidates", gallery_dir=settings.GALLERY_DIR, filename=filename, cols=4)
         
-        print(f"Please provide feedback for the following {batch_size} images (Check popup window):")
+        print(f"Please provide feedback for the following {batch_size} images (Check saved image file):")
         for idx, c_idx in enumerate(candidate_indices):
             row = df.iloc[c_idx]
             print(f"  [{idx+1}] ID: {row.get('id', 'N/A')} | Prompt: {row.get('prompt', '')[:80]}...")
