@@ -37,6 +37,21 @@ except Exception as exc:
     settings = None
     BACKEND_IMPORT_ERROR = exc
 
+class CliColor:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    MAGENTA = "\033[95m"
+    BLUE = "\033[94m"
+    RED = "\033[91m"
+
+
+def color_text(text: str, color: str, bold: bool = False) -> str:
+    prefix = f"{CliColor.BOLD}{color}" if bold else color
+    return f"{prefix}{text}{CliColor.RESET}"
+
 def display_images(df, indices, title="Images", gallery_dir=None, filename="display.png", cols=4):
     n = len(indices)
     cols = max(1, min(cols, n))
@@ -168,7 +183,7 @@ def print_wall_summary(agent: CreativeAgent, wall, df):
             print(f"  [{(group_idx - 1) * 2 + idx_in_group:02d}] ID: {row.get('id', 'N/A')} | {prompt}...")
 
 def main():
-    print("Initializing Genflow Backend CLI Test Tool...", flush=True)
+    print(color_text("Initializing Genflow Backend CLI Test Tool...", CliColor.CYAN, bold=True), flush=True)
 
     if any(dep is None for dep in [np, pd, plt, requests, Image]):
         print("One or more runtime visualization/data dependencies are missing in this environment.")
@@ -197,7 +212,7 @@ def main():
     else:
         print("\nPBO embedding source: runtime embedding (slow). Set SUPABASE_URL/SUPABASE_KEY to use the precomputed v4 database.", flush=True)
 
-    print(f"\nSuccessfully loaded {len(df)} images into the search engine.")
+    print(color_text(f"\nSuccessfully loaded {len(df)} images into the search engine.", CliColor.GREEN))
 
     # 2. ReAct-based creative intake and divergent candidate retrieval
     clarified_intent, intent_plan = prompt_user_intent(creative_agent)
@@ -205,8 +220,11 @@ def main():
     
     previous_expansions = []
     previous_wall_indices = []
+    previous_wall_set = set()
+    refresh_round = 0
     force_refresh = False
     while True:
+        print(color_text("\n[Pipeline] 开始生成候选扩展与候选墙...", CliColor.BLUE, bold=True))
         expansions = creative_agent.build_axis_expansions(
             clarified_intent,
             intent_plan,
@@ -220,12 +238,12 @@ def main():
         use_avoid_indices = force_refresh
         force_refresh = False
 
-        print("\n[Resource Assignment] 候选资源分配摘要：")
+        print(color_text("\n[Resource Assignment] 候选资源分配摘要：", CliColor.MAGENTA, bold=True))
         print(f"- Dominant Checkpoint: {resource_recommendation.checkpoint}")
         print(f"- Dominant Sampler: {resource_recommendation.sampler}")
         print(f"- Top LoRAs: {', '.join(resource_recommendation.loras) if resource_recommendation.loras else 'none'}")
         print(f"- Reasoning: {resource_recommendation.reasoning_summary}")
-        print("\n[Agent ReAct] 8 个发散查询（每个候选独立资源）已生成：")
+        print(color_text("\n[Agent ReAct] 8 个发散查询（每个候选独立资源）已生成：", CliColor.CYAN, bold=True))
         for i, expansion in enumerate(expansions, start=1):
             lora_text = ", ".join(expansion.loras) if expansion.loras else "none"
             cluster_text = f" | Cluster: {expansion.target_cluster_id}" if expansion.target_cluster_id is not None else ""
@@ -243,6 +261,17 @@ def main():
         if len(wall.flat_indices) < 16:
             raise RuntimeError(f"Initial wall only produced {len(wall.flat_indices)} candidates; expected 16.")
 
+        current_wall_set = set(wall.flat_indices)
+        overlap_count = len(current_wall_set & previous_wall_set) if previous_wall_set else 0
+        overlap_ratio = (overlap_count / max(1, len(current_wall_set))) * 100.0
+        print(
+            color_text(
+                f"[Wall Debug] refresh_round={refresh_round} | unique={len(current_wall_set)} | overlap_with_previous={overlap_count}/16 ({overlap_ratio:.1f}%)",
+                CliColor.YELLOW if overlap_count > 0 else CliColor.GREEN,
+                bold=True,
+            )
+        )
+
         print_wall_summary(creative_agent, wall, df)
         display_images(
             df,
@@ -259,9 +288,11 @@ def main():
             selected_raw = input("> ").strip()
             
             if selected_raw == "0":
-                print("\n[Agent ReAct] 正在为您更换一批候选方案（强制变换风格与资源组合）...")
+                refresh_round += 1
+                print(color_text(f"\n[Agent ReAct] 正在为您更换第 {refresh_round} 批候选方案（强制变换风格与资源组合）...", CliColor.YELLOW, bold=True))
                 previous_expansions.extend(expansions)
                 previous_wall_indices = list(dict.fromkeys(previous_wall_indices + wall.flat_indices))
+                previous_wall_set = current_wall_set
                 force_refresh = True
                 break_outer = False
                 break
