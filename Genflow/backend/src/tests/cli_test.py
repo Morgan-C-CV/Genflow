@@ -105,20 +105,56 @@ def prompt_user_intent(agent: CreativeAgent):
 
     clarified_intent = user_intent
     clarification_rounds = 0
+    clarification_closed = False
     while plan.next_action == "ask_user" and clarification_rounds < 2:
         print("\n需要补充的信息：")
         print(agent.build_clarification_prompt(plan))
         for question in plan.clarification_questions[:3]:
             answer = input(f"{question}\n> ").strip()
-            if answer:
+            if answer and not is_unknown_response(answer):
                 clarified_intent += f" | {answer}"
+            if not answer or is_unknown_response(answer):
+                clarification_closed = True
+                break
         clarification_rounds += 1
-        plan = agent.analyze_intent(clarified_intent)
+        if clarification_closed:
+            clarified_intent += " | 用户表示不清楚或不想继续补充，请Agent自主推断。"
+        plan = agent.analyze_intent(
+            clarified_intent,
+            clarification_closed=clarification_closed,
+        )
         print("\n[Agent ReAct] 更新后的判断：")
         print(plan.reasoning_summary)
         print(f"下一步动作: {plan.next_action}")
+        if clarification_closed:
+            print("用户已明确表示不知道/不补充，Agent 将基于当前信息自主继续。")
+            break
+
+    if clarification_closed and plan.next_action == "ask_user":
+        plan.next_action = "retrieve_resources"
+        plan.clarification_questions = []
 
     return clarified_intent, plan
+
+
+def is_unknown_response(text: str) -> bool:
+    normalized = text.strip().lower()
+    if not normalized:
+        return True
+    patterns = [
+        "不知道",
+        "不清楚",
+        "随便",
+        "你决定",
+        "都可以",
+        "无所谓",
+        "no idea",
+        "anything",
+        "whatever",
+        "don't know",
+        "dont know",
+    ]
+    return any(p in normalized for p in patterns)
 
 
 def print_wall_summary(agent: CreativeAgent, wall, df):

@@ -106,6 +106,8 @@ Rules:
 4. Decide next_action:
    - ask_user if the subject is unclear or fewer than 2 axes are confidently fixed.
    - retrieve_resources otherwise.
+   - if clarification_closed is true, you must choose retrieve_resources and use
+     the best available defaults instead of asking more questions.
 5. Ask only targeted clarification questions that reduce the ambiguity of the
    unclear axes.
 6. Do not invent constraints that are not supported by the prompt.
@@ -211,16 +213,19 @@ class CreativeAgent:
         )
         return self._resource_cache
 
-    def analyze_intent(self, user_intent: str) -> CreativeIntentPlan:
+    def analyze_intent(
+        self, user_intent: str, clarification_closed: bool = False
+    ) -> CreativeIntentPlan:
         resources = self.load_resources()
         payload = {
             "user_intent": user_intent.strip(),
+            "clarification_closed": clarification_closed,
             "axes": AXES,
             "resource_inventory": resources.to_context_block(),
         }
         response = self._planner_model.generate_content(self._build_json_payload(payload))
         data = self._parse_json(response.text, "analyze_intent")
-        return self._coerce_plan(data, user_intent.strip())
+        return self._coerce_plan(data, user_intent.strip(), clarification_closed=clarification_closed)
 
     def recommend_resources(
         self, plan: CreativeIntentPlan, resources: Optional[ResourceContext] = None
@@ -409,7 +414,11 @@ class CreativeAgent:
             raise ValueError(f"{context}: model returned invalid JSON: {text[:400]}") from exc
 
     @staticmethod
-    def _coerce_plan(data: Dict[str, Any], user_intent: str) -> CreativeIntentPlan:
+    def _coerce_plan(
+        data: Dict[str, Any],
+        user_intent: str,
+        clarification_closed: bool = False,
+    ) -> CreativeIntentPlan:
         fixed_constraints = {
             str(k): str(v)
             for k, v in dict(data.get("fixed_constraints", {})).items()
@@ -425,6 +434,9 @@ class CreativeAgent:
         reasoning_summary = str(data.get("reasoning_summary", "")).strip()
         if not reasoning_summary:
             reasoning_summary = "LLM completed intent analysis."
+        if clarification_closed:
+            next_action = "retrieve_resources"
+            clarification_questions = []
         return CreativeIntentPlan(
             user_intent=user_intent,
             fixed_constraints=fixed_constraints,
@@ -538,4 +550,3 @@ class CreativeAgent:
             if stripped.startswith("- "):
                 bullets.append(stripped[2:].strip())
         return bullets
-
