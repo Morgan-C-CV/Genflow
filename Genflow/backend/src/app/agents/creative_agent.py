@@ -125,18 +125,20 @@ Output schema:
 
 _EXPANSION_SYSTEM_INSTRUCTION = """\
 You are a production query-expansion planner for a ComfyUI gallery retrieval
-system. Your task is to generate four orthogonal retrieval queries for a single
+system. Your task is to generate eight orthogonal retrieval queries for a single
 user intent.
 
 Goals:
 1. Preserve the user intent and the fixed constraints.
-2. Generate four clearly different prompts that expand along different latent
+2. Generate eight clearly different prompts that expand along different latent
    axes.
 3. Use the provided resource inventory to choose a checkpoint, sampler, and
    LoRAs that fit the intent.
-4. Keep the four candidates diverse enough for gallery retrieval, but still
+4. Keep the eight candidates diverse enough for gallery retrieval, but still
    semantically tied to the user's request.
-5. Output JSON only. No markdown, no code fences, no commentary.
+5. If provided with "previous_expansions", ensure the new ones are significantly
+   different to provide a "refresh" experience.
+6. Output JSON only. No markdown, no code fences, no commentary.
 
 Output schema:
 {
@@ -157,7 +159,7 @@ Output schema:
 }
 
 Constraints:
-- The expansions array must contain exactly 4 items.
+- The expansions array must contain exactly 8 items.
 - Axis focus values must use only these axes:
   subject, style, composition, lighting_vibe, background_setting, color_palette
 - Choose loras and checkpoint from the inventory you are given.
@@ -255,6 +257,7 @@ class CreativeAgent:
         plan: CreativeIntentPlan,
         resources: ResourceContext,
         recommendation: Optional[ResourceRecommendation] = None,
+        previous_expansions: Optional[List[ExpandedQuery]] = None,
     ) -> List[ExpandedQuery]:
         recommendation = recommendation or self.recommend_resources(plan, resources)
         payload = {
@@ -268,17 +271,22 @@ class CreativeAgent:
                 "recommended_loras": recommendation.loras,
             },
             "resource_inventory": resources.to_context_block(),
-            "target_candidate_count": 4,
+            "target_candidate_count": 8,
         }
+        if previous_expansions:
+            payload["previous_expansions"] = [
+                {"label": e.label, "prompt": e.prompt} for e in previous_expansions
+            ]
+
         response = self._expander_model.generate_content(self._build_json_payload(payload))
         data = self._parse_json(response.text, "build_axis_expansions")
         expansions = self._coerce_expansions(data, recommendation)
-        if len(expansions) != 4:
-            raise ValueError(f"Expected 4 expansions, got {len(expansions)}")
+        if len(expansions) != 8:
+            raise ValueError(f"Expected 8 expansions, got {len(expansions)}")
         return expansions
 
     def describe_wall(self, wall: CandidateWall) -> str:
-        lines = ["16 图发散矩阵的 4 个轴向分组："]
+        lines = ["16 图发散矩阵的 8 个轴向分组："]
         for i, label in enumerate(wall.query_labels, start=1):
             lines.append(f"- Group {i}: {label}")
         return "\n".join(lines)

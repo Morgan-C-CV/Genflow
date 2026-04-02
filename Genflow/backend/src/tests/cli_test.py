@@ -123,7 +123,7 @@ def prompt_user_intent(agent: CreativeAgent):
 
 def print_wall_summary(agent: CreativeAgent, wall, df):
     print("\n" + "=" * 60)
-    print("16 图初始发散墙")
+    print("16 图初始发散墙 (8 Groups x 2 Images)")
     print("=" * 60)
     print(agent.describe_wall(wall))
     for group_idx, group in enumerate(wall.groups, start=1):
@@ -131,7 +131,7 @@ def print_wall_summary(agent: CreativeAgent, wall, df):
         for idx_in_group, df_idx in enumerate(group, start=1):
             row = df.iloc[df_idx]
             prompt = str(row.get('prompt', ''))[:90].replace("\n", " ")
-            print(f"  [{(group_idx - 1) * 4 + idx_in_group:02d}] ID: {row.get('id', 'N/A')} | {prompt}...")
+            print(f"  [{(group_idx - 1) * 2 + idx_in_group:02d}] ID: {row.get('id', 'N/A')} | {prompt}...")
 
 def main():
     print("Initializing Genflow Backend CLI Test Tool...", flush=True)
@@ -169,48 +169,74 @@ def main():
     clarified_intent, intent_plan = prompt_user_intent(creative_agent)
     resources = creative_agent.load_resources()
     resource_recommendation = creative_agent.recommend_resources(intent_plan, resources)
-    expansions = creative_agent.build_axis_expansions(
-        clarified_intent,
-        intent_plan,
-        resources,
-        recommendation=resource_recommendation,
-    )
+    
+    previous_expansions = []
+    while True:
+        expansions = creative_agent.build_axis_expansions(
+            clarified_intent,
+            intent_plan,
+            resources,
+            recommendation=resource_recommendation,
+            previous_expansions=previous_expansions,
+        )
 
-    print("\n[Resource RAG] 资源推荐：")
-    print(f"- Checkpoint: {resource_recommendation.checkpoint}")
-    print(f"- Sampler: {resource_recommendation.sampler}")
-    print(f"- LoRAs: {', '.join(resource_recommendation.loras) if resource_recommendation.loras else 'none'}")
-    print(f"- Reasoning: {resource_recommendation.reasoning_summary}")
-    print("\n[Agent ReAct] 4 个发散查询已生成：")
-    for i, expansion in enumerate(expansions, start=1):
-        print(f"  {i}. {expansion.label}")
-        print(f"     {expansion.prompt[:220]}...")
+        print("\n[Resource RAG] 资源推荐：")
+        print(f"- Checkpoint: {resource_recommendation.checkpoint}")
+        print(f"- Sampler: {resource_recommendation.sampler}")
+        print(f"- LoRAs: {', '.join(resource_recommendation.loras) if resource_recommendation.loras else 'none'}")
+        print(f"- Reasoning: {resource_recommendation.reasoning_summary}")
+        print("\n[Agent ReAct] 8 个发散查询已生成：")
+        for i, expansion in enumerate(expansions, start=1):
+            print(f"  {i}. {expansion.label}")
+            print(f"     {expansion.prompt[:220]}...")
 
-    wall = creative_agent.build_candidate_wall(search_engine, expansions, per_query_k=4, top_k=12)
-    if len(wall.flat_indices) < 16:
-        raise RuntimeError(f"Initial wall only produced {len(wall.flat_indices)} candidates; expected 16.")
+        wall = creative_agent.build_candidate_wall(search_engine, expansions, per_query_k=2, top_k=12)
+        if len(wall.flat_indices) < 16:
+            raise RuntimeError(f"Initial wall only produced {len(wall.flat_indices)} candidates; expected 16.")
 
-    print_wall_summary(creative_agent, wall, df)
-    display_images(
-        df,
-        wall.flat_indices[:16],
-        title="Initial 16-Candidate Wall",
-        gallery_dir=settings.GALLERY_DIR,
-        filename="pbo_initial_wall.png",
-        cols=4,
-    )
+        print_wall_summary(creative_agent, wall, df)
+        display_images(
+            df,
+            wall.flat_indices[:16],
+            title="Initial 16-Candidate Wall",
+            gallery_dir=settings.GALLERY_DIR,
+            filename="pbo_initial_wall.png",
+            cols=4,
+        )
 
-    print("\n请选择 16 张图中最喜欢的 3 张，输入编号（例如：2 7 14）。")
-    selected_raw = input("> ").strip()
-    selected_numbers = []
-    try:
-        selected_numbers = [int(x) for x in selected_raw.split() if x.isdigit()]
-    except ValueError:
-        selected_numbers = []
-    selected_numbers = [n for n in selected_numbers if 1 <= n <= 16][:3]
-    if len(selected_numbers) < 1:
-        selected_numbers = [1]
-    selected_indices = [wall.flat_indices[n - 1] for n in selected_numbers]
+        while True:
+            print("\n请选择 16 张图中最喜欢的 3 张，输入编号（例如：2 7 14）。")
+            print("或者输入 0 换一批（使用 ReAct 生成新查询）。")
+            selected_raw = input("> ").strip()
+            
+            if selected_raw == "0":
+                print("\n[Agent ReAct] 正在为您更换一批候选方案...")
+                previous_expansions.extend(expansions)
+                # We break the inner loop to continue the outer expansion loop
+                break_outer = False
+                break
+            
+            if not selected_raw:
+                print("输入不能为空。请输入编号或输入 0。")
+                continue
+                
+            selected_numbers = []
+            try:
+                selected_numbers = [int(x) for x in selected_raw.split() if x.isdigit()]
+            except ValueError:
+                selected_numbers = []
+            
+            selected_numbers = [n for n in selected_numbers if 1 <= n <= 16][:3]
+            if len(selected_numbers) < 1:
+                print("无效的输入。请输入 1-16 之间的编号（例如：2 7 14）或输入 0。")
+                continue
+            
+            selected_indices = [wall.flat_indices[n - 1] for n in selected_numbers]
+            break_outer = True
+            break
+            
+        if break_outer:
+            break
 
     X_train, y_train = creative_agent.build_training_labels(
         pbo_space=pbo_space,
