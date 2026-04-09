@@ -297,7 +297,7 @@ def main():
         )
 
         while True:
-            print("\n请选择 16 张图中最喜欢的 3 张，输入编号（例如：2 7 14）。")
+            print("\n请选择 16 张图中你想作为 seed 的任意张图片，输入编号（例如：2 7 14 15）。")
             print("或者输入 0 换一批（使用 ReAct 生成新查询）。")
             selected_raw = input("> ").strip()
             
@@ -321,9 +321,9 @@ def main():
             except ValueError:
                 selected_numbers = []
             
-            selected_numbers = [n for n in selected_numbers if 1 <= n <= 16][:3]
+            selected_numbers = list(dict.fromkeys(n for n in selected_numbers if 1 <= n <= 16))
             if len(selected_numbers) < 1:
-                print("无效的输入。请输入 1-16 之间的编号（例如：2 7 14）或输入 0。")
+                print("无效的输入。请输入 1-16 之间的一个或多个编号（例如：2 7 14 15）或输入 0。")
                 continue
             
             selected_indices = [wall.flat_indices[n - 1] for n in selected_numbers]
@@ -348,18 +348,24 @@ def main():
 
     # 3. Exploitation phase
     iterations = 8
-    batch_size = 4
+    batch_size = 6
     
-    print(f"\nStarting 4-image PBO exploitation loop ({iterations} rounds)...")
+    print(f"\nStarting 6-image PBO exploitation loop ({iterations} rounds)...")
     
     current_iter = 0
     while current_iter < iterations:
         print(f"\n--- Round {current_iter+1} / {iterations} ---")
-        candidate_indices = search_engine.run_pbo_round(X_train, y_train, batch_size=batch_size, consecutive_skips=consecutive_skips)
+        candidate_indices = search_engine.run_pbo_round(
+            X_train,
+            y_train,
+            selected_indices=selected_indices,
+            batch_size=batch_size,
+            consecutive_skips=consecutive_skips,
+        )
         
         # Display candidates
         filename = f"pbo_round.png"
-        display_images(df, candidate_indices, title=f"Round {current_iter+1} Candidates", gallery_dir=settings.GALLERY_DIR, filename=filename, cols=4)
+        display_images(df, candidate_indices, title=f"Round {current_iter+1} Candidates", gallery_dir=settings.GALLERY_DIR, filename=filename, cols=3)
         
         print(f"Please provide feedback for the following {batch_size} images (Check saved image file):")
         for idx, c_idx in enumerate(candidate_indices):

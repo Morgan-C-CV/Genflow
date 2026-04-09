@@ -164,13 +164,16 @@ class SearchRepository:
 
         ordered = sorted(candidate_indices, key=lambda idx: distances[idx])
         ordered_distances = [float(distances[idx]) for idx in ordered]
-        median_distance = float(np.median(ordered_distances))
+        nearest_distance = float(ordered_distances[0])
+        quantile_distance = float(np.quantile(ordered_distances, 0.35))
+        ratio_distance = nearest_distance * 1.6 if nearest_distance > 0 else quantile_distance
+        distance_gate = max(quantile_distance, ratio_distance)
         focused_candidates = [
             idx for idx in ordered
-            if float(distances[idx]) <= median_distance
+            if float(distances[idx]) <= distance_gate
         ]
         if len(focused_candidates) < count:
-            fallback_size = min(len(ordered), max(count + 2, count))
+            fallback_size = min(len(ordered), max(count + 3, count * 3))
             focused_candidates = ordered[:fallback_size]
         selected = [focused_candidates[0]]
         while len(selected) < count:
@@ -182,7 +185,7 @@ class SearchRepository:
                 diversity_bonus = min(
                     np.linalg.norm(pbo_space[idx] - pbo_space[chosen]) for chosen in selected
                 )
-                score = (diversity_bonus, -float(distances[idx]))
+                score = (-float(distances[idx]), float(diversity_bonus) * 0.25)
                 if best_score is None or score > best_score:
                     best_score = score
                     best_idx = idx

@@ -171,7 +171,11 @@ class LLMRepository:
             validation_error=validation_error,
         )
         response = self._generation_agent.generate_content(user_message)
-        return self._extract_json(response.text)
+        raw_text = getattr(response, "text", None)
+        self._debug_print_raw_response(raw_text, response)
+        if raw_text is None:
+            raise RuntimeError("LLM returned empty text response (response.text is None).")
+        return self._extract_json(raw_text)
 
     # ── User-Turn Builders (dynamic only) ───────
 
@@ -255,6 +259,18 @@ class LLMRepository:
         )
 
     # ── Helpers ─────────────────────────────────
+
+    @staticmethod
+    def _debug_print_raw_response(text, response) -> None:
+        gray = "\033[90m"
+        reset = "\033[0m"
+        if isinstance(text, str) and text.strip():
+            body = text
+        elif text is None:
+            body = f"<None> response_type={type(response).__name__}"
+        else:
+            body = str(text)
+        print(f"{gray}[LLM DEBUG] Raw generation response:\n{body}{reset}", flush=True)
 
     @staticmethod
     def _build_counterexample_guardrail(counterexample: dict | None) -> dict:

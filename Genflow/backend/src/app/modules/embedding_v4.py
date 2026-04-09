@@ -468,46 +468,72 @@ class ImageEmbeddingSearch:
             results.append(res_dict)
         return results
 
-    def run_pbo_round(self, X_train, y_train, batch_size=4, consecutive_skips=0):
+    @staticmethod
+    def _take_ranked_indices(pool_indices, scores, count, excluded=None):
+        excluded = set() if excluded is None else set(excluded)
+        ranked = sorted(pool_indices, key=lambda idx: float(scores[idx]), reverse=True)
+        chosen = []
+        for idx in ranked:
+            if idx in excluded:
+                continue
+            chosen.append(int(idx))
+            if len(chosen) >= count:
+                break
+        return chosen
+
+    def run_pbo_round(self, X_train, y_train, selected_indices=None, batch_size=6, consecutive_skips=0):
         # This can be used for iterative rounds if needed by a websocket or multi-step API
-        kernel = 1.0 * Matern(length_scale=1.0, nu=1.5)
-        gp = GaussianProcessRegressor(kernel=kernel, alpha=0.1, n_restarts_optimizer=5)
-        
         kappa_base = 1.5
         cur_kappa = kappa_base + (2.5 * consecutive_skips)
+        selected_indices = list(selected_indices or [])
         
         if len(X_train) < 2:
             candidate_indices = np.random.choice(len(self.pbo_space), batch_size, replace=False).tolist()
         else:
+            kernel = 1.0 * Matern(length_scale=1.0, nu=1.5)
+            gp = GaussianProcessRegressor(kernel=kernel, alpha=0.1, n_restarts_optimizer=5)
             gp.fit(np.array(X_train), np.array(y_train))
             mu, sigma = gp.predict(self.pbo_space, return_std=True)
-            
-            # Stagnation detection (Global Exploration)
-            if consecutive_skips >= 2:
-                print(f">>> Stagnation detected: Activating global exploration (Escaping local optima)...", flush=True)
-                pool_size = min(len(self.pbo_space), 100)
-                sigma_pool_indices = np.argsort(sigma)[-pool_size:].tolist()
-                np.random.shuffle(sigma_pool_indices)
-                candidate_indices = sigma_pool_indices[:batch_size]
+
+            if selected_indices:
+                local_center = np.mean(self.pbo_space[selected_indices], axis=0)
             else:
-                ucb = mu + cur_kappa * sigma
-                
-                # Dynamic pool size based on skips
-                base_pool_size = max(50, len(self.pbo_space) // 3)
-                top_n = min(len(self.pbo_space), base_pool_size + 50 * consecutive_skips)
-                top_k_indices = np.argsort(ucb)[-top_n:].tolist()
-                
-                candidate_indices = [top_k_indices.pop(-1)]
-                
-                while len(candidate_indices) < batch_size and top_k_indices:
-                    max_min_dist = -1
-                    best_idx_in_pool = -1
-                    for pool_idx in top_k_indices:
-                        dist_to_selected = min([np.linalg.norm(self.pbo_space[pool_idx] - self.pbo_space[s]) for s in candidate_indices])
-                        if dist_to_selected > max_min_dist:
-                            max_min_dist = dist_to_selected
-                            best_idx_in_pool = pool_idx
-                    candidate_indices.append(best_idx_in_pool)
-                    top_k_indices.remove(best_idx_in_pool)
+                local_center = np.mean(np.array(X_train), axis=0)
+
+            distances = np.linalg.norm(self.pbo_space - local_center, axis=1)
+            local_cutoff = float(np.quantile(distances, 0.30))
+            remote_cutoff = float(np.quantile(distances, 0.80))
+
+            all_indices = list(range(len(self.pbo_space)))
+            local_pool = [idx for idx, dist in enumerate(distances) if float(dist) <= local_cutoff]
+            remote_pool = [idx for idx, dist in enumerate(distances) if float(dist) >= remote_cutoff]
+
+            local_explore_score = mu + (0.6 * sigma)
+            strong_explore_score = mu + (cur_kappa * sigma)
+            remote_score = strong_explore_score if consecutive_skips >= 2 else sigma
+
+            candidate_indices = []
+            candidate_indices.extend(self._take_ranked_indices(local_pool, mu, 2))
+            candidate_indices.extend(self._take_ranked_indices(local_pool, local_explore_score, 3, excluded=candidate_indices))
+            candidate_indices.extend(self._take_ranked_indices(remote_pool, remote_score, 1, excluded=candidate_indices))
+
+            if len(candidate_indices) < batch_size:
+                candidate_indices.extend(
+                    self._take_ranked_indices(local_pool, mu, batch_size - len(candidate_indices), excluded=candidate_indices)
+                )
+            if len(candidate_indices) < batch_size:
+                candidate_indices.extend(
+                    self._take_ranked_indices(local_pool, local_explore_score, batch_size - len(candidate_indices), excluded=candidate_indices)
+                )
+            if len(candidate_indices) < batch_size:
+                candidate_indices.extend(
+                    self._take_ranked_indices(remote_pool, remote_score, batch_size - len(candidate_indices), excluded=candidate_indices)
+                )
+            if len(candidate_indices) < batch_size:
+                candidate_indices.extend(
+                    self._take_ranked_indices(all_indices, strong_explore_score, batch_size - len(candidate_indices), excluded=candidate_indices)
+                )
+
+            candidate_indices = list(dict.fromkeys(candidate_indices))[:batch_size]
         
         return candidate_indices
