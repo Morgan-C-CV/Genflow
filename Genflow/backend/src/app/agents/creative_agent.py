@@ -646,7 +646,7 @@ class CreativeAgent:
         selected_indices: Sequence[int],
         wall: CandidateWall,
         selected_score: float = 1.0,
-        unselected_score: float = 0.5,
+        unselected_score: float = 0.0,
     ) -> Tuple[List[np.ndarray], List[float]]:
         x_train: List[np.ndarray] = []
         y_train: List[float] = []
