@@ -400,17 +400,29 @@ def main():
     print(f"ID: {row.get('id', 'N/A')}")
     print(f"Prompt: {row.get('prompt')}")
     
-    # 4. Get similar results and skip summary
-    print("\nRetrieving similar results for generation...", flush=True)
+    # 4. Build a diversity-aware reference bundle for generation
+    print("\nBuilding diversity-aware search references for generation...", flush=True)
     try:
-        top_results = search_repo.search_by_index(best_discovered_index, top_k=5)
-        
-        print("\nTop 5 Similar Results Found:")
-        for i, res in enumerate(top_results):
-            print(f"{i+1}. ID {res['id']} | Distance: {res['distance']:.4f} | Prompt: {res['prompt'][:60]}...")
-            
-        display_images(df, [best_discovered_index] + [int(df[df['id'] == r['id']].index[0]) for r in top_results], 
-                      title="Best Result + Similar Recommendations", gallery_dir=settings.GALLERY_DIR, filename="pbo_final_results.png", cols=3)
+        reference_bundle = search_service.build_diverse_reference_bundle(best_discovered_index)
+        references = reference_bundle["references"]
+
+        print("\nDiverse Reference Bundle:")
+        for i, res in enumerate(references, start=1):
+            print(
+                f"{i}. [{res['role']}] ID {res['id']} | Distance: {res['distance']:.4f} | "
+                f"{res['selection_reason']}"
+            )
+            print(f"   Prompt: {res['prompt'][:100]}...")
+
+        display_indices = [int(item["index"]) for item in references]
+        display_images(
+            df,
+            display_indices,
+            title="Diverse Reference Bundle",
+            gallery_dir=settings.GALLERY_DIR,
+            filename="pbo_final_results.png",
+            cols=3,
+        )
         
         # 5. NEW: Generate metadata based on intent
         print("\n" + "*" * 50)
@@ -426,7 +438,7 @@ def main():
         validation_error = ""
         for attempt in range(3):
             generated_json_str = search_service.generate_image_metadata(
-                top_results,
+                reference_bundle,
                 auto_intent,
                 previous_output=generated_json_str,
                 validation_error=validation_error,

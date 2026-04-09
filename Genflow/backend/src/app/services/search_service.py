@@ -1,6 +1,7 @@
 from app.repositories.search_repository import SearchRepository
 from app.repositories.llm_repository import LLMRepository
 
+
 class SearchService:
     def __init__(self, search_repo: SearchRepository, llm_repo: LLMRepository):
         self.search_repo = search_repo
@@ -19,15 +20,18 @@ class SearchService:
             "llm_summary": summary
         }
 
+    def build_diverse_reference_bundle(self, index: int):
+        return self.search_repo.search_diverse_references(query_index=index)
+
     def generate_image_metadata(
         self,
-        results: list,
+        reference_bundle: dict,
         user_intent: str,
         previous_output: str = "",
         validation_error: str = "",
     ):
         metadata_json = self.llm_repo.generate_metadata_from_intent(
-            results,
+            reference_bundle,
             user_intent,
             previous_output=previous_output,
             validation_error=validation_error,

@@ -70,6 +70,10 @@ Diffusion pipeline.
    - Clip Skip: inherit from references; default "2" for SDXL.
    - Seed: generate a plausible random 10-digit number string.
    - Model: pick the checkpoint that appears most frequently in references.
+6. **Reference Prioritization**:
+   - Treat `best` and `complementary_knn` as the primary inheritance anchors.
+   - Use `exploratory` references only for selective idea broadening when aligned with the user's intent.
+   - Treat `counterexample` as a negative guardrail only. Never imitate its content, style, or parameters.
 
 ## Output Schema (strict JSON, no wrapper)
 ```
@@ -147,7 +151,7 @@ class LLMRepository:
 
     def generate_metadata_from_intent(
         self,
-        metadata_list: list,
+        reference_bundle: dict,
         user_intent: str,
         previous_output: str = "",
         validation_error: str = "",
@@ -159,7 +163,7 @@ class LLMRepository:
             Raw JSON string (already cleaned; no code fences).
         """
         user_message = self._build_generation_user_message(
-            metadata_list,
+            reference_bundle,
             user_intent,
             previous_output=previous_output,
             validation_error=validation_error,
@@ -186,7 +190,7 @@ class LLMRepository:
 
     @staticmethod
     def _build_generation_user_message(
-        metadata_list: list,
+        reference_bundle: dict,
         user_intent: str,
         previous_output: str = "",
         validation_error: str = "",
@@ -197,7 +201,26 @@ class LLMRepository:
         Structured with XML-style delimiters for reliable extraction by the
         model and clear separation of intent vs. references.
         """
-        items = json.dumps(metadata_list, indent=2, ensure_ascii=False)
+        references = reference_bundle.get("references", [])
+        positive_references = [
+            item for item in references
+            if item.get("role") != "counterexample"
+        ]
+        negative_reference = next(
+            (item for item in references if item.get("role") == "counterexample"),
+            None,
+        )
+        selection_summary = json.dumps(
+            {
+                "query_index": reference_bundle.get("query_index"),
+                "counts": reference_bundle.get("counts", {}),
+                "selection_summary": reference_bundle.get("selection_summary", {}),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+        positive_items = json.dumps(positive_references, indent=2, ensure_ascii=False)
+        negative_item = json.dumps(negative_reference, indent=2, ensure_ascii=False)
         retry_block = ""
         if previous_output.strip() or validation_error.strip():
             retry_block = (
@@ -209,7 +232,21 @@ class LLMRepository:
             )
         return (
             f"<intent>\n{user_intent}\n</intent>\n\n"
-            f"<references>\n{items}\n</references>"
+            "<reference_selection_policy>\n"
+            "Use the optimal baseline and complementary KNN samples as your main inheritance source.\n"
+            "Use exploratory samples only for limited, intent-aligned variation.\n"
+            "Use the counterexample only to understand what to avoid in the final output.\n"
+            "</reference_selection_policy>\n\n"
+            f"<selection_summary>\n{selection_summary}\n</selection_summary>\n\n"
+            f"<positive_references>\n{positive_items}\n</positive_references>\n\n"
+            f"<negative_reference>\n{negative_item}\n</negative_reference>\n\n"
+            "<generation_rules>\n"
+            "1. Preserve the core subject and strongest useful style patterns from the best sample.\n"
+            "2. Merge only complementary details that reinforce the user's intent.\n"
+            "3. Treat exploratory references as optional inspiration, not as dominant style anchors.\n"
+            "4. Explicitly avoid content, style, or parameter drift suggested by the negative reference.\n"
+            "5. Output one clean production-ready JSON object only.\n"
+            "</generation_rules>"
             f"{retry_block}"
         )
 
