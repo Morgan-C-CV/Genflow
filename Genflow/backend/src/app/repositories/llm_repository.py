@@ -74,6 +74,8 @@ Diffusion pipeline.
    - Treat `best` and `complementary_knn` as the primary inheritance anchors.
    - Use `exploratory` references only for selective idea broadening when aligned with the user's intent.
    - Treat `counterexample` as a negative guardrail only. Never imitate its content, style, or parameters.
+   - Never copy subject nouns, character identities, scene objects, or prompt fragments from the counterexample into either `prompt` or `negative_prompt`.
+   - In `negative_prompt`, prefer generic failure terms and broad style contradictions. Do not add unrelated object lists just because they appear in a counterexample.
 
 ## Output Schema (strict JSON, no wrapper)
 ```
@@ -206,10 +208,11 @@ class LLMRepository:
             item for item in references
             if item.get("role") != "counterexample"
         ]
-        negative_reference = next(
+        counterexample = next(
             (item for item in references if item.get("role") == "counterexample"),
             None,
         )
+        negative_reference = LLMRepository._build_counterexample_guardrail(counterexample)
         selection_summary = json.dumps(
             {
                 "query_index": reference_bundle.get("query_index"),
@@ -235,22 +238,50 @@ class LLMRepository:
             "<reference_selection_policy>\n"
             "Use the optimal baseline and complementary KNN samples as your main inheritance source.\n"
             "Use exploratory samples only for limited, intent-aligned variation.\n"
-            "Use the counterexample only to understand what to avoid in the final output.\n"
+            "Use the counterexample only as an abstract guardrail about what not to inherit.\n"
             "</reference_selection_policy>\n\n"
             f"<selection_summary>\n{selection_summary}\n</selection_summary>\n\n"
             f"<positive_references>\n{positive_items}\n</positive_references>\n\n"
-            f"<negative_reference>\n{negative_item}\n</negative_reference>\n\n"
+            f"<counterexample_guardrail>\n{negative_item}\n</counterexample_guardrail>\n\n"
             "<generation_rules>\n"
             "1. Preserve the core subject and strongest useful style patterns from the best sample.\n"
             "2. Merge only complementary details that reinforce the user's intent.\n"
             "3. Treat exploratory references as optional inspiration, not as dominant style anchors.\n"
-            "4. Explicitly avoid content, style, or parameter drift suggested by the negative reference.\n"
-            "5. Output one clean production-ready JSON object only.\n"
+            "4. Use the counterexample guardrail only to avoid its style family or parameter drift; do not reuse its subject nouns or object vocabulary.\n"
+            "5. Do not insert counterexample-specific entities into the negative prompt unless the user intent explicitly asks to exclude them.\n"
+            "6. Output one clean production-ready JSON object only.\n"
             "</generation_rules>"
             f"{retry_block}"
         )
 
     # ── Helpers ─────────────────────────────────
+
+    @staticmethod
+    def _build_counterexample_guardrail(counterexample: dict | None) -> dict:
+        if not counterexample:
+            return {
+                "present": False,
+                "instruction": "No counterexample provided.",
+            }
+        return {
+            "present": True,
+            "id": counterexample.get("id"),
+            "distance": counterexample.get("distance"),
+            "style": counterexample.get("style", ""),
+            "model": counterexample.get("model", ""),
+            "sampler": counterexample.get("sampler", ""),
+            "cfgscale": counterexample.get("cfgscale", ""),
+            "steps": counterexample.get("steps", ""),
+            "clipskip": counterexample.get("clipskip", ""),
+            "loras": counterexample.get("loras", ""),
+            "selection_reason": counterexample.get("selection_reason", ""),
+            "guardrail_rules": [
+                "Do not inherit the counterexample subject matter, named entities, or scene objects.",
+                "Do not copy counterexample prompt fragments into the final prompt.",
+                "Do not enumerate counterexample objects inside the negative prompt.",
+                "Use only generic quality negatives and broad style contradictions unless the user intent requires more.",
+            ],
+        }
 
     @staticmethod
     def _extract_json(text: str) -> str:

@@ -204,9 +204,10 @@ class LLMRepositoryPromptTests(unittest.TestCase):
         )
 
         self.assertIn("<positive_references>", message)
-        self.assertIn("<negative_reference>", message)
-        self.assertIn("macro insect photo", message)
-        self.assertIn("Use the counterexample only to understand what to avoid", message)
+        self.assertIn("<counterexample_guardrail>", message)
+        self.assertNotIn("macro insect photo", message)
+        self.assertIn("Do not enumerate counterexample objects inside the negative prompt.", message)
+        self.assertIn("Use the counterexample only as an abstract guardrail", message)
         self.assertIn("<validation_error>", message)
         self.assertIn("<previous_invalid_output>", message)
 
