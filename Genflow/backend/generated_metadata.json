@@ -1,0 +1,13 @@
+{
+  "prompt": "(two massive Star Destroyers colliding in deep space:1.4), (catastrophic impact:1.2), (explosions and debris:1.3), hyper-detailed mechanical hull, industrial sci-fi aesthetic, (cinematic lighting:1.2), dramatic rim light from nearby star, (dark void background:1.1), lens flare, (photorealistic:1.2), UHD, 4k, ultra detailed, cinematic, <lora:Kodak Portra 400 analog film stock style v2:0.8>, masterpiece, best quality, 8k",
+  "negative_prompt": "1girl, cat, vending machine, school uniform, anime, cartoon, illustration, deformed, bad anatomy, extra limbs, blurry, low quality, jpeg artifacts, watermark, text, signature, distorted geometry, soft focus",
+  "cfgscale": "4.0",
+  "steps": "35",
+  "sampler": "DPM++ 3M SDE",
+  "seed": "8294710365",
+  "model": "juggernautXL_v9Rundiffusionphoto2",
+  "clipskip": "2.0",
+  "style": "cinematic, hyper-detailed, sci-fi, dramatic, photorealistic",
+  "lora": "Kodak Portra 400 analog film stock style v2",
+  "full_metadata_string": "(two massive Star Destroyers colliding in deep space:1.4), (catastrophic impact:1.2), (explosions and debris:1.3), hyper-detailed mechanical hull, industrial sci-fi aesthetic, (cinematic lighting:1.2), dramatic rim light from nearby star, (dark void background:1.1), lens flare, (photorealistic:1.2), UHD, 4k, ultra detailed, cinematic, <lora:Kodak Portra 400 analog film stock style v2:0.8>, masterpiece, best quality, 8k --neg 1girl, cat, vending machine, school uniform, anime, cartoon, illustration, deformed, bad anatomy, extra limbs, blurry, low quality, jpeg artifacts, watermark, text, signature, distorted geometry, soft focus --cfg 4.0 --steps 35 --sampler DPM++ 3M SDE --seed 8294710365 --clip_skip 2"
+}
