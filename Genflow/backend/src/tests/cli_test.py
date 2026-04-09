@@ -21,6 +21,7 @@ except Exception:
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.dirname(current_dir)
 sys.path.append(src_dir)
+ROUNDS_DIR = os.path.abspath(os.path.join(src_dir, "..", "rounds"))
 
 from app.agents.creative_agent import CreativeAgent
 
@@ -52,7 +53,18 @@ def color_text(text: str, color: str, bold: bool = False) -> str:
     prefix = f"{CliColor.BOLD}{color}" if bold else color
     return f"{prefix}{text}{CliColor.RESET}"
 
+
+def ensure_rounds_dir() -> str:
+    os.makedirs(ROUNDS_DIR, exist_ok=True)
+    return ROUNDS_DIR
+
+
+def build_round_output_path(filename: str) -> str:
+    return os.path.join(ensure_rounds_dir(), filename)
+
+
 def display_images(df, indices, title="Images", gallery_dir=None, filename="display.png", cols=4):
+    output_path = build_round_output_path(filename)
     n = len(indices)
     cols = max(1, min(cols, n))
     rows = int(ceil(n / cols))
@@ -99,9 +111,9 @@ def display_images(df, indices, title="Images", gallery_dir=None, filename="disp
         axes[r][c].axis('off')
     
     plt.tight_layout()
-    plt.savefig(filename)
+    plt.savefig(output_path)
     plt.close()
-    print(f"[{title}] Images saved to: {os.path.abspath(filename)}")
+    print(f"[{title}] Images saved to: {output_path}")
 
 
 def prompt_user_intent(agent: CreativeAgent):
@@ -184,6 +196,8 @@ def print_wall_summary(agent: CreativeAgent, wall, df):
 
 def main():
     print(color_text("Initializing Genflow Backend CLI Test Tool...", CliColor.CYAN, bold=True), flush=True)
+    rounds_dir = ensure_rounds_dir()
+    print(f"Round artifacts directory: {rounds_dir}", flush=True)
 
     if any(dep is None for dep in [np, pd, plt, requests, Image]):
         print("One or more runtime visualization/data dependencies are missing in this environment.")
@@ -453,9 +467,10 @@ def main():
         if generated_json is not None:
             print("\nSuccessfully Generated Metadata:")
             print(json.dumps(generated_json, indent=2, ensure_ascii=False))
-            with open("generated_metadata.json", "w", encoding="utf-8") as f:
+            metadata_path = build_round_output_path("generated_metadata.json")
+            with open(metadata_path, "w", encoding="utf-8") as f:
                 json.dump(generated_json, f, indent=2, ensure_ascii=False)
-            print(f"\nMetadata saved to: {os.path.abspath('generated_metadata.json')}")
+            print(f"\nMetadata saved to: {metadata_path}")
         else:
             print(color_text("Failed to generate valid metadata JSON after retries.", CliColor.RED, bold=True))
         
