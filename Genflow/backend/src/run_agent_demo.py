@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, List
@@ -12,6 +13,7 @@ if TYPE_CHECKING:
 
 
 ARTIFACT_DIR = Path(__file__).resolve().parent.parent / "rounds" / "agent_demo"
+ALLOWED_EXECUTION_MODES = {"mock", "live"}
 
 
 def ensure_artifact_dir() -> Path:
@@ -48,7 +50,20 @@ def build_search_service() -> "SearchService":
     )
 
 
+def resolve_execution_mode(env: dict | None = None) -> str:
+    env = env or os.environ
+    mode = str(env.get("GENFLOW_EXECUTION_MODE", "mock")).strip().lower() or "mock"
+    if mode not in ALLOWED_EXECUTION_MODES:
+        allowed = ", ".join(sorted(ALLOWED_EXECUTION_MODES))
+        raise ValueError(f"Invalid execution mode: {mode}. Allowed modes: {allowed}.")
+    return mode
+
+
 def build_execution_adapter(mode: str = "mock"):
+    mode = str(mode).strip().lower()
+    if mode not in ALLOWED_EXECUTION_MODES:
+        allowed = ", ".join(sorted(ALLOWED_EXECUTION_MODES))
+        raise ValueError(f"Invalid execution mode: {mode}. Allowed modes: {allowed}.")
     if mode == "live":
         from app.agent.live_execution_adapter import LiveExecutionAdapter
 
@@ -230,15 +245,24 @@ def describe_cli_failure(exc: Exception) -> str:
             "required packages are installed in that environment.\n"
             f"Root cause: {message}"
         )
+    if "NotImplementedError" in message:
+        return (
+            "[CLI ERROR] Live execution mode is reserved but not wired yet.\n"
+            "Set `GENFLOW_EXECUTION_MODE=mock` for the current demo path, or finish "
+            "the live backend adapter before using `live`.\n"
+            f"Root cause: {message}"
+        )
     return f"[CLI ERROR] Demo startup failed.\nRoot cause: {message}"
 
 
 def main() -> None:
     try:
+        execution_mode = resolve_execution_mode()
         print("GenFlow Agent Demo")
         print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses -> preview -> commit -> verify")
+        print(f"Execution mode: {execution_mode}")
 
-        runtime_service = build_runtime_service(execution_mode="mock")
+        runtime_service = build_runtime_service(execution_mode=execution_mode)
         df = runtime_service.search_service.search_repo.get_all_data()
 
         user_intent = input("\n请输入你的创作意图\n> ").strip()
