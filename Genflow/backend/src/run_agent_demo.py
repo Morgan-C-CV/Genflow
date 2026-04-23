@@ -1,10 +1,13 @@
 import json
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import List
 
-from app.agent.orchestration import AgentOrchestrationService
-from app.agent.tools import AgentToolsService
 from app.agent.memory import AgentMemoryService
+from app.agent.orchestration import AgentOrchestrationService
+from app.agent.result_executor import ResultExecutor
+from app.agent.runtime_service import AgentRuntimeService
+from app.agent.tools import AgentToolsService
 from app.agents.creative_agent import CreativeAgent
 from app.repositories.llm_repository import LLMRepository
 from app.repositories.search_repository import SearchRepository
@@ -19,13 +22,13 @@ def ensure_artifact_dir() -> Path:
     return ARTIFACT_DIR
 
 
-def build_agent_service() -> AgentOrchestrationService:
+def build_agent_service(memory: AgentMemoryService | None = None) -> AgentOrchestrationService:
     search_repo = SearchRepository()
     tools = AgentToolsService(
         creative_agent=CreativeAgent(),
         search_repo=search_repo,
     )
-    memory = AgentMemoryService()
+    memory = memory or AgentMemoryService()
     return AgentOrchestrationService(
         tools_service=tools,
         memory_service=memory,
@@ -36,6 +39,18 @@ def build_search_service() -> SearchService:
     return SearchService(
         search_repo=SearchRepository(),
         llm_repo=LLMRepository(),
+    )
+
+
+def build_runtime_service() -> AgentRuntimeService:
+    memory = AgentMemoryService()
+    orchestration = build_agent_service(memory=memory)
+    search_service = build_search_service()
+    return AgentRuntimeService(
+        memory_service=memory,
+        orchestration_service=orchestration,
+        search_service=search_service,
+        result_executor=ResultExecutor(),
     )
 
 
@@ -110,29 +125,38 @@ def save_artifact(name: str, payload: dict | str) -> Path:
     return path
 
 
+def to_serializable(value):
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, dict):
+        return {k: to_serializable(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [to_serializable(v) for v in value]
+    return value
+
+
 def main() -> None:
     print("GenFlow Agent Demo")
-    print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema")
+    print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result")
 
-    agent_service = build_agent_service()
-    search_service = build_search_service()
-    df = search_service.search_repo.get_all_data()
+    runtime_service = build_runtime_service()
+    df = runtime_service.search_service.search_repo.get_all_data()
 
     user_intent = input("\n请输入你的创作意图\n> ").strip()
     if not user_intent:
         raise ValueError("创作意图不能为空。")
 
-    session = agent_service.start_session(user_intent)
+    session = runtime_service.start_episode(user_intent)
     print_plan(session.plan)
 
     while session.plan and session.plan.next_action == "ask_user":
         answers = collect_answers(session.plan.clarification_questions)
-        session = agent_service.submit_clarification(session.session_id, answers)
+        session = runtime_service.clarify_episode(session.session_id, answers)
         print_plan(session.plan)
         if not answers:
             break
 
-    session = agent_service.generate_candidates(
+    session = runtime_service.generate_initial_candidates(
         session_id=session.session_id,
         refresh=False,
         per_query_k=2,
@@ -141,45 +165,70 @@ def main() -> None:
     print_wall(session, df)
 
     gallery_index = choose_gallery_index(session)
-    reference_bundle = search_service.build_diverse_reference_bundle(gallery_index)
-    metadata_json = search_service.generate_image_metadata(
-        reference_bundle=reference_bundle,
-        user_intent=session.clarified_intent,
-    )
+    session = runtime_service.select_initial_reference(session.session_id, gallery_index)
+    session = runtime_service.generate_initial_schema(session.session_id)
+    session = runtime_service.produce_initial_result(session.session_id)
 
     session_path = save_artifact(
         f"{session.session_id}_session.json",
-        {
-            "session_id": session.session_id,
-            "original_intent": session.original_intent,
-            "clarified_intent": session.clarified_intent,
-            "plan": {
-                "fixed_constraints": session.plan.fixed_constraints if session.plan else {},
-                "free_variables": session.plan.free_variables if session.plan else [],
-                "locked_axes": session.plan.locked_axes if session.plan else [],
-                "unclear_axes": session.plan.unclear_axes if session.plan else [],
-                "next_action": session.plan.next_action if session.plan else "",
-                "reasoning_summary": session.plan.reasoning_summary if session.plan else "",
-            },
-            "selected_gallery_index": gallery_index,
-            "candidate_wall": {
-                "groups": session.latest_wall.groups if session.latest_wall else [],
-                "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],
-                "query_labels": session.latest_wall.query_labels if session.latest_wall else [],
-            },
-        },
+        to_serializable(
+            {
+                "session_id": session.session_id,
+                "original_intent": session.original_intent,
+                "clarified_intent": session.clarified_intent,
+                "plan": {
+                    "fixed_constraints": session.plan.fixed_constraints if session.plan else {},
+                    "free_variables": session.plan.free_variables if session.plan else [],
+                    "locked_axes": session.plan.locked_axes if session.plan else [],
+                    "unclear_axes": session.plan.unclear_axes if session.plan else [],
+                    "next_action": session.plan.next_action if session.plan else "",
+                    "reasoning_summary": session.plan.reasoning_summary if session.plan else "",
+                },
+                "selected_gallery_index": session.selected_gallery_index,
+                "selected_reference_ids": session.selected_reference_ids,
+                "current_gallery_anchor_summary": session.current_gallery_anchor_summary,
+                "candidate_wall": {
+                    "groups": session.latest_wall.groups if session.latest_wall else [],
+                    "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],
+                    "query_labels": session.latest_wall.query_labels if session.latest_wall else [],
+                },
+                "current_schema": session.current_schema,
+                "current_result_payload": session.current_result_payload,
+                "current_result_summary": session.current_result_summary,
+            }
+        ),
     )
-    bundle_path = save_artifact(f"{session.session_id}_reference_bundle.json", reference_bundle)
-    metadata_path = save_artifact(f"{session.session_id}_metadata.json", metadata_json)
+    bundle_path = save_artifact(f"{session.session_id}_reference_bundle.json", session.selected_reference_bundle)
+    metadata_path = save_artifact(f"{session.session_id}_metadata.json", session.current_schema_raw)
+    schema_path = save_artifact(f"{session.session_id}_normalized_schema.json", to_serializable(session.current_schema))
+    initial_result_path = save_artifact(
+        f"{session.session_id}_initial_result.json",
+        to_serializable(
+            {
+                "payload": session.current_result_payload,
+                "summary": session.current_result_summary,
+            }
+        ),
+    )
 
     print("\n[Selected Gallery Seed]")
-    print(f"- gallery_index: {gallery_index}")
+    print(f"- gallery_index: {session.selected_gallery_index}")
+    print(f"- anchor_summary: {session.current_gallery_anchor_summary}")
     print("\n[Generated Metadata / Schema]")
-    print(metadata_json)
+    print(session.current_schema_raw)
+    print("\n[Normalized Schema]")
+    print(json.dumps(to_serializable(session.current_schema), ensure_ascii=False, indent=2))
+    print("\n[Initial Result]")
+    print(json.dumps(to_serializable({
+        "payload": session.current_result_payload,
+        "summary": session.current_result_summary,
+    }), ensure_ascii=False, indent=2))
     print("\n[Artifacts]")
     print(f"- session: {session_path}")
     print(f"- reference_bundle: {bundle_path}")
     print(f"- metadata: {metadata_path}")
+    print(f"- normalized_schema: {schema_path}")
+    print(f"- initial_result: {initial_result_path}")
 
 
 if __name__ == "__main__":
