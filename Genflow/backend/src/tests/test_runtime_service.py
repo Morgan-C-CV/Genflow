@@ -1,7 +1,7 @@
 import unittest
 
 from app.agent.memory import AgentMemoryService
-from app.agent.runtime_models import ParsedFeedbackEvidence, PreviewProbe
+from app.agent.runtime_models import CommittedPatch, ParsedFeedbackEvidence, PreviewProbe, VerifierResult
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_models import NormalizedSchema
 from app.agent.runtime_service import AgentRuntimeService
@@ -161,6 +161,32 @@ class FakeProbeGenerator:
         ]
 
 
+class FakePatchPlanner:
+    def plan(self, selected_probe, current_schema, parsed_feedback, repair_hypotheses):
+        return CommittedPatch(
+            patch_id="cp_p_001",
+            target_fields=["style", "model"],
+            target_axes=["style"],
+            preserve_axes=["composition"],
+            changes={
+                "style": ["cinematic", "vivid"],
+                "model": "sdxl-base-patched",
+            },
+            rationale="apply style-focused committed patch",
+        )
+
+
+class FakeVerifier:
+    def verify(self, previous_result_summary, updated_result_summary, selected_probe, committed_patch, preserve_constraints):
+        return VerifierResult(
+            improved=True,
+            continue_recommended=False,
+            confidence=0.88,
+            regression_notes=[],
+            summary="verifier accepts current direction",
+        )
+
+
 class RuntimeServiceTest(unittest.TestCase):
     def test_runtime_service_initial_commit_path_persists_required_state(self):
         memory = AgentMemoryService()
@@ -263,6 +289,57 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.current_schema.prompt, original_schema_prompt)
         self.assertEqual(session.current_result_payload.result_id, original_result_id)
         self.assertEqual(session.current_result_summary.summary_text, original_summary_text)
+
+    def test_runtime_service_commit_execute_verify_and_should_continue(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        ids = iter(["initial-rt-1", "preview-rt-1", "commit-rt-1"])
+        executor = ResultExecutor(id_factory=lambda: next(ids))
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            result_executor=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            verifier=FakeVerifier(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        old_result_id = session.current_result_payload.result_id
+        old_summary = session.current_result_summary.summary_text
+
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_probe(session.session_id, "p_001")
+        session = service.select_probe(session.session_id, "p_001")
+        session = service.commit_patch(session.session_id)
+
+        self.assertEqual(session.accepted_patch.patch_id, "cp_p_001")
+        self.assertEqual(len(session.patch_history), 1)
+        self.assertEqual(session.current_schema.model, "sdxl-base-patched")
+        self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
+        self.assertNotEqual(session.current_schema_raw.strip(), "")
+
+        session = service.execute_patch(session.session_id)
+        self.assertEqual(session.previous_result_summary.summary_text, old_summary)
+        self.assertNotEqual(session.current_result_payload.result_id, old_result_id)
+        self.assertEqual(session.current_result_payload.result_type, "mock_committed_result")
+
+        session = service.verify_latest_result(session.session_id)
+        self.assertTrue(session.latest_verifier_result.summary)
+        self.assertFalse(session.continue_recommended)
+        self.assertEqual(session.verifier_confidence, 0.88)
+        self.assertEqual(session.stop_reason, "verifier_accepts_current_direction")
+        self.assertFalse(service.should_continue(session.session_id))
 
 
 if __name__ == "__main__":

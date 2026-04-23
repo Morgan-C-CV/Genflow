@@ -109,19 +109,34 @@ class ResultExecutor:
         schema: NormalizedSchema,
         patch: CommittedPatch,
     ) -> tuple[ResultPayload, ResultSummary]:
+        changed_axes = list(patch.target_axes or patch.target_fields)
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_committed_result",
             content={
                 "prompt": schema.prompt,
                 "patch_id": patch.patch_id,
+                "target_fields": list(patch.target_fields),
+                "target_axes": changed_axes,
+                "rationale": patch.rationale,
             },
-            artifacts={"render_mode": "mock_commit"},
+            artifacts={
+                "render_mode": "mock_commit",
+                "changes": dict(patch.changes),
+                "preserve_axes": list(patch.preserve_axes),
+            },
         )
         summary = ResultSummary(
-            summary_text="Mock committed patch result.",
-            changed_axes=list(patch.target_fields),
-            preserved_axes=[],
-            notes=[patch.rationale] if patch.rationale else [],
+            summary_text=(
+                f"Mock committed patch result for patch={patch.patch_id}, "
+                f"target_fields={','.join(patch.target_fields) or 'none'}, "
+                f"target_axes={','.join(changed_axes) or 'none'}."
+            ),
+            changed_axes=changed_axes,
+            preserved_axes=list(patch.preserve_axes),
+            notes=[
+                patch.rationale,
+                f"change_keys={','.join(patch.changes.keys())}",
+            ] if patch.rationale else [f"change_keys={','.join(patch.changes.keys())}"],
         )
         return payload, summary

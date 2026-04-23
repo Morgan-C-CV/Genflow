@@ -50,10 +50,12 @@ def build_search_service() -> "SearchService":
 
 def build_runtime_service() -> "AgentRuntimeService":
     from app.agent.feedback_parser import FeedbackParser
+    from app.agent.patch_planner import PatchPlanner
     from app.agent.probe_generator import PreviewProbeGenerator
     from app.agent.repair_hypothesis import RepairHypothesisBuilder
     from app.agent.result_executor import ResultExecutor
     from app.agent.runtime_service import AgentRuntimeService
+    from app.agent.verifier import Verifier
 
     memory = AgentMemoryService()
     orchestration = build_agent_service(memory=memory)
@@ -66,6 +68,8 @@ def build_runtime_service() -> "AgentRuntimeService":
         feedback_parser=FeedbackParser(),
         hypothesis_builder=RepairHypothesisBuilder(),
         probe_generator=PreviewProbeGenerator(),
+        patch_planner=PatchPlanner(),
+        verifier=Verifier(),
     )
 
 
@@ -184,6 +188,13 @@ def build_session_artifact_payload(session) -> dict:
             "preview_probe_candidates": session.preview_probe_candidates,
             "preview_probe_results": session.preview_probe_results,
             "selected_probe": session.selected_probe,
+            "accepted_patch": session.accepted_patch,
+            "patch_history": session.patch_history,
+            "previous_result_summary": session.previous_result_summary,
+            "latest_verifier_result": session.latest_verifier_result,
+            "continue_recommended": session.continue_recommended,
+            "verifier_confidence": session.verifier_confidence,
+            "stop_reason": session.stop_reason,
         }
     )
 
@@ -215,7 +226,7 @@ def describe_cli_failure(exc: Exception) -> str:
 def main() -> None:
     try:
         print("GenFlow Agent Demo")
-        print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses -> preview")
+        print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses -> preview -> commit -> verify")
 
         runtime_service = build_runtime_service()
         df = runtime_service.search_service.search_repo.get_all_data()
@@ -300,6 +311,37 @@ def main() -> None:
                     f"{session.session_id}_preview_result.json",
                     to_serializable(latest_preview),
                 )
+                session = runtime_service.commit_patch(session.session_id)
+                session = runtime_service.execute_patch(session.session_id)
+                session = runtime_service.verify_latest_result(session.session_id)
+                continue_decision = runtime_service.should_continue(session.session_id)
+                print("\n[Committed Patch]")
+                print(json.dumps(to_serializable(session.accepted_patch), ensure_ascii=False, indent=2))
+                print("\n[Updated Result]")
+                print(json.dumps(to_serializable({
+                    "payload": session.current_result_payload,
+                    "summary": session.current_result_summary,
+                }), ensure_ascii=False, indent=2))
+                print("\n[Verifier Decision]")
+                print(json.dumps(to_serializable(session.latest_verifier_result), ensure_ascii=False, indent=2))
+                print(f"\n[Loop Decision]\ncontinue={continue_decision}")
+                committed_patch_path = save_artifact(
+                    f"{session.session_id}_committed_patch.json",
+                    to_serializable(session.accepted_patch),
+                )
+                committed_result_path = save_artifact(
+                    f"{session.session_id}_updated_result.json",
+                    to_serializable(
+                        {
+                            "payload": session.current_result_payload,
+                            "summary": session.current_result_summary,
+                        }
+                    ),
+                )
+                verifier_result_path = save_artifact(
+                    f"{session.session_id}_verifier_result.json",
+                    to_serializable(session.latest_verifier_result),
+                )
             save_artifact(f"{session.session_id}_parsed_feedback.json", to_serializable(session.parsed_feedback))
             save_artifact(f"{session.session_id}_repair_hypotheses.json", to_serializable(session.repair_hypotheses))
         session_path = save_artifact(
@@ -316,6 +358,12 @@ def main() -> None:
             print(f"- preview_probes: {preview_probes_path}")
         if feedback_text and preview_result_path is not None:
             print(f"- preview_result: {preview_result_path}")
+        if feedback_text and 'committed_patch_path' in locals():
+            print(f"- committed_patch: {committed_patch_path}")
+        if feedback_text and 'committed_result_path' in locals():
+            print(f"- updated_result: {committed_result_path}")
+        if feedback_text and 'verifier_result_path' in locals():
+            print(f"- verifier_result: {verifier_result_path}")
     except Exception as exc:
         print(describe_cli_failure(exc))
         raise SystemExit(1) from exc

@@ -76,6 +76,8 @@ class PreviewResult:
 class CommittedPatch:
     patch_id: str = ""
     target_fields: List[str] = field(default_factory=list)
+    target_axes: List[str] = field(default_factory=list)
+    preserve_axes: List[str] = field(default_factory=list)
     changes: Dict[str, Any] = field(default_factory=dict)
     rationale: str = ""
 

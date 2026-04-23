@@ -4,10 +4,12 @@ from typing import Callable, Optional
 
 from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
+from app.agent.patch_planner import PatchPlanner
 from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.result_executor import ResultExecutor
 from app.agent.schema_utils import parse_and_normalize_metadata
+from app.agent.verifier import Verifier
 
 
 class AgentRuntimeService:
@@ -21,6 +23,8 @@ class AgentRuntimeService:
         feedback_parser: Optional[FeedbackParser] = None,
         hypothesis_builder: Optional[RepairHypothesisBuilder] = None,
         probe_generator: Optional[PreviewProbeGenerator] = None,
+        patch_planner: Optional[PatchPlanner] = None,
+        verifier: Optional[Verifier] = None,
     ):
         self.memory_service = memory_service
         self.orchestration_service = orchestration_service
@@ -30,6 +34,8 @@ class AgentRuntimeService:
         self.feedback_parser = feedback_parser or FeedbackParser()
         self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
         self.probe_generator = probe_generator or PreviewProbeGenerator()
+        self.patch_planner = patch_planner or PatchPlanner()
+        self.verifier = verifier or Verifier()
 
     def start_episode(self, user_intent: str) -> AgentSessionState:
         return self.orchestration_service.start_session(user_intent)
@@ -157,6 +163,55 @@ class AgentRuntimeService:
         session.selected_probe = probe
         return self.memory_service.save_session(session)
 
+    def commit_patch(self, session_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        if not session.selected_probe.probe_id:
+            raise ValueError("No selected probe available for commit.")
+        patch = self.patch_planner.plan(
+            selected_probe=session.selected_probe,
+            current_schema=session.current_schema,
+            parsed_feedback=session.parsed_feedback,
+            repair_hypotheses=session.repair_hypotheses,
+        )
+        session.accepted_patch = patch
+        session.patch_history.append(patch)
+        session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
+        return self.memory_service.save_session(session)
+
+    def execute_patch(self, session_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        if not session.accepted_patch.patch_id:
+            raise ValueError("No committed patch available for execution.")
+        session.previous_result_summary = session.current_result_summary
+        payload, summary = self.result_executor.execute_committed_patch(
+            schema=session.current_schema,
+            patch=session.accepted_patch,
+        )
+        session.current_result_id = payload.result_id
+        session.current_result_payload = payload
+        session.current_result_summary = summary
+        session.accepted_results.append(payload)
+        return self.memory_service.save_session(session)
+
+    def verify_latest_result(self, session_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        result = self.verifier.verify(
+            previous_result_summary=session.previous_result_summary,
+            updated_result_summary=session.current_result_summary,
+            selected_probe=session.selected_probe,
+            committed_patch=session.accepted_patch,
+            preserve_constraints=session.preserve_constraints,
+        )
+        session.latest_verifier_result = result
+        session.continue_recommended = result.continue_recommended
+        session.verifier_confidence = result.confidence
+        session.stop_reason = "" if result.continue_recommended else "verifier_accepts_current_direction"
+        return self.memory_service.save_session(session)
+
+    def should_continue(self, session_id: str) -> bool:
+        session = self.memory_service.get_session(session_id)
+        return bool(session.continue_recommended)
+
     @staticmethod
     def _build_anchor_summary(reference_bundle: dict) -> str:
         counts = reference_bundle.get("counts", {})
@@ -166,3 +221,24 @@ class AgentRuntimeService:
             f"(best={counts.get('best', 0)}, complementary_knn={counts.get('complementary_knn', 0)}, "
             f"exploratory={counts.get('exploratory', 0)}, counterexample={counts.get('counterexample', 0)})."
         )
+
+    @staticmethod
+    def _apply_patch_to_schema(current_schema, patch):
+        updated = type(current_schema)(
+            prompt=current_schema.prompt,
+            negative_prompt=current_schema.negative_prompt,
+            cfgscale=current_schema.cfgscale,
+            steps=current_schema.steps,
+            sampler=current_schema.sampler,
+            seed=current_schema.seed,
+            model=current_schema.model,
+            clipskip=current_schema.clipskip,
+            style=list(current_schema.style),
+            lora=list(current_schema.lora),
+            full_metadata_string=current_schema.full_metadata_string,
+            raw_fields=dict(current_schema.raw_fields),
+        )
+        for field, value in patch.changes.items():
+            if hasattr(updated, field):
+                setattr(updated, field, value)
+        return updated

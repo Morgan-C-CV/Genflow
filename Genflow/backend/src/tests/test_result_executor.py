@@ -57,6 +57,33 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertIn("composition", preview_result.summary.preserved_axes)
         self.assertIn("resource_shift", preview_result.summary.summary_text)
 
+    def test_execute_committed_patch_returns_updated_result_objects(self):
+        executor = ResultExecutor(id_factory=lambda: "commit-1")
+        schema = NormalizedSchema(
+            prompt="a vivid portrait | make the style more vivid",
+            model="sdxl-base-patched",
+            style=["cinematic", "vivid"],
+        )
+        from app.agent.runtime_models import CommittedPatch
+
+        patch = CommittedPatch(
+            patch_id="cp_p_001",
+            target_fields=["style", "model"],
+            target_axes=["style"],
+            preserve_axes=["composition"],
+            changes={"style": ["cinematic", "vivid"], "model": "sdxl-base-patched"},
+            rationale="adjust style and preserve composition",
+        )
+
+        payload, summary = executor.execute_committed_patch(schema, patch)
+
+        self.assertEqual(payload.result_id, "commit-1")
+        self.assertEqual(payload.result_type, "mock_committed_result")
+        self.assertEqual(payload.content["patch_id"], "cp_p_001")
+        self.assertIn("style", summary.changed_axes)
+        self.assertIn("composition", summary.preserved_axes)
+        self.assertIn("cp_p_001", summary.summary_text)
+
 
 if __name__ == "__main__":
     unittest.main()
