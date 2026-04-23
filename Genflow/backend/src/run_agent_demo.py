@@ -1,19 +1,14 @@
 import json
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from app.agent.memory import AgentMemoryService
-from app.agent.orchestration import AgentOrchestrationService
-from app.agent.feedback_parser import FeedbackParser
-from app.agent.repair_hypothesis import RepairHypothesisBuilder
-from app.agent.result_executor import ResultExecutor
-from app.agent.runtime_service import AgentRuntimeService
-from app.agent.tools import AgentToolsService
-from app.agents.creative_agent import CreativeAgent
-from app.repositories.llm_repository import LLMRepository
-from app.repositories.search_repository import SearchRepository
-from app.services.search_service import SearchService
+
+if TYPE_CHECKING:
+    from app.agent.orchestration import AgentOrchestrationService
+    from app.agent.runtime_service import AgentRuntimeService
+    from app.services.search_service import SearchService
 
 
 ARTIFACT_DIR = Path(__file__).resolve().parent.parent / "rounds" / "agent_demo"
@@ -24,7 +19,12 @@ def ensure_artifact_dir() -> Path:
     return ARTIFACT_DIR
 
 
-def build_agent_service(memory: AgentMemoryService | None = None) -> AgentOrchestrationService:
+def build_agent_service(memory: AgentMemoryService | None = None) -> "AgentOrchestrationService":
+    from app.agent.orchestration import AgentOrchestrationService
+    from app.agent.tools import AgentToolsService
+    from app.agents.creative_agent import CreativeAgent
+    from app.repositories.search_repository import SearchRepository
+
     search_repo = SearchRepository()
     tools = AgentToolsService(
         creative_agent=CreativeAgent(),
@@ -37,14 +37,23 @@ def build_agent_service(memory: AgentMemoryService | None = None) -> AgentOrches
     )
 
 
-def build_search_service() -> SearchService:
+def build_search_service() -> "SearchService":
+    from app.repositories.llm_repository import LLMRepository
+    from app.repositories.search_repository import SearchRepository
+    from app.services.search_service import SearchService
+
     return SearchService(
         search_repo=SearchRepository(),
         llm_repo=LLMRepository(),
     )
 
 
-def build_runtime_service() -> AgentRuntimeService:
+def build_runtime_service() -> "AgentRuntimeService":
+    from app.agent.feedback_parser import FeedbackParser
+    from app.agent.repair_hypothesis import RepairHypothesisBuilder
+    from app.agent.result_executor import ResultExecutor
+    from app.agent.runtime_service import AgentRuntimeService
+
     memory = AgentMemoryService()
     orchestration = build_agent_service(memory=memory)
     search_service = build_search_service()
@@ -139,6 +148,41 @@ def to_serializable(value):
     return value
 
 
+def build_session_artifact_payload(session) -> dict:
+    return to_serializable(
+        {
+            "session_id": session.session_id,
+            "original_intent": session.original_intent,
+            "clarified_intent": session.clarified_intent,
+            "plan": {
+                "fixed_constraints": session.plan.fixed_constraints if session.plan else {},
+                "free_variables": session.plan.free_variables if session.plan else [],
+                "locked_axes": session.plan.locked_axes if session.plan else [],
+                "unclear_axes": session.plan.unclear_axes if session.plan else [],
+                "next_action": session.plan.next_action if session.plan else "",
+                "reasoning_summary": session.plan.reasoning_summary if session.plan else "",
+            },
+            "selected_gallery_index": session.selected_gallery_index,
+            "selected_reference_ids": session.selected_reference_ids,
+            "current_gallery_anchor_summary": session.current_gallery_anchor_summary,
+            "candidate_wall": {
+                "groups": session.latest_wall.groups if session.latest_wall else [],
+                "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],
+                "query_labels": session.latest_wall.query_labels if session.latest_wall else [],
+            },
+            "current_schema": session.current_schema,
+            "current_result_payload": session.current_result_payload,
+            "current_result_summary": session.current_result_summary,
+            "parsed_feedback": session.parsed_feedback,
+            "preserve_constraints": session.preserve_constraints,
+            "dissatisfaction_axes": session.dissatisfaction_axes,
+            "requested_changes": session.requested_changes,
+            "current_uncertainty_estimate": session.current_uncertainty_estimate,
+            "repair_hypotheses": session.repair_hypotheses,
+        }
+    )
+
+
 def describe_cli_failure(exc: Exception) -> str:
     chain = []
     current = exc
@@ -198,35 +242,6 @@ def main() -> None:
         session = runtime_service.generate_initial_schema(session.session_id)
         session = runtime_service.produce_initial_result(session.session_id)
 
-        session_path = save_artifact(
-            f"{session.session_id}_session.json",
-            to_serializable(
-                {
-                    "session_id": session.session_id,
-                    "original_intent": session.original_intent,
-                    "clarified_intent": session.clarified_intent,
-                    "plan": {
-                        "fixed_constraints": session.plan.fixed_constraints if session.plan else {},
-                        "free_variables": session.plan.free_variables if session.plan else [],
-                        "locked_axes": session.plan.locked_axes if session.plan else [],
-                        "unclear_axes": session.plan.unclear_axes if session.plan else [],
-                        "next_action": session.plan.next_action if session.plan else "",
-                        "reasoning_summary": session.plan.reasoning_summary if session.plan else "",
-                    },
-                    "selected_gallery_index": session.selected_gallery_index,
-                    "selected_reference_ids": session.selected_reference_ids,
-                    "current_gallery_anchor_summary": session.current_gallery_anchor_summary,
-                    "candidate_wall": {
-                        "groups": session.latest_wall.groups if session.latest_wall else [],
-                        "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],
-                        "query_labels": session.latest_wall.query_labels if session.latest_wall else [],
-                    },
-                    "current_schema": session.current_schema,
-                    "current_result_payload": session.current_result_payload,
-                    "current_result_summary": session.current_result_summary,
-                }
-            ),
-        )
         bundle_path = save_artifact(f"{session.session_id}_reference_bundle.json", session.selected_reference_bundle)
         metadata_path = save_artifact(f"{session.session_id}_metadata.json", session.current_schema_raw)
         schema_path = save_artifact(f"{session.session_id}_normalized_schema.json", to_serializable(session.current_schema))
@@ -260,6 +275,12 @@ def main() -> None:
             print(json.dumps(to_serializable(session.parsed_feedback), ensure_ascii=False, indent=2))
             print("\n[Repair Hypotheses]")
             print(json.dumps(to_serializable(session.repair_hypotheses), ensure_ascii=False, indent=2))
+            save_artifact(f"{session.session_id}_parsed_feedback.json", to_serializable(session.parsed_feedback))
+            save_artifact(f"{session.session_id}_repair_hypotheses.json", to_serializable(session.repair_hypotheses))
+        session_path = save_artifact(
+            f"{session.session_id}_session.json",
+            build_session_artifact_payload(session),
+        )
         print("\n[Artifacts]")
         print(f"- session: {session_path}")
         print(f"- reference_bundle: {bundle_path}")
