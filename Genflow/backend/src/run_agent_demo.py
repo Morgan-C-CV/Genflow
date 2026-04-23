@@ -5,6 +5,8 @@ from typing import List
 
 from app.agent.memory import AgentMemoryService
 from app.agent.orchestration import AgentOrchestrationService
+from app.agent.feedback_parser import FeedbackParser
+from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_service import AgentRuntimeService
 from app.agent.tools import AgentToolsService
@@ -51,6 +53,8 @@ def build_runtime_service() -> AgentRuntimeService:
         orchestration_service=orchestration,
         search_service=search_service,
         result_executor=ResultExecutor(),
+        feedback_parser=FeedbackParser(),
+        hypothesis_builder=RepairHypothesisBuilder(),
     )
 
 
@@ -137,7 +141,7 @@ def to_serializable(value):
 
 def main() -> None:
     print("GenFlow Agent Demo")
-    print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result")
+    print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses")
 
     runtime_service = build_runtime_service()
     df = runtime_service.search_service.search_repo.get_all_data()
@@ -223,6 +227,14 @@ def main() -> None:
         "payload": session.current_result_payload,
         "summary": session.current_result_summary,
     }), ensure_ascii=False, indent=2))
+    feedback_text = input("\n请输入你对当前结果的反馈\n> ").strip()
+    if feedback_text:
+        session = runtime_service.submit_feedback(session.session_id, feedback_text)
+        session = runtime_service.build_repair_hypotheses(session.session_id)
+        print("\n[Parsed Feedback]")
+        print(json.dumps(to_serializable(session.parsed_feedback), ensure_ascii=False, indent=2))
+        print("\n[Repair Hypotheses]")
+        print(json.dumps(to_serializable(session.repair_hypotheses), ensure_ascii=False, indent=2))
     print("\n[Artifacts]")
     print(f"- session: {session_path}")
     print(f"- reference_bundle: {bundle_path}")

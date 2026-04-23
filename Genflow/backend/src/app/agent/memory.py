@@ -8,7 +8,9 @@ from uuid import uuid4
 from app.agent.runtime_models import (
     CommittedPatch,
     NormalizedSchema,
+    ParsedFeedbackEvidence,
     PreviewResult,
+    RepairHypothesis,
     ResultPayload,
     ResultSummary,
     VerifierResult,
@@ -51,9 +53,11 @@ class AgentSessionState:
     current_gallery_anchor_summary: str = ""
     feedback_history: List[str] = field(default_factory=list)
     latest_feedback: str = ""
+    parsed_feedback: ParsedFeedbackEvidence = field(default_factory=ParsedFeedbackEvidence)
     preserve_constraints: List[str] = field(default_factory=list)
     dissatisfaction_axes: List[str] = field(default_factory=list)
-    repair_hypotheses: List[Dict[str, object]] = field(default_factory=list)
+    requested_changes: List[str] = field(default_factory=list)
+    repair_hypotheses: List[RepairHypothesis] = field(default_factory=list)
     local_probes: List[Dict[str, object]] = field(default_factory=list)
     preview_probe_candidates: List[Dict[str, object]] = field(default_factory=list)
     preview_probe_results: List[PreviewResult] = field(default_factory=list)

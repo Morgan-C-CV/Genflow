@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
+from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.result_executor import ResultExecutor
 from app.agent.schema_utils import parse_and_normalize_metadata
 
@@ -15,12 +17,16 @@ class AgentRuntimeService:
         search_service,
         result_executor: ResultExecutor,
         schema_normalizer: Optional[Callable[[str], object]] = None,
+        feedback_parser: Optional[FeedbackParser] = None,
+        hypothesis_builder: Optional[RepairHypothesisBuilder] = None,
     ):
         self.memory_service = memory_service
         self.orchestration_service = orchestration_service
         self.search_service = search_service
         self.result_executor = result_executor
         self.schema_normalizer = schema_normalizer or parse_and_normalize_metadata
+        self.feedback_parser = feedback_parser or FeedbackParser()
+        self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
 
     def start_episode(self, user_intent: str) -> AgentSessionState:
         return self.orchestration_service.start_session(user_intent)
@@ -83,6 +89,33 @@ class AgentRuntimeService:
         session.current_result_payload = payload
         session.current_result_summary = summary
         session.accepted_results.append(payload)
+        return self.memory_service.save_session(session)
+
+    def submit_feedback(self, session_id: str, feedback_text: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        evidence = self.feedback_parser.parse(
+            feedback_text=feedback_text,
+            current_result_summary=session.current_result_summary.summary_text,
+            current_schema_prompt=session.current_schema.prompt,
+        )
+        session.feedback_history.append(feedback_text)
+        session.latest_feedback = feedback_text
+        session.parsed_feedback = evidence
+        session.preserve_constraints = list(evidence.preserve_constraints)
+        session.dissatisfaction_axes = list(evidence.dissatisfaction_scope)
+        session.requested_changes = list(evidence.requested_changes)
+        session.current_uncertainty_estimate = evidence.uncertainty_estimate
+        return self.memory_service.save_session(session)
+
+    def build_repair_hypotheses(self, session_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        hypotheses = self.hypothesis_builder.build(
+            current_schema=session.current_schema,
+            current_result_summary=session.current_result_summary,
+            feedback_evidence=session.parsed_feedback,
+            history=session.feedback_history,
+        )
+        session.repair_hypotheses = hypotheses
         return self.memory_service.save_session(session)
 
     @staticmethod

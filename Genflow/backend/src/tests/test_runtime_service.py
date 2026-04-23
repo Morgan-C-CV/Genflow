@@ -1,6 +1,7 @@
 import unittest
 
 from app.agent.memory import AgentMemoryService
+from app.agent.runtime_models import ParsedFeedbackEvidence
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_models import NormalizedSchema
 from app.agent.runtime_service import AgentRuntimeService
@@ -90,6 +91,47 @@ class FakeSearchService:
         return VALID_METADATA_JSON
 
 
+class FakeFeedbackParser:
+    def parse(
+        self,
+        feedback_text: str,
+        current_result_summary: str = "",
+        current_schema_prompt: str = "",
+    ):
+        return ParsedFeedbackEvidence(
+            dissatisfaction_scope=["style"],
+            preserve_constraints=["Keep the composition"],
+            requested_changes=["make the style brighter"],
+            uncertainty_estimate=0.25,
+            raw_feedback=feedback_text,
+            parser_notes=["fake_parser"],
+        )
+
+
+class FakeHypothesisBuilder:
+    def build(self, current_schema, current_result_summary, feedback_evidence, history=None):
+        from app.agent.runtime_models import RepairHypothesis
+
+        return [
+            RepairHypothesis(
+                hypothesis_id="h_001",
+                summary="style mismatch",
+                likely_changed_axes=["style"],
+                likely_preserved_axes=["composition"],
+                likely_patch_family="resource_shift",
+                rank=1,
+            ),
+            RepairHypothesis(
+                hypothesis_id="h_002",
+                summary="color mismatch",
+                likely_changed_axes=["color_palette"],
+                likely_preserved_axes=["composition"],
+                likely_patch_family="prompt_color_adjustment",
+                rank=2,
+            ),
+        ]
+
+
 class RuntimeServiceTest(unittest.TestCase):
     def test_runtime_service_initial_commit_path_persists_required_state(self):
         memory = AgentMemoryService()
@@ -119,6 +161,38 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.current_result_payload.result_id, "result-rt-1")
         self.assertEqual(session.current_result_payload.result_type, "mock_initial_result")
         self.assertIn("references=3", session.current_result_summary.summary_text)
+
+    def test_runtime_service_feedback_and_hypotheses_persist_state(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-2")
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            result_executor=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+
+        self.assertEqual(session.feedback_history, ["Keep the composition, but improve style."])
+        self.assertEqual(session.latest_feedback, "Keep the composition, but improve style.")
+        self.assertEqual(session.preserve_constraints, ["Keep the composition"])
+        self.assertEqual(session.dissatisfaction_axes, ["style"])
+        self.assertEqual(session.requested_changes, ["make the style brighter"])
+        self.assertEqual(session.current_uncertainty_estimate, 0.25)
+        self.assertEqual(session.parsed_feedback.raw_feedback, "Keep the composition, but improve style.")
+        self.assertEqual(len(session.repair_hypotheses), 2)
+        self.assertEqual(session.repair_hypotheses[0].hypothesis_id, "h_001")
 
 
 if __name__ == "__main__":

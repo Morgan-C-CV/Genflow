@@ -35,6 +35,26 @@ class ResultSummary:
 
 
 @dataclass
+class ParsedFeedbackEvidence:
+    dissatisfaction_scope: List[str] = field(default_factory=list)
+    preserve_constraints: List[str] = field(default_factory=list)
+    requested_changes: List[str] = field(default_factory=list)
+    uncertainty_estimate: float = 0.0
+    raw_feedback: str = ""
+    parser_notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class RepairHypothesis:
+    hypothesis_id: str = ""
+    summary: str = ""
+    likely_changed_axes: List[str] = field(default_factory=list)
+    likely_preserved_axes: List[str] = field(default_factory=list)
+    likely_patch_family: str = ""
+    rank: int = 0
+
+
+@dataclass
 class PreviewResult:
     probe_id: str = ""
     summary: ResultSummary = field(default_factory=ResultSummary)
