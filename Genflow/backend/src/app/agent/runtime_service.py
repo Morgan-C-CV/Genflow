@@ -8,7 +8,7 @@ from app.agent.patch_planner import PatchPlanner
 from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.result_executor import ResultExecutor
-from app.agent.schema_utils import parse_and_normalize_metadata
+from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
 
 
@@ -176,6 +176,7 @@ class AgentRuntimeService:
         session.accepted_patch = patch
         session.patch_history.append(patch)
         session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
+        session.current_schema_raw = serialize_normalized_schema(session.current_schema)
         return self.memory_service.save_session(session)
 
     def execute_patch(self, session_id: str) -> AgentSessionState:
@@ -241,4 +242,19 @@ class AgentRuntimeService:
         for field, value in patch.changes.items():
             if hasattr(updated, field):
                 setattr(updated, field, value)
+        updated.raw_fields.update(
+            {
+                "prompt": updated.prompt,
+                "negative_prompt": updated.negative_prompt,
+                "cfgscale": updated.cfgscale,
+                "steps": updated.steps,
+                "sampler": updated.sampler,
+                "seed": updated.seed,
+                "model": updated.model,
+                "clipskip": updated.clipskip,
+                "style": ", ".join(updated.style) if updated.style else "none",
+                "lora": ", ".join(updated.lora) if updated.lora else "none",
+                "full_metadata_string": updated.full_metadata_string,
+            }
+        )
         return updated

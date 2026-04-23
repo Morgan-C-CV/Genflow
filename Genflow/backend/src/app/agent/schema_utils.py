@@ -82,6 +82,23 @@ def parse_and_normalize_metadata(raw_json: str) -> NormalizedSchema:
     return normalize_metadata_schema(parse_metadata_json(raw_json))
 
 
+def serialize_normalized_schema(schema: NormalizedSchema) -> str:
+    payload = {
+        "prompt": schema.prompt,
+        "negative_prompt": schema.negative_prompt,
+        "cfgscale": schema.cfgscale,
+        "steps": schema.steps,
+        "sampler": schema.sampler,
+        "seed": schema.seed,
+        "model": schema.model,
+        "clipskip": schema.clipskip,
+        "style": ", ".join(schema.style) if schema.style else "none",
+        "lora": ", ".join(schema.lora) if schema.lora else "none",
+        "full_metadata_string": schema.full_metadata_string,
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
 def _split_csv_field(value: str) -> list[str]:
     stripped = value.strip()
     if not stripped or stripped.lower() == "none":

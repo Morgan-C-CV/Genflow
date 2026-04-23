@@ -328,6 +328,8 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.current_schema.model, "sdxl-base-patched")
         self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
         self.assertNotEqual(session.current_schema_raw.strip(), "")
+        self.assertIn('"model": "sdxl-base-patched"', session.current_schema_raw)
+        self.assertIn('"style": "cinematic, vivid"', session.current_schema_raw)
 
         session = service.execute_patch(session.session_id)
         self.assertEqual(session.previous_result_summary.summary_text, old_summary)
