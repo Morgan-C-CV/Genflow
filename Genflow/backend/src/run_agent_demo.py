@@ -139,108 +139,136 @@ def to_serializable(value):
     return value
 
 
+def describe_cli_failure(exc: Exception) -> str:
+    chain = []
+    current = exc
+    while current is not None and len(chain) < 4:
+        chain.append(f"{current.__class__.__name__}: {current}")
+        current = getattr(current, "__cause__", None)
+    message = " -> ".join(chain)
+    if "ConnectError" in message or "NameResolutionError" in message:
+        return (
+            "[CLI ERROR] Live backend unavailable for this smoke run.\n"
+            "Use the project virtual environment and a network-enabled environment "
+            "when calling the real model-backed cold-start path.\n"
+            f"Root cause: {message}"
+        )
+    if "ModuleNotFoundError" in message:
+        return (
+            "[CLI ERROR] Missing runtime dependency for the current interpreter.\n"
+            "Launch the demo with `.venv/bin/python run_agent_demo.py` and ensure "
+            "required packages are installed in that environment.\n"
+            f"Root cause: {message}"
+        )
+    return f"[CLI ERROR] Demo startup failed.\nRoot cause: {message}"
+
+
 def main() -> None:
-    print("GenFlow Agent Demo")
-    print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses")
+    try:
+        print("GenFlow Agent Demo")
+        print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses")
 
-    runtime_service = build_runtime_service()
-    df = runtime_service.search_service.search_repo.get_all_data()
+        runtime_service = build_runtime_service()
+        df = runtime_service.search_service.search_repo.get_all_data()
 
-    user_intent = input("\n请输入你的创作意图\n> ").strip()
-    if not user_intent:
-        raise ValueError("创作意图不能为空。")
+        user_intent = input("\n请输入你的创作意图\n> ").strip()
+        if not user_intent:
+            raise ValueError("创作意图不能为空。")
 
-    session = runtime_service.start_episode(user_intent)
-    print_plan(session.plan)
-
-    while session.plan and session.plan.next_action == "ask_user":
-        answers = collect_answers(session.plan.clarification_questions)
-        session = runtime_service.clarify_episode(session.session_id, answers)
+        session = runtime_service.start_episode(user_intent)
         print_plan(session.plan)
-        if not answers:
-            break
 
-    session = runtime_service.generate_initial_candidates(
-        session_id=session.session_id,
-        refresh=False,
-        per_query_k=2,
-        top_k=12,
-    )
-    print_wall(session, df)
+        while session.plan and session.plan.next_action == "ask_user":
+            answers = collect_answers(session.plan.clarification_questions)
+            session = runtime_service.clarify_episode(session.session_id, answers)
+            print_plan(session.plan)
+            if not answers:
+                break
 
-    gallery_index = choose_gallery_index(session)
-    session = runtime_service.select_initial_reference(session.session_id, gallery_index)
-    session = runtime_service.generate_initial_schema(session.session_id)
-    session = runtime_service.produce_initial_result(session.session_id)
+        session = runtime_service.generate_initial_candidates(
+            session_id=session.session_id,
+            refresh=False,
+            per_query_k=2,
+            top_k=12,
+        )
+        print_wall(session, df)
 
-    session_path = save_artifact(
-        f"{session.session_id}_session.json",
-        to_serializable(
-            {
-                "session_id": session.session_id,
-                "original_intent": session.original_intent,
-                "clarified_intent": session.clarified_intent,
-                "plan": {
-                    "fixed_constraints": session.plan.fixed_constraints if session.plan else {},
-                    "free_variables": session.plan.free_variables if session.plan else [],
-                    "locked_axes": session.plan.locked_axes if session.plan else [],
-                    "unclear_axes": session.plan.unclear_axes if session.plan else [],
-                    "next_action": session.plan.next_action if session.plan else "",
-                    "reasoning_summary": session.plan.reasoning_summary if session.plan else "",
-                },
-                "selected_gallery_index": session.selected_gallery_index,
-                "selected_reference_ids": session.selected_reference_ids,
-                "current_gallery_anchor_summary": session.current_gallery_anchor_summary,
-                "candidate_wall": {
-                    "groups": session.latest_wall.groups if session.latest_wall else [],
-                    "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],
-                    "query_labels": session.latest_wall.query_labels if session.latest_wall else [],
-                },
-                "current_schema": session.current_schema,
-                "current_result_payload": session.current_result_payload,
-                "current_result_summary": session.current_result_summary,
-            }
-        ),
-    )
-    bundle_path = save_artifact(f"{session.session_id}_reference_bundle.json", session.selected_reference_bundle)
-    metadata_path = save_artifact(f"{session.session_id}_metadata.json", session.current_schema_raw)
-    schema_path = save_artifact(f"{session.session_id}_normalized_schema.json", to_serializable(session.current_schema))
-    initial_result_path = save_artifact(
-        f"{session.session_id}_initial_result.json",
-        to_serializable(
-            {
-                "payload": session.current_result_payload,
-                "summary": session.current_result_summary,
-            }
-        ),
-    )
+        gallery_index = choose_gallery_index(session)
+        session = runtime_service.select_initial_reference(session.session_id, gallery_index)
+        session = runtime_service.generate_initial_schema(session.session_id)
+        session = runtime_service.produce_initial_result(session.session_id)
 
-    print("\n[Selected Gallery Seed]")
-    print(f"- gallery_index: {session.selected_gallery_index}")
-    print(f"- anchor_summary: {session.current_gallery_anchor_summary}")
-    print("\n[Generated Metadata / Schema]")
-    print(session.current_schema_raw)
-    print("\n[Normalized Schema]")
-    print(json.dumps(to_serializable(session.current_schema), ensure_ascii=False, indent=2))
-    print("\n[Initial Result]")
-    print(json.dumps(to_serializable({
-        "payload": session.current_result_payload,
-        "summary": session.current_result_summary,
-    }), ensure_ascii=False, indent=2))
-    feedback_text = input("\n请输入你对当前结果的反馈\n> ").strip()
-    if feedback_text:
-        session = runtime_service.submit_feedback(session.session_id, feedback_text)
-        session = runtime_service.build_repair_hypotheses(session.session_id)
-        print("\n[Parsed Feedback]")
-        print(json.dumps(to_serializable(session.parsed_feedback), ensure_ascii=False, indent=2))
-        print("\n[Repair Hypotheses]")
-        print(json.dumps(to_serializable(session.repair_hypotheses), ensure_ascii=False, indent=2))
-    print("\n[Artifacts]")
-    print(f"- session: {session_path}")
-    print(f"- reference_bundle: {bundle_path}")
-    print(f"- metadata: {metadata_path}")
-    print(f"- normalized_schema: {schema_path}")
-    print(f"- initial_result: {initial_result_path}")
+        session_path = save_artifact(
+            f"{session.session_id}_session.json",
+            to_serializable(
+                {
+                    "session_id": session.session_id,
+                    "original_intent": session.original_intent,
+                    "clarified_intent": session.clarified_intent,
+                    "plan": {
+                        "fixed_constraints": session.plan.fixed_constraints if session.plan else {},
+                        "free_variables": session.plan.free_variables if session.plan else [],
+                        "locked_axes": session.plan.locked_axes if session.plan else [],
+                        "unclear_axes": session.plan.unclear_axes if session.plan else [],
+                        "next_action": session.plan.next_action if session.plan else "",
+                        "reasoning_summary": session.plan.reasoning_summary if session.plan else "",
+                    },
+                    "selected_gallery_index": session.selected_gallery_index,
+                    "selected_reference_ids": session.selected_reference_ids,
+                    "current_gallery_anchor_summary": session.current_gallery_anchor_summary,
+                    "candidate_wall": {
+                        "groups": session.latest_wall.groups if session.latest_wall else [],
+                        "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],
+                        "query_labels": session.latest_wall.query_labels if session.latest_wall else [],
+                    },
+                    "current_schema": session.current_schema,
+                    "current_result_payload": session.current_result_payload,
+                    "current_result_summary": session.current_result_summary,
+                }
+            ),
+        )
+        bundle_path = save_artifact(f"{session.session_id}_reference_bundle.json", session.selected_reference_bundle)
+        metadata_path = save_artifact(f"{session.session_id}_metadata.json", session.current_schema_raw)
+        schema_path = save_artifact(f"{session.session_id}_normalized_schema.json", to_serializable(session.current_schema))
+        initial_result_path = save_artifact(
+            f"{session.session_id}_initial_result.json",
+            to_serializable(
+                {
+                    "payload": session.current_result_payload,
+                    "summary": session.current_result_summary,
+                }
+            ),
+        )
+
+        print("\n[Selected Gallery Seed]")
+        print(f"- gallery_index: {session.selected_gallery_index}")
+        print(f"- anchor_summary: {session.current_gallery_anchor_summary}")
+        print("\n[Generated Metadata / Schema]")
+        print(session.current_schema_raw)
+        print("\n[Normalized Schema]")
+        print(json.dumps(to_serializable(session.current_schema), ensure_ascii=False, indent=2))
+        print("\n[Initial Result]")
+        print(json.dumps(to_serializable({
+            "payload": session.current_result_payload,
+            "summary": session.current_result_summary,
+        }), ensure_ascii=False, indent=2))
+        feedback_text = input("\n请输入你对当前结果的反馈\n> ").strip()
+        if feedback_text:
+            session = runtime_service.submit_feedback(session.session_id, feedback_text)
+            session = runtime_service.build_repair_hypotheses(session.session_id)
+            print("\n[Parsed Feedback]")
+            print(json.dumps(to_serializable(session.parsed_feedback), ensure_ascii=False, indent=2))
+            print("\n[Repair Hypotheses]")
+            print(json.dumps(to_serializable(session.repair_hypotheses), ensure_ascii=False, indent=2))
+        print("\n[Artifacts]")
+        print(f"- session: {session_path}")
+        print(f"- reference_bundle: {bundle_path}")
+        print(f"- metadata: {metadata_path}")
+        print(f"- normalized_schema: {schema_path}")
+        print(f"- initial_result: {initial_result_path}")
+    except Exception as exc:
+        print(describe_cli_failure(exc))
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":
