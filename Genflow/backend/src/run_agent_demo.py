@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 ARTIFACT_DIR = Path(__file__).resolve().parent.parent / "rounds" / "agent_demo"
 ALLOWED_EXECUTION_MODES = {"mock", "live"}
+ALLOWED_DEMO_MODES = {"interactive", "local_live_smoke"}
 
 
 def ensure_artifact_dir() -> Path:
@@ -56,6 +57,15 @@ def resolve_execution_mode(env: dict | None = None) -> str:
     if mode not in ALLOWED_EXECUTION_MODES:
         allowed = ", ".join(sorted(ALLOWED_EXECUTION_MODES))
         raise ValueError(f"Invalid execution mode: {mode}. Allowed modes: {allowed}.")
+    return mode
+
+
+def resolve_demo_mode(env: dict | None = None) -> str:
+    env = env or os.environ
+    mode = str(env.get("GENFLOW_DEMO_MODE", "interactive")).strip().lower() or "interactive"
+    if mode not in ALLOWED_DEMO_MODES:
+        allowed = ", ".join(sorted(ALLOWED_DEMO_MODES))
+        raise ValueError(f"Invalid demo mode: {mode}. Allowed modes: {allowed}.")
     return mode
 
 
@@ -173,6 +183,38 @@ def run_local_live_smoke(env: dict | None = None, schema=None, reference_bundle:
         "reference_bundle": reference_bundle,
         "result_payload": payload,
         "result_summary": summary,
+    }
+
+
+def format_local_live_smoke_summary(smoke: dict) -> str:
+    config = smoke["live_backend_config"]
+    payload = smoke["result_payload"]
+    summary = smoke["result_summary"]
+    lines = [
+        "GenFlow Local Live Smoke",
+        f"execution_mode: {smoke['execution_mode']}",
+        f"backend_kind: {config.backend_kind}",
+        f"workflow_profile: {config.workflow_profile or 'none'}",
+        f"result_id: {payload.result_id}",
+        f"result_type: {payload.result_type}",
+        f"summary_text: {summary.summary_text}",
+    ]
+    return "\n".join(lines)
+
+
+def run_demo_mode(env: dict | None = None) -> dict:
+    demo_mode = resolve_demo_mode(env=env)
+    if demo_mode == "local_live_smoke":
+        smoke = run_local_live_smoke(env=env)
+        return {
+            "demo_mode": demo_mode,
+            "summary_text": format_local_live_smoke_summary(smoke),
+            "payload": smoke,
+        }
+    return {
+        "demo_mode": demo_mode,
+        "summary_text": "",
+        "payload": None,
     }
 
 
@@ -359,6 +401,12 @@ def describe_cli_failure(exc: Exception) -> str:
 
 def main() -> None:
     try:
+        demo_mode = resolve_demo_mode()
+        if demo_mode == "local_live_smoke":
+            result = run_demo_mode()
+            print(result["summary_text"])
+            return
+
         execution_mode = resolve_execution_mode()
         backend_client = None
         if execution_mode == "live":
