@@ -1,5 +1,6 @@
 import unittest
 
+from app.agent.default_live_backend_client import DefaultLiveBackendClient
 from app.agent.live_execution_adapter import LiveExecutionAdapter
 from app.agent.live_execution_models import (
     CommitExecutionRequest,
@@ -144,6 +145,30 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(payload.content["patch_id"], "cp_001")
         self.assertEqual(summary.changed_axes, ["style"])
         self.assertEqual(summary.preserved_axes, ["composition"])
+
+    def test_live_adapter_works_with_concrete_default_client(self):
+        client = DefaultLiveBackendClient(
+            transport=lambda execution_kind, request: {
+                "response_id": "resp-initial-1",
+                "execution_kind": execution_kind,
+                "output_payload": {"image_id": "img-1", "model": request.schema_snapshot.get("model")},
+                "summary_text": "Concrete live client path completed.",
+                "changed_axes": ["initial_generation"],
+                "preserved_axes": [],
+                "backend_artifacts": {"artifact_uri": "memory://concrete/1"},
+                "backend_metadata": {"result_type": "live_initial_result", "backend": "fake-transport"},
+                "comparison_notes": ["roundtrip=ok"],
+            }
+        )
+        adapter = LiveExecutionAdapter(backend_client=client)
+        schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
+
+        payload, summary = adapter.produce_initial_result(schema, {"references": [{"id": 1}]})
+
+        self.assertEqual(payload.result_id, "resp-initial-1")
+        self.assertEqual(payload.result_type, "live_initial_result")
+        self.assertEqual(payload.content["model"], "sdxl-base")
+        self.assertEqual(summary.summary_text, "Concrete live client path completed.")
 
 
 if __name__ == "__main__":

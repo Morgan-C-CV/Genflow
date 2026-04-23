@@ -4,6 +4,7 @@ from typing import Dict, Optional
 
 from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.live_backend_client import LiveBackendClient
+from app.agent.live_backend_errors import LiveBackendResponseError
 from app.agent.live_execution_models import (
     CommitExecutionRequest,
     ExecutionRequest,
@@ -159,6 +160,8 @@ class LiveExecutionAdapter(ExecutionAdapter):
         response: ExecutionResponse,
         default_result_type: str,
     ) -> tuple[ResultPayload, ResultSummary]:
+        if not response.response_id:
+            raise LiveBackendResponseError("Live adapter received response without response_id.")
         payload = ResultPayload(
             result_id=response.response_id,
             result_type=response.backend_metadata.get("result_type", default_result_type),
