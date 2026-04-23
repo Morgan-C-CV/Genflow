@@ -129,6 +129,53 @@ def build_runtime_service(execution_mode: str = "mock", backend_client=None) -> 
     )
 
 
+def build_live_runtime_components_from_env(env: dict | None = None) -> dict:
+    execution_mode = resolve_execution_mode(env=env)
+    if execution_mode != "live":
+        raise ValueError("Canonical live smoke helper requires GENFLOW_EXECUTION_MODE=live.")
+
+    live_backend_config = resolve_live_backend_config(env=env)
+    backend_client = build_live_backend_client(live_backend_config)
+    execution_adapter = build_execution_adapter(mode=execution_mode, backend_client=backend_client)
+    return {
+        "execution_mode": execution_mode,
+        "live_backend_config": live_backend_config,
+        "backend_client": backend_client,
+        "execution_adapter": execution_adapter,
+    }
+
+
+def run_local_live_smoke(env: dict | None = None, schema=None, reference_bundle: dict | None = None) -> dict:
+    from app.agent.runtime_models import NormalizedSchema
+
+    components = build_live_runtime_components_from_env(env=env)
+    execution_adapter = components["execution_adapter"]
+    schema = schema or NormalizedSchema(
+        prompt="a cinematic portrait",
+        negative_prompt="blurry",
+        model="sdxl-base",
+        sampler="DPM++ 2M",
+        style=["cinematic"],
+        lora=["portrait-helper"],
+    )
+    reference_bundle = reference_bundle or {
+        "query_index": 7,
+        "counts": {"best": 1},
+        "references": [{"id": 101}, {"id": 202}],
+    }
+    payload, summary = execution_adapter.produce_initial_result(
+        schema=schema,
+        reference_bundle=reference_bundle,
+    )
+    return {
+        **components,
+        "schema": schema,
+        "reference_bundle": reference_bundle,
+        "result_payload": payload,
+        "result_summary": summary,
+    }
+
+
 def print_plan(plan) -> None:
     print("\n[Plan]")
     print(f"- fixed_constraints: {plan.fixed_constraints}")
