@@ -13,6 +13,10 @@ class LiveBackendConfig:
     enabled: bool = False
     metadata: Dict[str, str] = field(default_factory=dict)
 
+    @property
+    def workflow_profile(self) -> str:
+        return str(self.metadata.get("workflow_profile", "")).strip().lower()
+
 
 def resolve_live_backend_config(env: dict | None = None) -> LiveBackendConfig:
     env = env or os.environ

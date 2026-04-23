@@ -65,10 +65,19 @@ def resolve_live_backend_config(env: dict | None = None):
     return _resolve_live_backend_config(env=env)
 
 
+def build_workflow_facade(config):
+    if config.backend_kind == "workflow_shell" and config.workflow_profile == "local":
+        from app.agent.local_workflow_facade import LocalWorkflowFacade
+
+        return LocalWorkflowFacade()
+    return None
+
+
 def build_workflow_backend_transport(config, workflow_facade=None):
     from app.agent.workflow_backend_transport import WorkflowBackendTransport
 
-    return WorkflowBackendTransport(config, workflow_facade=workflow_facade)
+    facade = workflow_facade if workflow_facade is not None else build_workflow_facade(config)
+    return WorkflowBackendTransport(config, workflow_facade=facade)
 
 
 def build_live_backend_client(config, workflow_facade=None):

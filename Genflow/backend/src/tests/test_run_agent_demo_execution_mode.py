@@ -9,6 +9,8 @@ from app.agent.live_execution_adapter import LiveExecutionAdapter
 from app.agent.result_executor import ResultExecutor
 from run_agent_demo import (
     build_execution_adapter,
+    build_workflow_facade,
+    build_workflow_backend_transport,
     build_live_backend_client,
     describe_cli_failure,
     resolve_execution_mode,
@@ -57,6 +59,76 @@ class RunAgentDemoExecutionModeTest(unittest.TestCase):
         )
         client = build_live_backend_client(config)
         self.assertIsInstance(client, DefaultLiveBackendClient)
+
+    def test_build_workflow_facade_returns_local_facade_for_local_profile(self):
+        config = resolve_live_backend_config(
+            {
+                "GENFLOW_LIVE_BACKEND_ENABLED": "true",
+                "GENFLOW_LIVE_BACKEND_KIND": "workflow_shell",
+                "GENFLOW_LIVE_BACKEND_PROFILE": "local",
+            }
+        )
+
+        facade = build_workflow_facade(config)
+
+        self.assertIsNotNone(facade)
+        self.assertEqual(type(facade).__name__, "LocalWorkflowFacade")
+
+    def test_build_live_backend_client_uses_configured_local_profile_without_manual_facade(self):
+        config = resolve_live_backend_config(
+            {
+                "GENFLOW_LIVE_BACKEND_ENABLED": "true",
+                "GENFLOW_LIVE_BACKEND_KIND": "workflow_shell",
+                "GENFLOW_LIVE_BACKEND_PROFILE": "local",
+                "GENFLOW_LIVE_BACKEND_ENDPOINT": "memory://workflow-shell",
+            }
+        )
+
+        client = build_live_backend_client(config)
+        response = client.run_initial(
+            type(
+                "Req",
+                (),
+                {
+                    "execution_kind": "initial",
+                    "schema_snapshot": {"prompt": "portrait", "model": "sdxl-base"},
+                    "workflow_payload": {},
+                    "reference_info": {"reference_ids": [1, 2]},
+                },
+            )()
+        )
+
+        self.assertEqual(response.response_id, "local-initial")
+        self.assertEqual(response.execution_kind, "initial")
+
+    def test_build_workflow_backend_transport_without_local_profile_stays_unimplemented(self):
+        config = resolve_live_backend_config(
+            {
+                "GENFLOW_LIVE_BACKEND_ENABLED": "true",
+                "GENFLOW_LIVE_BACKEND_KIND": "workflow_shell",
+                "GENFLOW_LIVE_BACKEND_ENDPOINT": "memory://workflow-shell",
+            }
+        )
+
+        transport = build_workflow_backend_transport(config)
+
+        with self.assertRaisesRegex(
+            LiveBackendNotImplementedError,
+            "Live backend substrate 'workflow_shell' is configured but no workflow facade is available.",
+        ):
+            transport.dispatch(
+                "initial",
+                type(
+                    "Req",
+                    (),
+                    {
+                        "execution_kind": "initial",
+                        "schema_snapshot": {"prompt": "portrait"},
+                        "workflow_payload": {},
+                        "reference_info": {},
+                    },
+                )(),
+            )
 
     def test_cli_failure_message_for_live_mode_not_implemented_is_short_and_actionable(self):
         message = describe_cli_failure(

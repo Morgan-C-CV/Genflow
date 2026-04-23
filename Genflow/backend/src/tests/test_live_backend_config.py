@@ -26,6 +26,7 @@ class LiveBackendConfigTest(unittest.TestCase):
 
         self.assertTrue(config.enabled)
         self.assertEqual(config.backend_kind, "workflow_shell")
+        self.assertEqual(config.workflow_profile, "local")
         self.assertEqual(config.endpoint, "memory://workflow-shell")
         self.assertEqual(config.timeout_seconds, 12.5)
         self.assertEqual(config.metadata["namespace"], "demo")
