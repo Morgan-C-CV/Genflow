@@ -50,6 +50,7 @@ def build_search_service() -> "SearchService":
 
 def build_runtime_service() -> "AgentRuntimeService":
     from app.agent.feedback_parser import FeedbackParser
+    from app.agent.probe_generator import PreviewProbeGenerator
     from app.agent.repair_hypothesis import RepairHypothesisBuilder
     from app.agent.result_executor import ResultExecutor
     from app.agent.runtime_service import AgentRuntimeService
@@ -64,6 +65,7 @@ def build_runtime_service() -> "AgentRuntimeService":
         result_executor=ResultExecutor(),
         feedback_parser=FeedbackParser(),
         hypothesis_builder=RepairHypothesisBuilder(),
+        probe_generator=PreviewProbeGenerator(),
     )
 
 
@@ -179,6 +181,9 @@ def build_session_artifact_payload(session) -> dict:
             "requested_changes": session.requested_changes,
             "current_uncertainty_estimate": session.current_uncertainty_estimate,
             "repair_hypotheses": session.repair_hypotheses,
+            "preview_probe_candidates": session.preview_probe_candidates,
+            "preview_probe_results": session.preview_probe_results,
+            "selected_probe": session.selected_probe,
         }
     )
 
@@ -210,7 +215,7 @@ def describe_cli_failure(exc: Exception) -> str:
 def main() -> None:
     try:
         print("GenFlow Agent Demo")
-        print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses")
+        print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses -> preview")
 
         runtime_service = build_runtime_service()
         df = runtime_service.search_service.search_repo.get_all_data()
@@ -275,6 +280,26 @@ def main() -> None:
             print(json.dumps(to_serializable(session.parsed_feedback), ensure_ascii=False, indent=2))
             print("\n[Repair Hypotheses]")
             print(json.dumps(to_serializable(session.repair_hypotheses), ensure_ascii=False, indent=2))
+            session = runtime_service.generate_local_probes(session.session_id)
+            print("\n[Preview Probes]")
+            print(json.dumps(to_serializable(session.preview_probe_candidates), ensure_ascii=False, indent=2))
+            preview_probes_path = None
+            preview_result_path = None
+            if session.preview_probe_candidates:
+                first_probe = session.preview_probe_candidates[0]
+                session = runtime_service.preview_probe(session.session_id, first_probe.probe_id)
+                session = runtime_service.select_probe(session.session_id, first_probe.probe_id)
+                latest_preview = session.preview_probe_results[-1]
+                print("\n[Preview Result]")
+                print(json.dumps(to_serializable(latest_preview), ensure_ascii=False, indent=2))
+                preview_probes_path = save_artifact(
+                    f"{session.session_id}_preview_probes.json",
+                    to_serializable(session.preview_probe_candidates),
+                )
+                preview_result_path = save_artifact(
+                    f"{session.session_id}_preview_result.json",
+                    to_serializable(latest_preview),
+                )
             save_artifact(f"{session.session_id}_parsed_feedback.json", to_serializable(session.parsed_feedback))
             save_artifact(f"{session.session_id}_repair_hypotheses.json", to_serializable(session.repair_hypotheses))
         session_path = save_artifact(
@@ -287,6 +312,10 @@ def main() -> None:
         print(f"- metadata: {metadata_path}")
         print(f"- normalized_schema: {schema_path}")
         print(f"- initial_result: {initial_result_path}")
+        if feedback_text and preview_probes_path is not None:
+            print(f"- preview_probes: {preview_probes_path}")
+        if feedback_text and preview_result_path is not None:
+            print(f"- preview_result: {preview_result_path}")
     except Exception as exc:
         print(describe_cli_failure(exc))
         raise SystemExit(1) from exc

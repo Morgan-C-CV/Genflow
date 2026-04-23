@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
+from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.result_executor import ResultExecutor
 from app.agent.schema_utils import parse_and_normalize_metadata
@@ -19,6 +20,7 @@ class AgentRuntimeService:
         schema_normalizer: Optional[Callable[[str], object]] = None,
         feedback_parser: Optional[FeedbackParser] = None,
         hypothesis_builder: Optional[RepairHypothesisBuilder] = None,
+        probe_generator: Optional[PreviewProbeGenerator] = None,
     ):
         self.memory_service = memory_service
         self.orchestration_service = orchestration_service
@@ -27,6 +29,7 @@ class AgentRuntimeService:
         self.schema_normalizer = schema_normalizer or parse_and_normalize_metadata
         self.feedback_parser = feedback_parser or FeedbackParser()
         self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
+        self.probe_generator = probe_generator or PreviewProbeGenerator()
 
     def start_episode(self, user_intent: str) -> AgentSessionState:
         return self.orchestration_service.start_session(user_intent)
@@ -116,6 +119,42 @@ class AgentRuntimeService:
             history=session.feedback_history,
         )
         session.repair_hypotheses = hypotheses
+        return self.memory_service.save_session(session)
+
+    def generate_local_probes(self, session_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        probes = self.probe_generator.generate(
+            current_schema=session.current_schema,
+            parsed_feedback=session.parsed_feedback,
+            repair_hypotheses=session.repair_hypotheses,
+            selected_gallery_index=session.selected_gallery_index,
+            selected_reference_ids=session.selected_reference_ids,
+        )
+        session.local_probes = probes
+        session.preview_probe_candidates = probes
+        return self.memory_service.save_session(session)
+
+    def preview_probe(self, session_id: str, probe_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        probe = next((item for item in session.preview_probe_candidates if item.probe_id == probe_id), None)
+        if probe is None:
+            raise ValueError(f"Preview probe not found: {probe_id}")
+
+        # Preview must not mutate committed state.
+        preview_result = self.result_executor.execute_preview_probe(
+            schema=session.current_schema,
+            probe=probe,
+        )
+        session.preview_results.append(preview_result)
+        session.preview_probe_results.append(preview_result)
+        return self.memory_service.save_session(session)
+
+    def select_probe(self, session_id: str, probe_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        probe = next((item for item in session.preview_probe_candidates if item.probe_id == probe_id), None)
+        if probe is None:
+            raise ValueError(f"Preview probe not found: {probe_id}")
+        session.selected_probe = probe
         return self.memory_service.save_session(session)
 
     @staticmethod

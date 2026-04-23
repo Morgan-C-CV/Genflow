@@ -6,6 +6,7 @@ from uuid import uuid4
 from app.agent.runtime_models import (
     CommittedPatch,
     NormalizedSchema,
+    PreviewProbe,
     PreviewResult,
     ResultPayload,
     ResultSummary,
@@ -63,28 +64,44 @@ class ResultExecutor:
     def execute_preview_probe(
         self,
         schema: NormalizedSchema,
-        probe: Dict[str, object],
+        probe: PreviewProbe,
     ) -> PreviewResult:
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_preview_result",
             content={
                 "prompt": schema.prompt,
-                "probe": dict(probe),
+                "probe_id": probe.probe_id,
+                "target_axes": list(probe.target_axes),
+                "source_kind": probe.source_kind,
+                "preview_execution_spec": dict(probe.preview_execution_spec),
             },
-            artifacts={"render_mode": "mock_preview"},
+            artifacts={
+                "render_mode": "mock_preview",
+                "preserve_axes": list(probe.preserve_axes),
+            },
         )
         summary = ResultSummary(
-            summary_text="Mock preview result.",
-            changed_axes=[],
-            preserved_axes=[],
-            notes=[],
+            summary_text=(
+                f"Mock preview for probe={probe.probe_id}, "
+                f"target_axes={','.join(probe.target_axes) or 'none'}, "
+                f"source_kind={probe.source_kind or 'unknown'}."
+            ),
+            changed_axes=list(probe.target_axes),
+            preserved_axes=list(probe.preserve_axes),
+            notes=[
+                f"patch_family={probe.preview_execution_spec.get('patch_family', '')}",
+                f"reference_anchor={probe.preview_execution_spec.get('reference_anchor', '')}",
+            ],
         )
         return PreviewResult(
-            probe_id=str(probe.get("probe_id", "")),
+            probe_id=probe.probe_id,
             summary=summary,
             payload=payload,
-            comparison_notes=[],
+            comparison_notes=[
+                f"preview_source={probe.source_kind}",
+                f"target_axes={','.join(probe.target_axes)}",
+            ],
         )
 
     def execute_committed_patch(

@@ -9,6 +9,7 @@ from app.agent.runtime_models import (
     CommittedPatch,
     NormalizedSchema,
     ParsedFeedbackEvidence,
+    PreviewProbe,
     PreviewResult,
     RepairHypothesis,
     ResultPayload,
@@ -58,10 +59,10 @@ class AgentSessionState:
     dissatisfaction_axes: List[str] = field(default_factory=list)
     requested_changes: List[str] = field(default_factory=list)
     repair_hypotheses: List[RepairHypothesis] = field(default_factory=list)
-    local_probes: List[Dict[str, object]] = field(default_factory=list)
-    preview_probe_candidates: List[Dict[str, object]] = field(default_factory=list)
+    local_probes: List[PreviewProbe] = field(default_factory=list)
+    preview_probe_candidates: List[PreviewProbe] = field(default_factory=list)
     preview_probe_results: List[PreviewResult] = field(default_factory=list)
-    selected_probe: Dict[str, object] = field(default_factory=dict)
+    selected_probe: PreviewProbe = field(default_factory=PreviewProbe)
     patch_history: List[CommittedPatch] = field(default_factory=list)
     accepted_patch: CommittedPatch = field(default_factory=CommittedPatch)
     current_uncertainty_estimate: float = 0.0

@@ -1,7 +1,7 @@
 import unittest
 
 from app.agent.result_executor import ResultExecutor
-from app.agent.runtime_models import NormalizedSchema, ResultPayload, ResultSummary
+from app.agent.runtime_models import NormalizedSchema, PreviewProbe, ResultPayload, ResultSummary
 
 
 class ResultExecutorTest(unittest.TestCase):
@@ -27,6 +27,35 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertEqual(payload.content["reference_count"], 2)
         self.assertIn("model=sdxl-base", summary.summary_text)
         self.assertIn("style_count=2", summary.notes)
+
+    def test_execute_preview_probe_returns_preview_result_without_mutating_schema(self):
+        executor = ResultExecutor(id_factory=lambda: "preview-1")
+        schema = NormalizedSchema(
+            prompt="a vivid portrait",
+            negative_prompt="blurry",
+            model="sdxl-base",
+            sampler="DPM++ 2M",
+            style=["cinematic", "vivid"],
+            lora=["portrait-helper"],
+        )
+        original_prompt = schema.prompt
+        probe = PreviewProbe(
+            probe_id="p_001",
+            summary="style mismatch",
+            target_axes=["style"],
+            preserve_axes=["composition"],
+            preview_execution_spec={"patch_family": "resource_shift", "reference_anchor": 7},
+            source_kind="resource_shift",
+        )
+
+        preview_result = executor.execute_preview_probe(schema, probe)
+
+        self.assertEqual(schema.prompt, original_prompt)
+        self.assertEqual(preview_result.probe_id, "p_001")
+        self.assertEqual(preview_result.payload.result_id, "preview-1")
+        self.assertIn("style", preview_result.summary.changed_axes)
+        self.assertIn("composition", preview_result.summary.preserved_axes)
+        self.assertIn("resource_shift", preview_result.summary.summary_text)
 
 
 if __name__ == "__main__":

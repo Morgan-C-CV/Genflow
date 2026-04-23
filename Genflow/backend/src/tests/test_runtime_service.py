@@ -1,7 +1,7 @@
 import unittest
 
 from app.agent.memory import AgentMemoryService
-from app.agent.runtime_models import ParsedFeedbackEvidence
+from app.agent.runtime_models import ParsedFeedbackEvidence, PreviewProbe
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_models import NormalizedSchema
 from app.agent.runtime_service import AgentRuntimeService
@@ -132,6 +132,35 @@ class FakeHypothesisBuilder:
         ]
 
 
+class FakeProbeGenerator:
+    def generate(
+        self,
+        current_schema,
+        parsed_feedback,
+        repair_hypotheses,
+        selected_gallery_index=None,
+        selected_reference_ids=None,
+    ):
+        return [
+            PreviewProbe(
+                probe_id="p_001",
+                summary="preview style shift",
+                target_axes=["style"],
+                preserve_axes=["composition"],
+                preview_execution_spec={"patch_family": "resource_shift", "reference_anchor": selected_gallery_index},
+                source_kind="resource_shift",
+            ),
+            PreviewProbe(
+                probe_id="p_002",
+                summary="preview color shift",
+                target_axes=["color_palette"],
+                preserve_axes=["composition"],
+                preview_execution_spec={"patch_family": "prompt_color_adjustment", "reference_anchor": selected_gallery_index},
+                source_kind="schema_variation",
+            ),
+        ]
+
+
 class RuntimeServiceTest(unittest.TestCase):
     def test_runtime_service_initial_commit_path_persists_required_state(self):
         memory = AgentMemoryService()
@@ -193,6 +222,47 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.parsed_feedback.raw_feedback, "Keep the composition, but improve style.")
         self.assertEqual(len(session.repair_hypotheses), 2)
         self.assertEqual(session.repair_hypotheses[0].hypothesis_id, "h_001")
+
+    def test_runtime_service_preview_probe_flow_updates_preview_state_only(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "preview-rt-1")
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            result_executor=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        original_schema_prompt = session.current_schema.prompt
+        original_result_id = session.current_result_payload.result_id
+        original_summary_text = session.current_result_summary.summary_text
+
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        self.assertEqual(len(session.preview_probe_candidates), 2)
+        self.assertEqual(session.preview_probe_candidates[0].probe_id, "p_001")
+
+        session = service.preview_probe(session.session_id, "p_001")
+        self.assertEqual(len(session.preview_results), 1)
+        self.assertEqual(len(session.preview_probe_results), 1)
+        self.assertEqual(session.preview_probe_results[0].probe_id, "p_001")
+
+        session = service.select_probe(session.session_id, "p_001")
+        self.assertEqual(session.selected_probe.probe_id, "p_001")
+        self.assertEqual(session.current_schema.prompt, original_schema_prompt)
+        self.assertEqual(session.current_result_payload.result_id, original_result_id)
+        self.assertEqual(session.current_result_summary.summary_text, original_summary_text)
 
 
 if __name__ == "__main__":

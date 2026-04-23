@@ -55,6 +55,16 @@ class RepairHypothesis:
 
 
 @dataclass
+class PreviewProbe:
+    probe_id: str = ""
+    summary: str = ""
+    target_axes: List[str] = field(default_factory=list)
+    preserve_axes: List[str] = field(default_factory=list)
+    preview_execution_spec: Dict[str, Any] = field(default_factory=dict)
+    source_kind: str = ""
+
+
+@dataclass
 class PreviewResult:
     probe_id: str = ""
     summary: ResultSummary = field(default_factory=ResultSummary)
