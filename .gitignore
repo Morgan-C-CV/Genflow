@@ -19,3 +19,6 @@ v5_similarity_rich.png
 */v5_similarity*.png
 comparison_rounds/
 **/comparison_rounds/*.png
+
+# Documentation
+doc/
