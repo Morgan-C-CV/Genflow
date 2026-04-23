@@ -197,7 +197,7 @@ class RuntimeServiceTest(unittest.TestCase):
             memory_service=memory,
             orchestration_service=orchestration,
             search_service=search,
-            result_executor=executor,
+            execution_adapter=executor,
         )
 
         session = service.start_episode("make a portrait")
@@ -226,7 +226,7 @@ class RuntimeServiceTest(unittest.TestCase):
             memory_service=memory,
             orchestration_service=orchestration,
             search_service=search,
-            result_executor=executor,
+            execution_adapter=executor,
             feedback_parser=FakeFeedbackParser(),
             hypothesis_builder=FakeHypothesisBuilder(),
         )
@@ -258,7 +258,7 @@ class RuntimeServiceTest(unittest.TestCase):
             memory_service=memory,
             orchestration_service=orchestration,
             search_service=search,
-            result_executor=executor,
+            execution_adapter=executor,
             feedback_parser=FakeFeedbackParser(),
             hypothesis_builder=FakeHypothesisBuilder(),
             probe_generator=FakeProbeGenerator(),
@@ -300,7 +300,7 @@ class RuntimeServiceTest(unittest.TestCase):
             memory_service=memory,
             orchestration_service=orchestration,
             search_service=search,
-            result_executor=executor,
+            execution_adapter=executor,
             feedback_parser=FakeFeedbackParser(),
             hypothesis_builder=FakeHypothesisBuilder(),
             probe_generator=FakeProbeGenerator(),

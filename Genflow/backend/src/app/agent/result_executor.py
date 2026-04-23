@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Optional
 from uuid import uuid4
 
+from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.runtime_models import (
     CommittedPatch,
     NormalizedSchema,
@@ -13,7 +14,7 @@ from app.agent.runtime_models import (
 )
 
 
-class ResultExecutor:
+class ResultExecutor(ExecutionAdapter):
     def __init__(self, id_factory: Optional[Callable[[], str]] = None):
         self._id_factory = id_factory or (lambda: str(uuid4()))
 

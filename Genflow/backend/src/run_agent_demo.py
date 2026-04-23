@@ -48,12 +48,22 @@ def build_search_service() -> "SearchService":
     )
 
 
-def build_runtime_service() -> "AgentRuntimeService":
+def build_execution_adapter(mode: str = "mock"):
+    if mode == "live":
+        from app.agent.live_execution_adapter import LiveExecutionAdapter
+
+        return LiveExecutionAdapter()
+
+    from app.agent.result_executor import ResultExecutor
+
+    return ResultExecutor()
+
+
+def build_runtime_service(execution_mode: str = "mock") -> "AgentRuntimeService":
     from app.agent.feedback_parser import FeedbackParser
     from app.agent.patch_planner import PatchPlanner
     from app.agent.probe_generator import PreviewProbeGenerator
     from app.agent.repair_hypothesis import RepairHypothesisBuilder
-    from app.agent.result_executor import ResultExecutor
     from app.agent.runtime_service import AgentRuntimeService
     from app.agent.verifier import Verifier
 
@@ -64,7 +74,7 @@ def build_runtime_service() -> "AgentRuntimeService":
         memory_service=memory,
         orchestration_service=orchestration,
         search_service=search_service,
-        result_executor=ResultExecutor(),
+        execution_adapter=build_execution_adapter(mode=execution_mode),
         feedback_parser=FeedbackParser(),
         hypothesis_builder=RepairHypothesisBuilder(),
         probe_generator=PreviewProbeGenerator(),
@@ -228,7 +238,7 @@ def main() -> None:
         print("GenFlow Agent Demo")
         print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses -> preview -> commit -> verify")
 
-        runtime_service = build_runtime_service()
+        runtime_service = build_runtime_service(execution_mode="mock")
         df = runtime_service.search_service.search_repo.get_all_data()
 
         user_intent = input("\n请输入你的创作意图\n> ").strip()

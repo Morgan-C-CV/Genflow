@@ -19,7 +19,7 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             memory_service=memory,
             orchestration_service=FakeOrchestrationService(memory),
             search_service=FakeSearchService(),
-            result_executor=ResultExecutor(id_factory=lambda: "artifact-result-1"),
+            execution_adapter=ResultExecutor(id_factory=lambda: "artifact-result-1"),
             feedback_parser=FakeFeedbackParser(),
             hypothesis_builder=FakeHypothesisBuilder(),
         )

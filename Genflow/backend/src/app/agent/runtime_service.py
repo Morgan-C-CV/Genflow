@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.patch_planner import PatchPlanner
 from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
-from app.agent.result_executor import ResultExecutor
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
 
@@ -18,7 +18,7 @@ class AgentRuntimeService:
         memory_service: AgentMemoryService,
         orchestration_service,
         search_service,
-        result_executor: ResultExecutor,
+        execution_adapter: ExecutionAdapter,
         schema_normalizer: Optional[Callable[[str], object]] = None,
         feedback_parser: Optional[FeedbackParser] = None,
         hypothesis_builder: Optional[RepairHypothesisBuilder] = None,
@@ -29,7 +29,7 @@ class AgentRuntimeService:
         self.memory_service = memory_service
         self.orchestration_service = orchestration_service
         self.search_service = search_service
-        self.result_executor = result_executor
+        self.execution_adapter = execution_adapter
         self.schema_normalizer = schema_normalizer or parse_and_normalize_metadata
         self.feedback_parser = feedback_parser or FeedbackParser()
         self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
@@ -90,7 +90,7 @@ class AgentRuntimeService:
         session = self.memory_service.get_session(session_id)
         if not session.current_schema_raw:
             raise ValueError("Current schema is missing; generate initial schema first.")
-        payload, summary = self.result_executor.produce_initial_result(
+        payload, summary = self.execution_adapter.produce_initial_result(
             schema=session.current_schema,
             reference_bundle=session.selected_reference_bundle,
         )
@@ -147,7 +147,7 @@ class AgentRuntimeService:
             raise ValueError(f"Preview probe not found: {probe_id}")
 
         # Preview must not mutate committed state.
-        preview_result = self.result_executor.execute_preview_probe(
+        preview_result = self.execution_adapter.execute_preview_probe(
             schema=session.current_schema,
             probe=probe,
         )
@@ -184,7 +184,7 @@ class AgentRuntimeService:
         if not session.accepted_patch.patch_id:
             raise ValueError("No committed patch available for execution.")
         session.previous_result_summary = session.current_result_summary
-        payload, summary = self.result_executor.execute_committed_patch(
+        payload, summary = self.execution_adapter.execute_committed_patch(
             schema=session.current_schema,
             patch=session.accepted_patch,
         )
