@@ -1,16 +1,26 @@
+"""Agent package.
+
+Expose low-side-effect compatibility exports at package level while avoiding
+heavy imports during basic runtime-model and memory tests.
+"""
+
 from .memory import AgentMemoryService, AgentSessionState
-from .orchestration import AgentOrchestrationService
-from .schemas import (
-    AgentCandidatesResponse,
-    AgentCandidateWallView,
-    AgentClarifyRequest,
-    AgentClarifyResponse,
-    AgentExpansionView,
-    AgentGenerateCandidatesRequest,
-    AgentPlanView,
-    AgentResourceRecommendationView,
-    AgentSessionView,
-    AgentStartRequest,
-    AgentStartResponse,
+from .runtime_models import (
+    CommittedPatch,
+    NormalizedSchema,
+    PreviewResult,
+    ResultPayload,
+    ResultSummary,
+    VerifierResult,
 )
-from .tools import AgentToolsService
+
+__all__ = [
+    "AgentMemoryService",
+    "AgentSessionState",
+    "CommittedPatch",
+    "NormalizedSchema",
+    "PreviewResult",
+    "ResultPayload",
+    "ResultSummary",
+    "VerifierResult",
+]

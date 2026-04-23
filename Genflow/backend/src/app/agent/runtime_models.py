@@ -1,0 +1,59 @@
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
+
+
+@dataclass
+class NormalizedSchema:
+    prompt: str = ""
+    negative_prompt: str = ""
+    cfgscale: str = ""
+    steps: str = ""
+    sampler: str = ""
+    seed: str = ""
+    model: str = ""
+    clipskip: str = ""
+    style: List[str] = field(default_factory=list)
+    lora: List[str] = field(default_factory=list)
+    full_metadata_string: str = ""
+    raw_fields: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class ResultPayload:
+    result_id: str = ""
+    result_type: str = ""
+    content: Dict[str, Any] = field(default_factory=dict)
+    artifacts: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ResultSummary:
+    summary_text: str = ""
+    changed_axes: List[str] = field(default_factory=list)
+    preserved_axes: List[str] = field(default_factory=list)
+    notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class PreviewResult:
+    probe_id: str = ""
+    summary: ResultSummary = field(default_factory=ResultSummary)
+    payload: ResultPayload = field(default_factory=ResultPayload)
+    comparison_notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class CommittedPatch:
+    patch_id: str = ""
+    target_fields: List[str] = field(default_factory=list)
+    changes: Dict[str, Any] = field(default_factory=dict)
+    rationale: str = ""
+
+
+@dataclass
+class VerifierResult:
+    improved: bool = False
+    continue_recommended: bool = False
+    confidence: float = 0.0
+    regression_notes: List[str] = field(default_factory=list)
+    summary: str = ""
