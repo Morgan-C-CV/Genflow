@@ -123,6 +123,7 @@ class AgentRuntimeService:
         session.dissatisfaction_axes = list(evidence.dissatisfaction_scope)
         session.requested_changes = list(evidence.requested_changes)
         session.current_uncertainty_estimate = evidence.uncertainty_estimate
+        self._sync_workflow_state(session, execution_kind="feedback", preview=False)
         return self.memory_service.save_session(session)
 
     def build_repair_hypotheses(self, session_id: str) -> AgentSessionState:
@@ -134,6 +135,7 @@ class AgentRuntimeService:
             history=session.feedback_history,
         )
         session.repair_hypotheses = hypotheses
+        self._sync_workflow_state(session, execution_kind="repair_hypotheses", preview=False)
         return self.memory_service.save_session(session)
 
     def generate_local_probes(self, session_id: str) -> AgentSessionState:
@@ -147,6 +149,7 @@ class AgentRuntimeService:
         )
         session.local_probes = probes
         session.preview_probe_candidates = probes
+        self._sync_workflow_state(session, execution_kind="probe_generation", preview=False)
         return self.memory_service.save_session(session)
 
     def preview_probe(self, session_id: str, probe_id: str) -> AgentSessionState:
@@ -171,6 +174,7 @@ class AgentRuntimeService:
         if probe is None:
             raise ValueError(f"Preview probe not found: {probe_id}")
         session.selected_probe = probe
+        self._sync_workflow_state(session, execution_kind="probe_select", preview=False)
         return self.memory_service.save_session(session)
 
     def commit_patch(self, session_id: str) -> AgentSessionState:
@@ -277,6 +281,14 @@ class AgentRuntimeService:
             "has_schema": bool(session.current_schema_raw),
             "has_preview_results": bool(session.preview_probe_results),
             "has_committed_patch": bool(session.accepted_patch.patch_id),
+            "has_feedback": bool(session.latest_feedback),
+            "feedback_count": len(session.feedback_history),
+            "dissatisfaction_axes": list(session.dissatisfaction_axes),
+            "preserve_constraints": list(session.preserve_constraints),
+            "repair_hypothesis_count": len(session.repair_hypotheses),
+            "probe_count": len(session.preview_probe_candidates),
+            "selected_probe_id": session.selected_probe.probe_id,
+            "current_uncertainty_estimate": session.current_uncertainty_estimate,
         }
         surrogate_payload = {
             "schema": {
@@ -292,6 +304,13 @@ class AgentRuntimeService:
             "selected_probe_id": session.selected_probe.probe_id,
             "accepted_patch_id": session.accepted_patch.patch_id,
             "current_result_id": session.current_result_id,
+            "latest_feedback": session.latest_feedback,
+            "feedback_count": len(session.feedback_history),
+            "dissatisfaction_axes": list(session.dissatisfaction_axes),
+            "preserve_constraints": list(session.preserve_constraints),
+            "repair_hypothesis_count": len(session.repair_hypotheses),
+            "probe_count": len(session.preview_probe_candidates),
+            "current_uncertainty_estimate": session.current_uncertainty_estimate,
         }
 
         session.editable_scopes = editable_scopes

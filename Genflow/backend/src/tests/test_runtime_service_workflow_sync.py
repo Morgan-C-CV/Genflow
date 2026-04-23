@@ -64,6 +64,53 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         self.assertEqual(session.workflow_state.last_execution_config.execution_kind, "preview")
         self.assertTrue(session.workflow_state.last_execution_config.preview)
 
+    def test_refinement_events_sync_workflow_metadata_and_surrogate_payload(self):
+        _, service = self._build_service(iter(["initial-1"]))
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        self.assertEqual(session.last_execution_config.execution_kind, "feedback")
+        self.assertTrue(session.workflow_metadata["has_feedback"])
+        self.assertEqual(session.workflow_metadata["feedback_count"], 1)
+        self.assertEqual(session.workflow_metadata["dissatisfaction_axes"], ["style"])
+        self.assertEqual(session.workflow_metadata["preserve_constraints"], ["Keep the composition"])
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["latest_feedback"],
+            "Keep the composition, but improve style.",
+        )
+        self.assertEqual(session.workflow_state.surrogate_payload["current_uncertainty_estimate"], 0.25)
+
+        session = service.build_repair_hypotheses(session.session_id)
+        self.assertEqual(session.last_execution_config.execution_kind, "repair_hypotheses")
+        self.assertEqual(session.workflow_metadata["repair_hypothesis_count"], 2)
+        self.assertEqual(session.workflow_state.surrogate_payload["repair_hypothesis_count"], 2)
+
+        session = service.generate_local_probes(session.session_id)
+        self.assertEqual(session.last_execution_config.execution_kind, "probe_generation")
+        self.assertEqual(session.workflow_metadata["probe_count"], 2)
+        self.assertEqual(session.workflow_state.surrogate_payload["probe_count"], 2)
+        self.assertEqual(
+            session.workflow_state.editable_scopes[0].node_ids,
+            session.editable_scopes[0].node_ids,
+        )
+        self.assertEqual(
+            session.workflow_state.protected_scopes[0].node_ids,
+            session.protected_scopes[0].node_ids,
+        )
+
+        session = service.select_probe(session.session_id, "p_001")
+        self.assertEqual(session.last_execution_config.execution_kind, "probe_select")
+        self.assertEqual(session.workflow_metadata["selected_probe_id"], "p_001")
+        self.assertEqual(session.workflow_state.surrogate_payload["selected_probe_id"], "p_001")
+        self.assertEqual(
+            session.workflow_state.last_execution_config.execution_kind,
+            session.last_execution_config.execution_kind,
+        )
+
     def test_execute_patch_updates_workflow_state_and_artifact_consistently(self):
         _, service = self._build_service(iter(["initial-1", "preview-1", "commit-1"]))
         session = service.start_episode("make a portrait")
