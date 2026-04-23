@@ -388,6 +388,13 @@ def build_session_artifact_payload(session) -> dict:
             "selected_gallery_index": session.selected_gallery_index,
             "selected_reference_ids": session.selected_reference_ids,
             "current_gallery_anchor_summary": session.current_gallery_anchor_summary,
+            "workflow_id": session.workflow_id,
+            "workflow_identity": session.workflow_identity,
+            "workflow_state": session.workflow_state,
+            "editable_scopes": session.editable_scopes,
+            "protected_scopes": session.protected_scopes,
+            "last_execution_config": session.last_execution_config,
+            "workflow_metadata": session.workflow_metadata,
             "candidate_wall": {
                 "groups": session.latest_wall.groups if session.latest_wall else [],
                 "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],

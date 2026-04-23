@@ -16,6 +16,12 @@ from app.agent.runtime_models import (
     ResultSummary,
     VerifierResult,
 )
+from app.agent.workflow_runtime_models import (
+    WorkflowExecutionConfig,
+    WorkflowIdentity,
+    WorkflowScope,
+    WorkflowStateSnapshot,
+)
 
 if TYPE_CHECKING:
     from app.agents.creative_agent import (
@@ -52,6 +58,13 @@ class AgentSessionState:
     selected_reference_bundle: Dict[str, object] = field(default_factory=dict)
     selected_reference_ids: List[int] = field(default_factory=list)
     current_gallery_anchor_summary: str = ""
+    workflow_id: str = ""
+    workflow_identity: WorkflowIdentity = field(default_factory=WorkflowIdentity)
+    workflow_state: WorkflowStateSnapshot = field(default_factory=WorkflowStateSnapshot)
+    editable_scopes: List[WorkflowScope] = field(default_factory=list)
+    protected_scopes: List[WorkflowScope] = field(default_factory=list)
+    last_execution_config: WorkflowExecutionConfig = field(default_factory=WorkflowExecutionConfig)
+    workflow_metadata: Dict[str, object] = field(default_factory=dict)
     feedback_history: List[str] = field(default_factory=list)
     latest_feedback: str = ""
     parsed_feedback: ParsedFeedbackEvidence = field(default_factory=ParsedFeedbackEvidence)
