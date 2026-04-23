@@ -10,11 +10,10 @@ from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
-from app.agent.workflow_runtime_models import (
-    WorkflowExecutionConfig,
-    WorkflowIdentity,
-    WorkflowScope,
-    WorkflowStateSnapshot,
+from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
+from app.agent.workflow_scope_materializer import (
+    materialize_editable_scopes,
+    materialize_protected_scopes,
 )
 
 
@@ -259,8 +258,8 @@ class AgentRuntimeService:
     ) -> None:
         self._sync_workflow_identity(session)
         backend_kind, workflow_profile = self._infer_backend_descriptor()
-        editable_scopes = self._build_editable_scopes(session)
-        protected_scopes = self._build_protected_scopes(session)
+        editable_scopes = materialize_editable_scopes(session)
+        protected_scopes = materialize_protected_scopes(session)
         execution_config = WorkflowExecutionConfig(
             execution_kind=execution_kind,
             preview=preview,
@@ -339,42 +338,6 @@ class AgentRuntimeService:
                 )
             return ("live_backend", "default")
         return ("mock", "default")
-
-    @staticmethod
-    def _build_editable_scopes(session: AgentSessionState) -> list[WorkflowScope]:
-        target_fields = list(session.accepted_patch.target_fields)
-        if not target_fields and session.selected_probe.probe_id:
-            target_fields = list(session.selected_probe.target_axes)
-        if not target_fields and session.current_schema_raw:
-            target_fields = ["prompt", "model", "style", "lora"]
-        if not target_fields:
-            return []
-        return [
-            WorkflowScope(
-                scope_id="editable-surrogate",
-                scope_kind="schema_fields",
-                label="Editable surrogate workflow fields",
-                node_ids=list(target_fields),
-                metadata={"source": "surrogate", "count": len(target_fields)},
-            )
-        ]
-
-    @staticmethod
-    def _build_protected_scopes(session: AgentSessionState) -> list[WorkflowScope]:
-        protected_items = list(session.preserve_constraints)
-        if not protected_items and session.selected_probe.probe_id:
-            protected_items = list(session.selected_probe.preserve_axes)
-        if not protected_items:
-            return []
-        return [
-            WorkflowScope(
-                scope_id="protected-surrogate",
-                scope_kind="preserve_constraints",
-                label="Protected surrogate workflow fields",
-                node_ids=list(protected_items),
-                metadata={"source": "constraints", "count": len(protected_items)},
-            )
-        ]
 
     @staticmethod
     def _apply_patch_to_schema(current_schema, patch):
