@@ -28,6 +28,34 @@ class WorkflowExecutionConfig:
 
 
 @dataclass
+class WorkflowNodeRef:
+    node_id: str = ""
+    node_kind: str = ""
+    label: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class WorkflowTopologySlice:
+    slice_id: str = ""
+    region_label: str = ""
+    node_refs: List[WorkflowNodeRef] = field(default_factory=list)
+    edge_hints: List[Dict[str, str]] = field(default_factory=list)
+    scope_partitions: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class WorkflowGraphPlaceholder:
+    graph_id: str = ""
+    graph_kind: str = ""
+    node_refs: List[WorkflowNodeRef] = field(default_factory=list)
+    topology_slices: List[WorkflowTopologySlice] = field(default_factory=list)
+    adjacency_hints: List[Dict[str, str]] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class WorkflowStateSnapshot:
     identity: WorkflowIdentity = field(default_factory=WorkflowIdentity)
     editable_scopes: List[WorkflowScope] = field(default_factory=list)
@@ -35,3 +63,4 @@ class WorkflowStateSnapshot:
     last_execution_config: WorkflowExecutionConfig = field(default_factory=WorkflowExecutionConfig)
     workflow_metadata: Dict[str, Any] = field(default_factory=dict)
     surrogate_payload: Dict[str, Any] = field(default_factory=dict)
+    workflow_graph_placeholder: WorkflowGraphPlaceholder = field(default_factory=WorkflowGraphPlaceholder)

@@ -18,9 +18,12 @@ from .runtime_models import (
 )
 from .workflow_runtime_models import (
     WorkflowExecutionConfig,
+    WorkflowGraphPlaceholder,
     WorkflowIdentity,
+    WorkflowNodeRef,
     WorkflowScope,
     WorkflowStateSnapshot,
+    WorkflowTopologySlice,
 )
 
 __all__ = [
@@ -36,7 +39,10 @@ __all__ = [
     "ResultSummary",
     "VerifierResult",
     "WorkflowExecutionConfig",
+    "WorkflowGraphPlaceholder",
     "WorkflowIdentity",
+    "WorkflowNodeRef",
     "WorkflowScope",
     "WorkflowStateSnapshot",
+    "WorkflowTopologySlice",
 ]

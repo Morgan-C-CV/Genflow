@@ -18,6 +18,7 @@ from app.agent.runtime_models import (
 )
 from app.agent.workflow_runtime_models import (
     WorkflowExecutionConfig,
+    WorkflowGraphPlaceholder,
     WorkflowIdentity,
     WorkflowScope,
     WorkflowStateSnapshot,
@@ -65,6 +66,8 @@ class AgentSessionState:
     protected_scopes: List[WorkflowScope] = field(default_factory=list)
     last_execution_config: WorkflowExecutionConfig = field(default_factory=WorkflowExecutionConfig)
     workflow_metadata: Dict[str, object] = field(default_factory=dict)
+    workflow_graph_placeholder: WorkflowGraphPlaceholder = field(default_factory=WorkflowGraphPlaceholder)
+    workflow_topology_hints: Dict[str, object] = field(default_factory=dict)
     feedback_history: List[str] = field(default_factory=list)
     latest_feedback: str = ""
     parsed_feedback: ParsedFeedbackEvidence = field(default_factory=ParsedFeedbackEvidence)

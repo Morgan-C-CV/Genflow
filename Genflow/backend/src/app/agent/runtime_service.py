@@ -11,6 +11,11 @@ from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
+from app.agent.workflow_runtime_models import (
+    WorkflowGraphPlaceholder,
+    WorkflowNodeRef,
+    WorkflowTopologySlice,
+)
 from app.agent.workflow_scope_materializer import (
     materialize_editable_scopes,
     materialize_protected_scopes,
@@ -289,6 +294,11 @@ class AgentRuntimeService:
             "selected_probe_id": session.selected_probe.probe_id,
             "current_uncertainty_estimate": session.current_uncertainty_estimate,
         }
+        topology_placeholder, topology_hints = self._build_workflow_graph_placeholder(
+            session=session,
+            execution_kind=execution_kind,
+            preview=preview,
+        )
         surrogate_payload = {
             "schema": {
                 "prompt": session.current_schema.prompt,
@@ -310,12 +320,16 @@ class AgentRuntimeService:
             "repair_hypothesis_count": len(session.repair_hypotheses),
             "probe_count": len(session.preview_probe_candidates),
             "current_uncertainty_estimate": session.current_uncertainty_estimate,
+            "workflow_topology_graph_id": topology_placeholder.graph_id,
+            "workflow_topology_slice_count": len(topology_placeholder.topology_slices),
         }
 
         session.editable_scopes = editable_scopes
         session.protected_scopes = protected_scopes
         session.last_execution_config = execution_config
         session.workflow_metadata = workflow_metadata
+        session.workflow_graph_placeholder = topology_placeholder
+        session.workflow_topology_hints = topology_hints
         session.workflow_state = WorkflowStateSnapshot(
             identity=session.workflow_identity,
             editable_scopes=editable_scopes,
@@ -323,6 +337,7 @@ class AgentRuntimeService:
             last_execution_config=execution_config,
             workflow_metadata=workflow_metadata,
             surrogate_payload=surrogate_payload,
+            workflow_graph_placeholder=topology_placeholder,
         )
 
     def _infer_backend_descriptor(self) -> tuple[str, str]:
@@ -338,6 +353,106 @@ class AgentRuntimeService:
                 )
             return ("live_backend", "default")
         return ("mock", "default")
+
+    def _build_workflow_graph_placeholder(
+        self,
+        session: AgentSessionState,
+        execution_kind: str,
+        preview: bool,
+    ) -> tuple[WorkflowGraphPlaceholder, dict]:
+        graph_id = session.workflow_id or f"workflow-{session.session_id}"
+        region_label = "repair_region" if session.selected_probe.probe_id or session.accepted_patch.patch_id else "initial_region"
+        node_refs = [
+            WorkflowNodeRef(
+                node_id="intent.prompt",
+                node_kind="surrogate_input",
+                label="Prompt Input",
+                metadata={"value_present": bool(session.current_schema.prompt)},
+            ),
+            WorkflowNodeRef(
+                node_id="render.model",
+                node_kind="surrogate_compute",
+                label="Model Selection",
+                metadata={"model": session.current_schema.model},
+            ),
+        ]
+        if session.selected_gallery_index is not None:
+            node_refs.append(
+                WorkflowNodeRef(
+                    node_id="reference.bundle",
+                    node_kind="surrogate_reference",
+                    label="Reference Bundle",
+                    metadata={"gallery_index": session.selected_gallery_index},
+                )
+            )
+        if session.selected_probe.probe_id:
+            node_refs.append(
+                WorkflowNodeRef(
+                    node_id=f"probe.{session.selected_probe.probe_id}",
+                    node_kind="surrogate_probe",
+                    label="Selected Probe",
+                    metadata={"target_axes": list(session.selected_probe.target_axes)},
+                )
+            )
+        if session.accepted_patch.patch_id:
+            node_refs.append(
+                WorkflowNodeRef(
+                    node_id=f"patch.{session.accepted_patch.patch_id}",
+                    node_kind="surrogate_patch",
+                    label="Accepted Patch",
+                    metadata={"target_fields": list(session.accepted_patch.target_fields)},
+                )
+            )
+
+        adjacency_hints = [
+            {"from": "intent.prompt", "to": "render.model", "hint": "prompt_conditions_model"},
+        ]
+        if session.selected_gallery_index is not None:
+            adjacency_hints.append({"from": "reference.bundle", "to": "intent.prompt", "hint": "references_inform_prompt"})
+        if session.selected_probe.probe_id:
+            adjacency_hints.append(
+                {"from": f"probe.{session.selected_probe.probe_id}", "to": "render.model", "hint": "probe_targets_render"}
+            )
+        if session.accepted_patch.patch_id:
+            adjacency_hints.append(
+                {"from": f"patch.{session.accepted_patch.patch_id}", "to": "render.model", "hint": "patch_updates_render"}
+            )
+
+        topology_slice = WorkflowTopologySlice(
+            slice_id=f"{graph_id}:{execution_kind or 'idle'}",
+            region_label=region_label,
+            node_refs=list(node_refs),
+            edge_hints=list(adjacency_hints),
+            scope_partitions=[scope.scope_id for scope in session.editable_scopes + session.protected_scopes],
+            metadata={
+                "execution_kind": execution_kind,
+                "preview": preview,
+                "has_feedback": bool(session.latest_feedback),
+            },
+        )
+        placeholder = WorkflowGraphPlaceholder(
+            graph_id=graph_id,
+            graph_kind="surrogate_topology",
+            node_refs=list(node_refs),
+            topology_slices=[topology_slice],
+            adjacency_hints=list(adjacency_hints),
+            metadata={
+                "backend_kind": self._infer_backend_descriptor()[0],
+                "workflow_profile": self._infer_backend_descriptor()[1],
+                "execution_kind": execution_kind,
+                "preview": preview,
+                "region_label": region_label,
+            },
+        )
+        topology_hints = {
+            "region_label": region_label,
+            "node_count": len(node_refs),
+            "adjacency_hint_count": len(adjacency_hints),
+            "selected_probe_id": session.selected_probe.probe_id,
+            "accepted_patch_id": session.accepted_patch.patch_id,
+            "has_feedback": bool(session.latest_feedback),
+        }
+        return placeholder, topology_hints
 
     @staticmethod
     def _apply_patch_to_schema(current_schema, patch):
