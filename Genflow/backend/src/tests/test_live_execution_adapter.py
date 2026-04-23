@@ -1,6 +1,7 @@
 import unittest
 
 from app.agent.default_live_backend_client import DefaultLiveBackendClient
+from app.agent.live_backend_config import LiveBackendConfig
 from app.agent.live_execution_adapter import LiveExecutionAdapter
 from app.agent.live_execution_models import (
     CommitExecutionRequest,
@@ -8,7 +9,9 @@ from app.agent.live_execution_models import (
     ExecutionResponse,
     PreviewExecutionRequest,
 )
+from app.agent.local_workflow_facade import LocalWorkflowFacade
 from app.agent.runtime_models import CommittedPatch, NormalizedSchema, PreviewProbe
+from app.agent.workflow_backend_transport import WorkflowBackendTransport
 
 
 class FakeLiveBackendClient:
@@ -169,6 +172,22 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(payload.result_type, "live_initial_result")
         self.assertEqual(payload.content["model"], "sdxl-base")
         self.assertEqual(summary.summary_text, "Concrete live client path completed.")
+
+    def test_live_adapter_works_with_transport_client_and_local_facade(self):
+        transport = WorkflowBackendTransport(
+            LiveBackendConfig(enabled=True, backend_kind="workflow_shell", endpoint="memory://shell"),
+            workflow_facade=LocalWorkflowFacade(),
+        )
+        client = DefaultLiveBackendClient(transport=transport)
+        adapter = LiveExecutionAdapter(backend_client=client)
+        schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
+
+        payload, summary = adapter.produce_initial_result(schema, {"references": [{"id": 1}, {"id": 2}]})
+
+        self.assertEqual(payload.result_id, "local-initial")
+        self.assertEqual(payload.result_type, "live_initial_result")
+        self.assertEqual(payload.content["reference_count"], 2)
+        self.assertEqual(summary.summary_text, "Local workflow facade produced initial result with model=sdxl-base and references=2.")
 
 
 if __name__ == "__main__":

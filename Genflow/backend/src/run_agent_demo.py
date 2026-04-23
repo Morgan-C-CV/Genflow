@@ -65,14 +65,19 @@ def resolve_live_backend_config(env: dict | None = None):
     return _resolve_live_backend_config(env=env)
 
 
-def build_live_backend_client(config):
+def build_workflow_backend_transport(config, workflow_facade=None):
+    from app.agent.workflow_backend_transport import WorkflowBackendTransport
+
+    return WorkflowBackendTransport(config, workflow_facade=workflow_facade)
+
+
+def build_live_backend_client(config, workflow_facade=None):
     from app.agent.default_live_backend_client import DefaultLiveBackendClient
     from app.agent.live_backend_errors import LiveBackendNotConfiguredError
-    from app.agent.workflow_backend_transport import WorkflowBackendTransport
 
     if not config.enabled:
         raise LiveBackendNotConfiguredError("Live backend substrate is not configured.")
-    transport = WorkflowBackendTransport(config)
+    transport = build_workflow_backend_transport(config, workflow_facade=workflow_facade)
     return DefaultLiveBackendClient(transport=transport)
 
 

@@ -7,6 +7,7 @@ from app.agent.live_backend_errors import (
     LiveBackendUnavailableError,
 )
 from app.agent.live_execution_models import ExecutionRequest
+from app.agent.local_workflow_facade import LocalWorkflowFacade
 from app.agent.workflow_backend_transport import WorkflowBackendTransport
 
 
@@ -36,9 +37,28 @@ class WorkflowBackendTransportTest(unittest.TestCase):
 
         with self.assertRaisesRegex(
             LiveBackendNotImplementedError,
-            "Live backend substrate 'workflow_shell' is configured but dispatch is not implemented yet.",
+            "Live backend substrate 'workflow_shell' is configured but no workflow facade is available.",
         ):
             transport.dispatch("commit", ExecutionRequest(execution_kind="commit"))
+
+    def test_transport_dispatches_through_local_workflow_facade(self):
+        transport = WorkflowBackendTransport(
+            LiveBackendConfig(enabled=True, backend_kind="workflow_shell", endpoint="memory://shell"),
+            workflow_facade=LocalWorkflowFacade(),
+        )
+
+        response = transport.dispatch(
+            "initial",
+            ExecutionRequest(
+                execution_kind="initial",
+                schema_snapshot={"prompt": "portrait", "model": "sdxl-base"},
+                reference_info={"reference_ids": [101]},
+            ),
+        )
+
+        self.assertEqual(response.execution_kind, "initial")
+        self.assertEqual(response.response_id, "local-initial")
+        self.assertEqual(response.output_payload["reference_count"], 1)
 
 
 if __name__ == "__main__":
