@@ -186,6 +186,78 @@ def run_local_live_smoke(env: dict | None = None, schema=None, reference_bundle:
     }
 
 
+def run_local_live_multi_stage_smoke(
+    env: dict | None = None,
+    schema=None,
+    reference_bundle: dict | None = None,
+    preview_probe=None,
+    committed_patch=None,
+) -> dict:
+    from app.agent.runtime_models import CommittedPatch, NormalizedSchema, PreviewProbe
+
+    components = build_live_runtime_components_from_env(env=env)
+    execution_adapter = components["execution_adapter"]
+    schema = schema or NormalizedSchema(
+        prompt="a cinematic portrait",
+        negative_prompt="blurry",
+        model="sdxl-base",
+        sampler="DPM++ 2M",
+        style=["cinematic"],
+        lora=["portrait-helper"],
+    )
+    reference_bundle = reference_bundle or {
+        "query_index": 7,
+        "counts": {"best": 1},
+        "references": [{"id": 101}, {"id": 202}],
+    }
+    preview_probe = preview_probe or PreviewProbe(
+        probe_id="probe-local-001",
+        summary="Push style intensity while preserving composition.",
+        target_axes=["style"],
+        preserve_axes=["composition"],
+        preview_execution_spec={"patch_family": "resource_shift"},
+        source_kind="schema_variation",
+    )
+    committed_patch = committed_patch or CommittedPatch(
+        patch_id="patch-local-001",
+        target_fields=["style", "model"],
+        target_axes=["style"],
+        preserve_axes=["composition"],
+        changes={"style": ["cinematic", "vivid"], "model": "sdxl-base"},
+        rationale="Commit the stronger style direction from preview.",
+    )
+
+    initial_payload, initial_summary = execution_adapter.produce_initial_result(
+        schema=schema,
+        reference_bundle=reference_bundle,
+    )
+    preview_result = execution_adapter.execute_preview_probe(
+        schema=schema,
+        probe=preview_probe,
+    )
+    committed_payload, committed_summary = execution_adapter.execute_committed_patch(
+        schema=schema,
+        patch=committed_patch,
+    )
+
+    return {
+        **components,
+        "schema": schema,
+        "reference_bundle": reference_bundle,
+        "preview_probe": preview_probe,
+        "committed_patch": committed_patch,
+        "initial_result": {
+            "payload": initial_payload,
+            "summary": initial_summary,
+        },
+        "preview_result": preview_result,
+        "committed_result": {
+            "payload": committed_payload,
+            "summary": committed_summary,
+        },
+    }
+
+
 def format_local_live_smoke_summary(smoke: dict) -> str:
     config = smoke["live_backend_config"]
     payload = smoke["result_payload"]

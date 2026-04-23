@@ -8,6 +8,7 @@ from run_agent_demo import (
     format_local_live_smoke_summary,
     main,
     run_demo_mode,
+    run_local_live_multi_stage_smoke,
     run_local_live_smoke,
 )
 
@@ -40,6 +41,24 @@ class RunAgentDemoLocalLiveSmokeTest(unittest.TestCase):
         self.assertEqual(smoke["result_payload"].result_type, "live_initial_result")
         self.assertEqual(smoke["result_payload"].content["reference_count"], 2)
         self.assertIn("Local workflow facade produced initial result", smoke["result_summary"].summary_text)
+
+    def test_run_local_live_multi_stage_smoke_produces_initial_preview_and_commit_results(self):
+        smoke = run_local_live_multi_stage_smoke(env=self.env)
+
+        self.assertIsInstance(smoke["schema"], NormalizedSchema)
+        self.assertIsInstance(smoke["initial_result"]["payload"], ResultPayload)
+        self.assertIsInstance(smoke["initial_result"]["summary"], ResultSummary)
+        self.assertEqual(smoke["initial_result"]["payload"].result_type, "live_initial_result")
+
+        self.assertEqual(smoke["preview_result"].probe_id, "probe-local-001")
+        self.assertEqual(smoke["preview_result"].payload.result_type, "live_preview_result")
+        self.assertEqual(smoke["preview_result"].summary.changed_axes, ["style"])
+
+        self.assertIsInstance(smoke["committed_result"]["payload"], ResultPayload)
+        self.assertIsInstance(smoke["committed_result"]["summary"], ResultSummary)
+        self.assertEqual(smoke["committed_result"]["payload"].result_type, "live_committed_result")
+        self.assertEqual(smoke["committed_result"]["payload"].content["patch_id"], "patch-local-001")
+        self.assertEqual(smoke["committed_result"]["summary"].changed_axes, ["style"])
 
     def test_run_demo_mode_local_live_smoke_returns_stable_summary(self):
         result = run_demo_mode(env={**self.env, "GENFLOW_DEMO_MODE": "local_live_smoke"})
