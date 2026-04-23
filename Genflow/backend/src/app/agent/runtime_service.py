@@ -10,6 +10,12 @@ from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
+from app.agent.workflow_runtime_models import (
+    WorkflowExecutionConfig,
+    WorkflowIdentity,
+    WorkflowScope,
+    WorkflowStateSnapshot,
+)
 
 
 class AgentRuntimeService:
@@ -71,6 +77,7 @@ class AgentRuntimeService:
         session.selected_reference_bundle = reference_bundle
         session.selected_reference_ids = selected_reference_ids
         session.current_gallery_anchor_summary = self._build_anchor_summary(reference_bundle)
+        self._sync_workflow_state(session, execution_kind="reference_select", preview=False)
         return self.memory_service.save_session(session)
 
     def generate_initial_schema(self, session_id: str) -> AgentSessionState:
@@ -84,6 +91,7 @@ class AgentRuntimeService:
         normalized_schema = self.schema_normalizer(metadata_json)
         session.current_schema_raw = metadata_json
         session.current_schema = normalized_schema
+        self._sync_workflow_state(session, execution_kind="initial_schema", preview=False)
         return self.memory_service.save_session(session)
 
     def produce_initial_result(self, session_id: str) -> AgentSessionState:
@@ -98,6 +106,7 @@ class AgentRuntimeService:
         session.current_result_payload = payload
         session.current_result_summary = summary
         session.accepted_results.append(payload)
+        self._sync_workflow_state(session, execution_kind="initial", preview=False)
         return self.memory_service.save_session(session)
 
     def submit_feedback(self, session_id: str, feedback_text: str) -> AgentSessionState:
@@ -153,6 +162,7 @@ class AgentRuntimeService:
         )
         session.preview_results.append(preview_result)
         session.preview_probe_results.append(preview_result)
+        self._sync_workflow_state(session, execution_kind="preview", preview=True)
         return self.memory_service.save_session(session)
 
     def select_probe(self, session_id: str, probe_id: str) -> AgentSessionState:
@@ -177,6 +187,7 @@ class AgentRuntimeService:
         session.patch_history.append(patch)
         session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
         session.current_schema_raw = serialize_normalized_schema(session.current_schema)
+        self._sync_workflow_state(session, execution_kind="commit_plan", preview=False)
         return self.memory_service.save_session(session)
 
     def execute_patch(self, session_id: str) -> AgentSessionState:
@@ -192,6 +203,7 @@ class AgentRuntimeService:
         session.current_result_payload = payload
         session.current_result_summary = summary
         session.accepted_results.append(payload)
+        self._sync_workflow_state(session, execution_kind="commit", preview=False)
         return self.memory_service.save_session(session)
 
     def verify_latest_result(self, session_id: str) -> AgentSessionState:
@@ -222,6 +234,128 @@ class AgentRuntimeService:
             f"(best={counts.get('best', 0)}, complementary_knn={counts.get('complementary_knn', 0)}, "
             f"exploratory={counts.get('exploratory', 0)}, counterexample={counts.get('counterexample', 0)})."
         )
+
+    def _sync_workflow_identity(self, session: AgentSessionState) -> None:
+        workflow_id = session.workflow_id or f"workflow-{session.session_id}"
+        workflow_kind = "normalized_schema_surrogate"
+        identity = WorkflowIdentity(
+            workflow_id=workflow_id,
+            workflow_kind=workflow_kind,
+            workflow_version="phase-g-skeleton",
+        )
+        session.workflow_id = workflow_id
+        session.workflow_identity = identity
+        session.workflow_state.identity = identity
+
+    def _sync_workflow_state(
+        self,
+        session: AgentSessionState,
+        execution_kind: str = "",
+        preview: bool = False,
+    ) -> None:
+        self._sync_workflow_identity(session)
+        backend_kind, workflow_profile = self._infer_backend_descriptor()
+        editable_scopes = self._build_editable_scopes(session)
+        protected_scopes = self._build_protected_scopes(session)
+        execution_config = WorkflowExecutionConfig(
+            execution_kind=execution_kind,
+            preview=preview,
+            backend_kind=backend_kind,
+            workflow_profile=workflow_profile,
+            parameters={
+                "selected_gallery_index": session.selected_gallery_index,
+                "selected_reference_ids": list(session.selected_reference_ids),
+                "selected_probe_id": session.selected_probe.probe_id,
+                "accepted_patch_id": session.accepted_patch.patch_id,
+                "current_result_id": session.current_result_id,
+            },
+        )
+        workflow_metadata = {
+            "backend_kind": backend_kind,
+            "workflow_profile": workflow_profile,
+            "surrogate_kind": "normalized_schema",
+            "has_schema": bool(session.current_schema_raw),
+            "has_preview_results": bool(session.preview_probe_results),
+            "has_committed_patch": bool(session.accepted_patch.patch_id),
+        }
+        surrogate_payload = {
+            "schema": {
+                "prompt": session.current_schema.prompt,
+                "negative_prompt": session.current_schema.negative_prompt,
+                "model": session.current_schema.model,
+                "sampler": session.current_schema.sampler,
+                "style": list(session.current_schema.style),
+                "lora": list(session.current_schema.lora),
+            },
+            "selected_gallery_index": session.selected_gallery_index,
+            "selected_reference_ids": list(session.selected_reference_ids),
+            "selected_probe_id": session.selected_probe.probe_id,
+            "accepted_patch_id": session.accepted_patch.patch_id,
+            "current_result_id": session.current_result_id,
+        }
+
+        session.editable_scopes = editable_scopes
+        session.protected_scopes = protected_scopes
+        session.last_execution_config = execution_config
+        session.workflow_metadata = workflow_metadata
+        session.workflow_state = WorkflowStateSnapshot(
+            identity=session.workflow_identity,
+            editable_scopes=editable_scopes,
+            protected_scopes=protected_scopes,
+            last_execution_config=execution_config,
+            workflow_metadata=workflow_metadata,
+            surrogate_payload=surrogate_payload,
+        )
+
+    def _infer_backend_descriptor(self) -> tuple[str, str]:
+        adapter_name = type(self.execution_adapter).__name__.lower()
+        if "live" in adapter_name:
+            backend_client = getattr(self.execution_adapter, "backend_client", None)
+            transport = getattr(backend_client, "transport", None)
+            config = getattr(transport, "config", None)
+            if config is not None:
+                return (
+                    getattr(config, "backend_kind", "") or "live_backend",
+                    getattr(config, "workflow_profile", "") or "default",
+                )
+            return ("live_backend", "default")
+        return ("mock", "default")
+
+    @staticmethod
+    def _build_editable_scopes(session: AgentSessionState) -> list[WorkflowScope]:
+        target_fields = list(session.accepted_patch.target_fields)
+        if not target_fields and session.selected_probe.probe_id:
+            target_fields = list(session.selected_probe.target_axes)
+        if not target_fields and session.current_schema_raw:
+            target_fields = ["prompt", "model", "style", "lora"]
+        if not target_fields:
+            return []
+        return [
+            WorkflowScope(
+                scope_id="editable-surrogate",
+                scope_kind="schema_fields",
+                label="Editable surrogate workflow fields",
+                node_ids=list(target_fields),
+                metadata={"source": "surrogate", "count": len(target_fields)},
+            )
+        ]
+
+    @staticmethod
+    def _build_protected_scopes(session: AgentSessionState) -> list[WorkflowScope]:
+        protected_items = list(session.preserve_constraints)
+        if not protected_items and session.selected_probe.probe_id:
+            protected_items = list(session.selected_probe.preserve_axes)
+        if not protected_items:
+            return []
+        return [
+            WorkflowScope(
+                scope_id="protected-surrogate",
+                scope_kind="preserve_constraints",
+                label="Protected surrogate workflow fields",
+                node_ids=list(protected_items),
+                metadata={"source": "constraints", "count": len(protected_items)},
+            )
+        ]
 
     @staticmethod
     def _apply_patch_to_schema(current_schema, patch):
