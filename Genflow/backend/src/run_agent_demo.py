@@ -59,7 +59,7 @@ def resolve_execution_mode(env: dict | None = None) -> str:
     return mode
 
 
-def build_execution_adapter(mode: str = "mock"):
+def build_execution_adapter(mode: str = "mock", backend_client=None):
     mode = str(mode).strip().lower()
     if mode not in ALLOWED_EXECUTION_MODES:
         allowed = ", ".join(sorted(ALLOWED_EXECUTION_MODES))
@@ -67,14 +67,14 @@ def build_execution_adapter(mode: str = "mock"):
     if mode == "live":
         from app.agent.live_execution_adapter import LiveExecutionAdapter
 
-        return LiveExecutionAdapter()
+        return LiveExecutionAdapter(backend_client=backend_client)
 
     from app.agent.result_executor import ResultExecutor
 
     return ResultExecutor()
 
 
-def build_runtime_service(execution_mode: str = "mock") -> "AgentRuntimeService":
+def build_runtime_service(execution_mode: str = "mock", backend_client=None) -> "AgentRuntimeService":
     from app.agent.feedback_parser import FeedbackParser
     from app.agent.patch_planner import PatchPlanner
     from app.agent.probe_generator import PreviewProbeGenerator
@@ -89,7 +89,7 @@ def build_runtime_service(execution_mode: str = "mock") -> "AgentRuntimeService"
         memory_service=memory,
         orchestration_service=orchestration,
         search_service=search_service,
-        execution_adapter=build_execution_adapter(mode=execution_mode),
+        execution_adapter=build_execution_adapter(mode=execution_mode, backend_client=backend_client),
         feedback_parser=FeedbackParser(),
         hypothesis_builder=RepairHypothesisBuilder(),
         probe_generator=PreviewProbeGenerator(),
