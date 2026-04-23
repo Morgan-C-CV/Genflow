@@ -12,3 +12,11 @@ class LiveBackendResponseError(LiveExecutionError):
 
 class LiveBackendDispatchError(LiveExecutionError):
     """Raised when request dispatch fails for non-availability reasons."""
+
+
+class LiveBackendNotConfiguredError(LiveBackendUnavailableError):
+    """Raised when live execution is selected but no substrate config is provided."""
+
+
+class LiveBackendNotImplementedError(LiveExecutionError):
+    """Raised when a substrate shell is selected but dispatch is not implemented yet."""

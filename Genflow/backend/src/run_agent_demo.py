@@ -59,6 +59,23 @@ def resolve_execution_mode(env: dict | None = None) -> str:
     return mode
 
 
+def resolve_live_backend_config(env: dict | None = None):
+    from app.agent.live_backend_config import resolve_live_backend_config as _resolve_live_backend_config
+
+    return _resolve_live_backend_config(env=env)
+
+
+def build_live_backend_client(config):
+    from app.agent.default_live_backend_client import DefaultLiveBackendClient
+    from app.agent.live_backend_errors import LiveBackendNotConfiguredError
+    from app.agent.workflow_backend_transport import WorkflowBackendTransport
+
+    if not config.enabled:
+        raise LiveBackendNotConfiguredError("Live backend substrate is not configured.")
+    transport = WorkflowBackendTransport(config)
+    return DefaultLiveBackendClient(transport=transport)
+
+
 def build_execution_adapter(mode: str = "mock", backend_client=None):
     mode = str(mode).strip().lower()
     if mode not in ALLOWED_EXECUTION_MODES:
@@ -225,12 +242,36 @@ def build_session_artifact_payload(session) -> dict:
 
 
 def describe_cli_failure(exc: Exception) -> str:
+    from app.agent.live_backend_errors import (
+        LiveBackendNotConfiguredError,
+        LiveBackendNotImplementedError,
+        LiveBackendUnavailableError,
+    )
+
     chain = []
     current = exc
     while current is not None and len(chain) < 4:
         chain.append(f"{current.__class__.__name__}: {current}")
         current = getattr(current, "__cause__", None)
     message = " -> ".join(chain)
+    if isinstance(exc, LiveBackendNotConfiguredError):
+        return (
+            "[CLI ERROR] Live execution mode selected, but no live substrate is configured.\n"
+            "Set `GENFLOW_LIVE_BACKEND_KIND` and related live backend env vars, or use `GENFLOW_EXECUTION_MODE=mock`.\n"
+            f"Root cause: {message}"
+        )
+    if isinstance(exc, LiveBackendNotImplementedError):
+        return (
+            "[CLI ERROR] Live substrate is configured, but dispatch is not implemented yet.\n"
+            "Keep using `GENFLOW_EXECUTION_MODE=mock` until the workflow backend transport is wired.\n"
+            f"Root cause: {message}"
+        )
+    if isinstance(exc, LiveBackendUnavailableError):
+        return (
+            "[CLI ERROR] Live backend substrate is unavailable for this run.\n"
+            "Verify the live backend config or use `GENFLOW_EXECUTION_MODE=mock`.\n"
+            f"Root cause: {message}"
+        )
     if "ConnectError" in message or "NameResolutionError" in message:
         return (
             "[CLI ERROR] Live backend unavailable for this smoke run.\n"
@@ -258,11 +299,15 @@ def describe_cli_failure(exc: Exception) -> str:
 def main() -> None:
     try:
         execution_mode = resolve_execution_mode()
+        backend_client = None
+        if execution_mode == "live":
+            live_backend_config = resolve_live_backend_config()
+            backend_client = build_live_backend_client(live_backend_config)
         print("GenFlow Agent Demo")
         print("Current scope: start -> clarify -> candidates -> select -> reference bundle -> metadata/schema -> initial result -> feedback -> hypotheses -> preview -> commit -> verify")
         print(f"Execution mode: {execution_mode}")
 
-        runtime_service = build_runtime_service(execution_mode=execution_mode)
+        runtime_service = build_runtime_service(execution_mode=execution_mode, backend_client=backend_client)
         df = runtime_service.search_service.search_repo.get_all_data()
 
         user_intent = input("\n请输入你的创作意图\n> ").strip()
