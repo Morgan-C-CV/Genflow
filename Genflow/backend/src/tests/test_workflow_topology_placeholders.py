@@ -65,11 +65,11 @@ class WorkflowTopologyPlaceholdersTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.select_probe(session.session_id, "p_001")
+        session = service.select_probe(session.session_id, "p_002")
         session = service.commit_patch(session.session_id)
 
-        self.assertEqual(session.workflow_topology_hints["selected_probe_id"], "p_001")
-        self.assertEqual(session.workflow_topology_hints["accepted_patch_id"], "cp_p_001")
+        self.assertEqual(session.workflow_topology_hints["selected_probe_id"], "p_002")
+        self.assertEqual(session.workflow_topology_hints["accepted_patch_id"], "cp_p_002")
         self.assertEqual(session.workflow_graph_placeholder.metadata["region_label"], "repair_region")
         self.assertTrue(
             any(node.node_kind == "surrogate_probe" for node in session.workflow_graph_placeholder.node_refs)
@@ -86,7 +86,7 @@ class WorkflowTopologyPlaceholdersTest(unittest.TestCase):
         self.assertEqual(session.workflow_graph_placeholder.metadata["graph_regions"], ["repair_region"])
         self.assertEqual(session.workflow_graph_placeholder.topology_slices[0].slice_kind, "repair_region")
         self.assertEqual(session.workflow_graph_placeholder.topology_slices[0].entry_node_ids, ["reference.bundle", "intent.prompt"])
-        self.assertEqual(session.workflow_graph_placeholder.topology_slices[0].exit_node_ids, ["patch.cp_p_001", "result.output"])
+        self.assertEqual(session.workflow_graph_placeholder.topology_slices[0].exit_node_ids, ["patch.cp_p_002", "result.output"])
 
     def test_topology_sync_is_stable_for_same_input(self):
         service = self._build_service(iter(["result-1", "result-2"]))

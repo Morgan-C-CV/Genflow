@@ -7,7 +7,9 @@ from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.benchmark_comparison_summary import build_benchmark_comparison_summary
 from app.agent.patch_planner import PatchPlanner
+from app.agent.patch_candidate_generator import PatchCandidateGenerator
 from app.agent.pbo_probe_ranker import rank_probe_candidates
+from app.agent.pbo_patch_ranker import rank_patch_candidates
 from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.refinement_benchmark_retriever import retrieve_refinement_benchmark_set
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
@@ -30,6 +32,8 @@ class AgentRuntimeService:
         probe_generator: Optional[PreviewProbeGenerator] = None,
         pbo_probe_ranker=None,
         refinement_benchmark_retriever=None,
+        patch_candidate_generator=None,
+        pbo_patch_ranker=None,
         patch_planner: Optional[PatchPlanner] = None,
         verifier: Optional[Verifier] = None,
     ):
@@ -43,6 +47,15 @@ class AgentRuntimeService:
         self.probe_generator = probe_generator or PreviewProbeGenerator()
         self.pbo_probe_ranker = pbo_probe_ranker or rank_probe_candidates
         self.refinement_benchmark_retriever = refinement_benchmark_retriever or retrieve_refinement_benchmark_set
+        self.patch_candidate_generator = (
+            patch_candidate_generator
+            or (
+                patch_planner
+                if patch_planner is not None and (hasattr(patch_planner, "generate") or hasattr(patch_planner, "generate_candidates"))
+                else PatchCandidateGenerator(planner=patch_planner)
+            )
+        )
+        self.pbo_patch_ranker = pbo_patch_ranker or rank_patch_candidates
         self.patch_planner = patch_planner or PatchPlanner()
         self.verifier = verifier or Verifier()
 
@@ -198,12 +211,14 @@ class AgentRuntimeService:
         session = self.memory_service.get_session(session_id)
         if not session.selected_probe.probe_id:
             raise ValueError("No selected probe available for commit.")
-        patch = self.patch_planner.plan(
-            selected_probe=session.selected_probe,
-            current_schema=session.current_schema,
-            parsed_feedback=session.parsed_feedback,
-            repair_hypotheses=session.repair_hypotheses,
+        patch_candidates = self._generate_patch_candidates(session)
+        ranked_patch_candidates = self.pbo_patch_ranker(
+            patch_candidates,
+            session.parsed_feedback,
+            benchmark_comparison_summary=session.benchmark_comparison_summary,
+            refinement_benchmark_set=session.refinement_benchmark_set,
         )
+        patch = ranked_patch_candidates[0]
         session.accepted_patch = patch
         session.patch_history.append(patch)
         session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
@@ -331,6 +346,22 @@ class AgentRuntimeService:
                 )
             return ("live_backend", "default")
         return ("mock", "default")
+
+    def _generate_patch_candidates(self, session: AgentSessionState):
+        generator = self.patch_candidate_generator
+        kwargs = {
+            "selected_probe": session.selected_probe,
+            "current_schema": session.current_schema,
+            "parsed_feedback": session.parsed_feedback,
+            "repair_hypotheses": session.repair_hypotheses,
+        }
+        if hasattr(generator, "generate"):
+            return generator.generate(**kwargs)
+        if hasattr(generator, "generate_candidates"):
+            return generator.generate_candidates(**kwargs)
+        if hasattr(generator, "plan"):
+            return [generator.plan(**kwargs)]
+        raise TypeError("Patch candidate generator must provide generate(), generate_candidates(), or plan().")
 
     @staticmethod
     def _apply_patch_to_schema(current_schema, patch):

@@ -80,6 +80,7 @@ class CommittedPatch:
     preserve_axes: List[str] = field(default_factory=list)
     changes: Dict[str, Any] = field(default_factory=dict)
     rationale: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

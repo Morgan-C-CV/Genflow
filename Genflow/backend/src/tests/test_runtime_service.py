@@ -167,18 +167,32 @@ class FakeProbeGenerator:
 
 
 class FakePatchPlanner:
-    def plan(self, selected_probe, current_schema, parsed_feedback, repair_hypotheses):
-        return CommittedPatch(
-            patch_id="cp_p_001",
-            target_fields=["style", "model"],
-            target_axes=["style"],
-            preserve_axes=["composition"],
-            changes={
-                "style": ["cinematic", "vivid"],
-                "model": "sdxl-base-patched",
-            },
-            rationale="apply style-focused committed patch",
-        )
+    def generate(self, selected_probe, current_schema, parsed_feedback, repair_hypotheses):
+        return [
+            CommittedPatch(
+                patch_id="cp_p_001",
+                target_fields=["prompt"],
+                target_axes=["composition"],
+                preserve_axes=["composition"],
+                changes={
+                    "prompt": f"{current_schema.prompt} | maintain composition",
+                },
+                rationale="conservative prompt-only patch",
+                metadata={"candidate_kind": "conservative"},
+            ),
+            CommittedPatch(
+                patch_id="cp_p_002",
+                target_fields=["style", "model"],
+                target_axes=["style"],
+                preserve_axes=["composition"],
+                changes={
+                    "style": ["cinematic", "vivid"],
+                    "model": "sdxl-base-patched",
+                },
+                rationale="apply style-focused committed patch",
+                metadata={"candidate_kind": "style_shift"},
+            ),
+        ]
 
 
 class FakeVerifier:
@@ -219,6 +233,23 @@ class FakePboProbeRanker:
         self.last_benchmark_comparison_summary = benchmark_comparison_summary
         self.last_refinement_benchmark_set = refinement_benchmark_set
         return list(reversed(probes))
+
+
+class FakePboPatchRanker:
+    def __init__(self):
+        self.last_benchmark_comparison_summary = None
+        self.last_refinement_benchmark_set = None
+
+    def __call__(
+        self,
+        patch_candidates,
+        parsed_feedback,
+        benchmark_comparison_summary=None,
+        refinement_benchmark_set=None,
+    ):
+        self.last_benchmark_comparison_summary = benchmark_comparison_summary
+        self.last_refinement_benchmark_set = refinement_benchmark_set
+        return list(reversed(patch_candidates))
 
 
 class RuntimeServiceTest(unittest.TestCase):
@@ -366,6 +397,45 @@ class RuntimeServiceTest(unittest.TestCase):
             session.refinement_benchmark_set.benchmark_id,
         )
 
+    def test_runtime_service_commit_patch_consumes_top_ranked_patch_candidate(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-4b")
+        pbo_patch_ranker = FakePboPatchRanker()
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            pbo_patch_ranker=pbo_patch_ranker,
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.select_probe(session.session_id, "p_002")
+        session = service.commit_patch(session.session_id)
+
+        self.assertEqual(session.accepted_patch.patch_id, "cp_p_002")
+        self.assertEqual(
+            pbo_patch_ranker.last_benchmark_comparison_summary.compared_candidate_ids,
+            session.benchmark_comparison_summary.compared_candidate_ids,
+        )
+        self.assertEqual(
+            pbo_patch_ranker.last_refinement_benchmark_set.benchmark_id,
+            session.refinement_benchmark_set.benchmark_id,
+        )
+
     def test_runtime_service_preview_probe_flow_updates_preview_state_only(self):
         memory = AgentMemoryService()
         orchestration = FakeOrchestrationService(memory)
@@ -438,12 +508,14 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.preview_probe(session.session_id, "p_001")
-        session = service.select_probe(session.session_id, "p_001")
+        session = service.preview_probe(session.session_id, "p_002")
+        session = service.select_probe(session.session_id, "p_002")
         session = service.commit_patch(session.session_id)
 
-        self.assertEqual(session.accepted_patch.patch_id, "cp_p_001")
+        self.assertEqual(session.accepted_patch.patch_id, "cp_p_002")
         self.assertEqual(len(session.patch_history), 1)
+        self.assertIn("pbo_score", session.accepted_patch.metadata)
+        self.assertIn("pbo_rationale", session.accepted_patch.metadata)
         self.assertEqual(session.current_schema.model, "sdxl-base-patched")
         self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
         self.assertNotEqual(session.current_schema_raw.strip(), "")
@@ -489,7 +561,7 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.select_probe(session.session_id, "p_001")
+        session = service.select_probe(session.session_id, "p_002")
         session = service.commit_patch(session.session_id)
         session = service.execute_patch(session.session_id)
         session = service.verify_latest_result(session.session_id)
