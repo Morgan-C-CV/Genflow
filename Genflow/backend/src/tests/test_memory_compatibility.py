@@ -16,6 +16,8 @@ class MemoryCompatibilityTest(unittest.TestCase):
         self.assertEqual(session.current_schema.prompt, "")
         self.assertEqual(session.current_schema_raw, "")
         self.assertEqual(session.selected_reference_bundle, {})
+        self.assertEqual(session.refinement_benchmark_set.benchmark_id, "")
+        self.assertEqual(session.refinement_benchmark_summary, "")
         self.assertEqual(session.workflow_id, "")
         self.assertEqual(session.workflow_state.identity.workflow_id, "")
         self.assertEqual(session.editable_scopes, [])
