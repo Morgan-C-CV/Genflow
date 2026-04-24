@@ -7,6 +7,7 @@ from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.patch_planner import PatchPlanner
 from app.agent.probe_generator import PreviewProbeGenerator
+from app.agent.refinement_benchmark_retriever import retrieve_refinement_benchmark_set
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
@@ -25,6 +26,7 @@ class AgentRuntimeService:
         feedback_parser: Optional[FeedbackParser] = None,
         hypothesis_builder: Optional[RepairHypothesisBuilder] = None,
         probe_generator: Optional[PreviewProbeGenerator] = None,
+        refinement_benchmark_retriever=None,
         patch_planner: Optional[PatchPlanner] = None,
         verifier: Optional[Verifier] = None,
     ):
@@ -36,6 +38,7 @@ class AgentRuntimeService:
         self.feedback_parser = feedback_parser or FeedbackParser()
         self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
         self.probe_generator = probe_generator or PreviewProbeGenerator()
+        self.refinement_benchmark_retriever = refinement_benchmark_retriever or retrieve_refinement_benchmark_set
         self.patch_planner = patch_planner or PatchPlanner()
         self.verifier = verifier or Verifier()
 
@@ -131,6 +134,12 @@ class AgentRuntimeService:
             history=session.feedback_history,
         )
         session.repair_hypotheses = hypotheses
+        benchmark_set = self.refinement_benchmark_retriever(
+            session,
+            search_service=self.search_service,
+        )
+        session.refinement_benchmark_set = benchmark_set
+        session.refinement_benchmark_summary = " | ".join(benchmark_set.selection_rationale)
         self._sync_workflow_state(session, execution_kind="repair_hypotheses", preview=False)
         return self.memory_service.save_session(session)
 

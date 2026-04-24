@@ -248,6 +248,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.parsed_feedback.raw_feedback, "Keep the composition, but improve style.")
         self.assertEqual(len(session.repair_hypotheses), 2)
         self.assertEqual(session.repair_hypotheses[0].hypothesis_id, "h_001")
+        self.assertEqual(session.refinement_benchmark_set.benchmark_kind, "refinement_local_comparison")
+        self.assertEqual(session.refinement_benchmark_set.anchor_ids, [101, 102, 103])
+        self.assertTrue(session.refinement_benchmark_summary)
+        self.assertIn("focus_axes=style", session.refinement_benchmark_summary)
 
     def test_runtime_service_preview_probe_flow_updates_preview_state_only(self):
         memory = AgentMemoryService()

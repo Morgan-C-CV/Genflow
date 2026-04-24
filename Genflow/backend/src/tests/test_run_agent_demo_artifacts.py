@@ -40,12 +40,16 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertIn("requested_changes", payload)
         self.assertIn("current_uncertainty_estimate", payload)
         self.assertIn("repair_hypotheses", payload)
+        self.assertIn("refinement_benchmark_set", payload)
+        self.assertIn("refinement_benchmark_summary", payload)
         self.assertEqual(payload["parsed_feedback"]["raw_feedback"], "Keep the composition, but improve style.")
         self.assertEqual(payload["preserve_constraints"], ["Keep the composition"])
         self.assertEqual(payload["dissatisfaction_axes"], ["style"])
         self.assertEqual(payload["requested_changes"], ["make the style brighter"])
         self.assertEqual(payload["current_uncertainty_estimate"], 0.25)
         self.assertEqual(len(payload["repair_hypotheses"]), 2)
+        self.assertEqual(payload["refinement_benchmark_set"]["benchmark_kind"], "refinement_local_comparison")
+        self.assertTrue(payload["refinement_benchmark_summary"])
 
 
 if __name__ == "__main__":
