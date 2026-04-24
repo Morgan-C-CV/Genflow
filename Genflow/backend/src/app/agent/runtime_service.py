@@ -6,6 +6,7 @@ from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.benchmark_comparison_summary import build_benchmark_comparison_summary
+from app.agent.orchestration_policy import PolicyDecision, decide_next_action
 from app.agent.patch_planner import PatchPlanner
 from app.agent.patch_candidate_generator import PatchCandidateGenerator
 from app.agent.pbo_benchmark_ranker import rank_benchmark_candidates
@@ -272,6 +273,10 @@ class AgentRuntimeService:
     def should_continue(self, session_id: str) -> bool:
         session = self.memory_service.get_session(session_id)
         return bool(session.continue_recommended)
+
+    def get_policy_decision(self, session_id: str) -> PolicyDecision:
+        session = self.memory_service.get_session(session_id)
+        return decide_next_action(session)
 
     @staticmethod
     def _build_anchor_summary(reference_bundle: dict) -> str:

@@ -365,6 +365,32 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertEqual(pbo_benchmark_ranker.last_session_context.session_id, session.session_id)
 
+    def test_runtime_service_exposes_policy_decision_without_rewriting_execution_flow(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-2c")
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+
+        decision = service.get_policy_decision(session.session_id)
+
+        self.assertEqual(decision.next_action, "generate_probes")
+
     def test_runtime_service_passes_refinement_benchmark_context_to_probe_generator(self):
         memory = AgentMemoryService()
         orchestration = FakeOrchestrationService(memory)
