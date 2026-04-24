@@ -106,6 +106,67 @@ class RuntimeServicePolicyRunnerTest(unittest.TestCase):
         self.assertEqual(result.decision.next_action, "stop")
         self.assertEqual(result.updated_session.current_result_id, before_result_id)
 
+    def test_run_policy_steps_advances_through_multi_step_trace(self):
+        ids = iter(
+            [
+                "policy-runner-trace-initial",
+                "policy-runner-trace-commit",
+                "policy-runner-trace-final",
+            ]
+        )
+        service = self._make_service(id_factory=lambda: next(ids))
+        session = self._prepare_base_repair_session(service)
+
+        run_result = service.run_policy_steps(session.session_id, max_steps=6)
+
+        self.assertEqual(
+            [step.action for step in run_result.steps],
+            [
+                "build_hypotheses",
+                "generate_probes",
+                "preview_selected_probe",
+                "commit_selected_patch",
+                "execute_patch",
+                "verify_latest_result",
+            ],
+        )
+        self.assertFalse(run_result.stopped)
+        self.assertEqual(run_result.stop_reason, "verifier_accepts_current_direction")
+        self.assertTrue(run_result.final_session.latest_verifier_result.summary)
+
+    def test_run_policy_steps_stops_when_policy_returns_stop(self):
+        ids = iter(
+            [
+                "policy-runner-stop-trace-initial",
+                "policy-runner-stop-trace-commit",
+                "policy-runner-stop-trace-final",
+            ]
+        )
+        service = self._make_service(id_factory=lambda: next(ids))
+        session = self._prepare_base_repair_session(service)
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_selected_probe(session.session_id)
+        session = service.commit_patch(session.session_id)
+        session = service.execute_patch(session.session_id)
+        session = service.verify_latest_result(session.session_id)
+
+        run_result = service.run_policy_steps(session.session_id, max_steps=3)
+
+        self.assertTrue(run_result.stopped)
+        self.assertEqual([step.action for step in run_result.steps], ["stop"])
+        self.assertEqual(run_result.stop_reason, "verifier_accepts_current_direction")
+
+    def test_run_policy_steps_respects_max_steps_truncation(self):
+        service = self._make_service(id_factory=lambda: "policy-runner-max-steps")
+        session = self._prepare_base_repair_session(service)
+
+        run_result = service.run_policy_steps(session.session_id, max_steps=2)
+
+        self.assertEqual([step.action for step in run_result.steps], ["build_hypotheses", "generate_probes"])
+        self.assertFalse(run_result.stopped)
+        self.assertEqual(run_result.stop_reason, "max_steps_reached")
+
 
 if __name__ == "__main__":
     unittest.main()

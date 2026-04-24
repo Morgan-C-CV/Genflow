@@ -28,6 +28,21 @@ class PolicyStepResult:
     updated_session: AgentSessionState
 
 
+@dataclass
+class PolicyRunStep:
+    action: str
+    rationale: list[str]
+    session_id: str
+
+
+@dataclass
+class PolicyRunResult:
+    steps: list[PolicyRunStep]
+    final_session: AgentSessionState
+    stopped: bool
+    stop_reason: str
+
+
 class AgentRuntimeService:
     def __init__(
         self,
@@ -308,6 +323,40 @@ class AgentRuntimeService:
         else:
             raise ValueError(f"Unsupported policy action: {action}")
         return PolicyStepResult(decision=decision, updated_session=updated_session)
+
+    def run_policy_steps(self, session_id: str, max_steps: int = 5) -> PolicyRunResult:
+        max_steps = max(1, int(max_steps))
+        steps: list[PolicyRunStep] = []
+        final_session = self.memory_service.get_session(session_id)
+        stopped = False
+        stop_reason = ""
+
+        for _ in range(max_steps):
+            step_result = self.run_next_policy_step(session_id)
+            final_session = step_result.updated_session
+            steps.append(
+                PolicyRunStep(
+                    action=step_result.decision.next_action,
+                    rationale=list(step_result.decision.rationale),
+                    session_id=final_session.session_id,
+                )
+            )
+            if step_result.decision.next_action == "stop":
+                stopped = True
+                stop_reason = final_session.stop_reason or "policy_stop"
+                break
+
+        if not stopped and final_session.stop_reason:
+            stop_reason = final_session.stop_reason
+        elif not stopped:
+            stop_reason = "max_steps_reached"
+
+        return PolicyRunResult(
+            steps=steps,
+            final_session=final_session,
+            stopped=stopped,
+            stop_reason=stop_reason,
+        )
 
     @staticmethod
     def _build_anchor_summary(reference_bundle: dict) -> str:
