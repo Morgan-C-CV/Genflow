@@ -390,6 +390,7 @@ def build_session_artifact_payload(session) -> dict:
             "current_gallery_anchor_summary": session.current_gallery_anchor_summary,
             "refinement_benchmark_set": session.refinement_benchmark_set,
             "refinement_benchmark_summary": session.refinement_benchmark_summary,
+            "benchmark_comparison_summary": session.benchmark_comparison_summary,
             "workflow_id": session.workflow_id,
             "workflow_identity": session.workflow_identity,
             "workflow_state": session.workflow_state,

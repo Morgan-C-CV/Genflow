@@ -42,6 +42,7 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertIn("repair_hypotheses", payload)
         self.assertIn("refinement_benchmark_set", payload)
         self.assertIn("refinement_benchmark_summary", payload)
+        self.assertIn("benchmark_comparison_summary", payload)
         self.assertEqual(payload["parsed_feedback"]["raw_feedback"], "Keep the composition, but improve style.")
         self.assertEqual(payload["preserve_constraints"], ["Keep the composition"])
         self.assertEqual(payload["dissatisfaction_axes"], ["style"])
@@ -50,6 +51,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(len(payload["repair_hypotheses"]), 2)
         self.assertEqual(payload["refinement_benchmark_set"]["benchmark_kind"], "refinement_local_comparison")
         self.assertTrue(payload["refinement_benchmark_summary"])
+        self.assertEqual(
+            payload["benchmark_comparison_summary"]["metadata"]["benchmark_kind"],
+            "refinement_local_comparison",
+        )
 
 
 if __name__ == "__main__":

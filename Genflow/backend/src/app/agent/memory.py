@@ -17,6 +17,7 @@ from app.agent.runtime_models import (
     VerifierResult,
 )
 from app.agent.refinement_benchmark_retriever import RefinementBenchmarkSet
+from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
 from app.agent.workflow_runtime_models import (
     WorkflowExecutionConfig,
     WorkflowGraphPlaceholder,
@@ -62,6 +63,7 @@ class AgentSessionState:
     current_gallery_anchor_summary: str = ""
     refinement_benchmark_set: RefinementBenchmarkSet = field(default_factory=RefinementBenchmarkSet)
     refinement_benchmark_summary: str = ""
+    benchmark_comparison_summary: BenchmarkComparisonSummary = field(default_factory=BenchmarkComparisonSummary)
     workflow_id: str = ""
     workflow_identity: WorkflowIdentity = field(default_factory=WorkflowIdentity)
     workflow_state: WorkflowStateSnapshot = field(default_factory=WorkflowStateSnapshot)

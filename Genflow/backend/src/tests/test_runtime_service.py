@@ -257,6 +257,14 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.refinement_benchmark_set.anchor_ids, [101, 102, 103])
         self.assertTrue(session.refinement_benchmark_summary)
         self.assertIn("focus_axes=style", session.refinement_benchmark_summary)
+        self.assertEqual(
+            session.benchmark_comparison_summary.compared_candidate_ids,
+            ["benchmark-candidate-101", "benchmark-candidate-102", "benchmark-candidate-103"],
+        )
+        self.assertIn(
+            "benchmark_source=refinement_search_bundle",
+            session.benchmark_comparison_summary.summary_bullets,
+        )
 
     def test_runtime_service_passes_refinement_benchmark_context_to_probe_generator(self):
         memory = AgentMemoryService()

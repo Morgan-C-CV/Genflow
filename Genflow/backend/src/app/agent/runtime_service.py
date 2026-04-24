@@ -5,6 +5,7 @@ from typing import Callable, Optional
 from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
+from app.agent.benchmark_comparison_summary import build_benchmark_comparison_summary
 from app.agent.patch_planner import PatchPlanner
 from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.refinement_benchmark_retriever import retrieve_refinement_benchmark_set
@@ -140,6 +141,7 @@ class AgentRuntimeService:
         )
         session.refinement_benchmark_set = benchmark_set
         session.refinement_benchmark_summary = " | ".join(benchmark_set.selection_rationale)
+        session.benchmark_comparison_summary = build_benchmark_comparison_summary(benchmark_set, session)
         self._sync_workflow_state(session, execution_kind="repair_hypotheses", preview=False)
         return self.memory_service.save_session(session)
 
