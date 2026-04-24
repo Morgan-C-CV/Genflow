@@ -31,7 +31,10 @@ class WorkflowExecutionConfig:
 class WorkflowNodeRef:
     node_id: str = ""
     node_kind: str = ""
+    role: str = ""
     label: str = ""
+    upstream_ids: List[str] = field(default_factory=list)
+    downstream_ids: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -39,7 +42,10 @@ class WorkflowNodeRef:
 class WorkflowTopologySlice:
     slice_id: str = ""
     region_label: str = ""
+    slice_kind: str = ""
     node_refs: List[WorkflowNodeRef] = field(default_factory=list)
+    entry_node_ids: List[str] = field(default_factory=list)
+    exit_node_ids: List[str] = field(default_factory=list)
     edge_hints: List[Dict[str, str]] = field(default_factory=list)
     scope_partitions: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -49,6 +55,8 @@ class WorkflowTopologySlice:
 class WorkflowGraphPlaceholder:
     graph_id: str = ""
     graph_kind: str = ""
+    entry_node_ids: List[str] = field(default_factory=list)
+    exit_node_ids: List[str] = field(default_factory=list)
     node_refs: List[WorkflowNodeRef] = field(default_factory=list)
     topology_slices: List[WorkflowTopologySlice] = field(default_factory=list)
     adjacency_hints: List[Dict[str, str]] = field(default_factory=list)

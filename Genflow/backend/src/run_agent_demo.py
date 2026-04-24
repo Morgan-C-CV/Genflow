@@ -397,6 +397,8 @@ def build_session_artifact_payload(session) -> dict:
             "workflow_metadata": session.workflow_metadata,
             "workflow_graph_placeholder": session.workflow_graph_placeholder,
             "workflow_topology_hints": session.workflow_topology_hints,
+            "workflow_topology_entry_node_ids": session.workflow_topology_entry_node_ids,
+            "workflow_topology_exit_node_ids": session.workflow_topology_exit_node_ids,
             "candidate_wall": {
                 "groups": session.latest_wall.groups if session.latest_wall else [],
                 "flat_indices": session.latest_wall.flat_indices if session.latest_wall else [],

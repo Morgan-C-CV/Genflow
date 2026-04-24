@@ -68,6 +68,8 @@ class AgentSessionState:
     workflow_metadata: Dict[str, object] = field(default_factory=dict)
     workflow_graph_placeholder: WorkflowGraphPlaceholder = field(default_factory=WorkflowGraphPlaceholder)
     workflow_topology_hints: Dict[str, object] = field(default_factory=dict)
+    workflow_topology_entry_node_ids: List[str] = field(default_factory=list)
+    workflow_topology_exit_node_ids: List[str] = field(default_factory=list)
     feedback_history: List[str] = field(default_factory=list)
     latest_feedback: str = ""
     parsed_feedback: ParsedFeedbackEvidence = field(default_factory=ParsedFeedbackEvidence)

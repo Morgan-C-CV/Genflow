@@ -24,10 +24,17 @@ class WorkflowRuntimeModelsTest(unittest.TestCase):
 
         self.assertEqual(identity.workflow_id, "")
         self.assertEqual(node.node_id, "")
+        self.assertEqual(node.role, "")
+        self.assertEqual(node.upstream_ids, [])
+        self.assertEqual(node.downstream_ids, [])
         self.assertEqual(scope.node_ids, [])
         self.assertEqual(config.parameters, {})
         self.assertEqual(topology_slice.node_refs, [])
+        self.assertEqual(topology_slice.entry_node_ids, [])
+        self.assertEqual(topology_slice.exit_node_ids, [])
         self.assertEqual(graph.adjacency_hints, [])
+        self.assertEqual(graph.entry_node_ids, [])
+        self.assertEqual(graph.exit_node_ids, [])
         self.assertEqual(snapshot.editable_scopes, [])
         self.assertEqual(snapshot.workflow_metadata, {})
         self.assertEqual(snapshot.workflow_graph_placeholder.graph_id, "")
@@ -52,8 +59,17 @@ class WorkflowRuntimeModelsTest(unittest.TestCase):
             editable_scopes=[WorkflowScope(scope_id="editable-1", node_ids=["n1"])],
             workflow_graph_placeholder=WorkflowGraphPlaceholder(
                 graph_id="graph-1",
-                node_refs=[WorkflowNodeRef(node_id="node-1")],
-                topology_slices=[WorkflowTopologySlice(slice_id="slice-1")],
+                node_refs=[WorkflowNodeRef(node_id="node-1", role="input", downstream_ids=["node-2"])],
+                entry_node_ids=["node-1"],
+                exit_node_ids=["node-2"],
+                topology_slices=[
+                    WorkflowTopologySlice(
+                        slice_id="slice-1",
+                        slice_kind="initial_region",
+                        entry_node_ids=["node-1"],
+                        exit_node_ids=["node-2"],
+                    )
+                ],
             ),
         )
 
@@ -63,6 +79,8 @@ class WorkflowRuntimeModelsTest(unittest.TestCase):
         self.assertEqual(payload["editable_scopes"][0]["node_ids"], ["n1"])
         self.assertEqual(payload["workflow_graph_placeholder"]["graph_id"], "graph-1")
         self.assertEqual(payload["workflow_graph_placeholder"]["node_refs"][0]["node_id"], "node-1")
+        self.assertEqual(payload["workflow_graph_placeholder"]["entry_node_ids"], ["node-1"])
+        self.assertEqual(payload["workflow_graph_placeholder"]["topology_slices"][0]["slice_kind"], "initial_region")
 
 
 if __name__ == "__main__":
