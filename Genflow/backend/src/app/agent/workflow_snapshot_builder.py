@@ -81,6 +81,14 @@ def build_surrogate_workflow_snapshot(
         "graph_entry_node_ids": list(document.entry_node_ids),
         "graph_exit_node_ids": list(document.exit_node_ids),
         "document_region_label": str(document.metadata.get("region_label", "")),
+        "benchmark_comparison": {
+            "benchmark_source": descriptor.benchmark_comparison.benchmark_source,
+            "compared_anchor_ids": list(descriptor.benchmark_comparison.compared_anchor_ids),
+            "compared_candidate_ids": list(descriptor.benchmark_comparison.compared_candidate_ids),
+            "focus_axes": list(descriptor.benchmark_comparison.focus_axes),
+            "preserve_axes": list(descriptor.benchmark_comparison.preserve_axes),
+            "confidence_hint": descriptor.benchmark_comparison.confidence_hint,
+        },
     }
     surrogate_payload = {
         "schema": {
@@ -111,6 +119,14 @@ def build_surrogate_workflow_snapshot(
         "workflow_topology_slice_count": len(graph_placeholder.topology_slices),
         "workflow_topology_entry_node_ids": list(graph_placeholder.entry_node_ids),
         "workflow_topology_exit_node_ids": list(graph_placeholder.exit_node_ids),
+        "benchmark_comparison": {
+            "benchmark_source": descriptor.benchmark_comparison.benchmark_source,
+            "compared_anchor_ids": list(descriptor.benchmark_comparison.compared_anchor_ids),
+            "compared_candidate_ids": list(descriptor.benchmark_comparison.compared_candidate_ids),
+            "focus_axes": list(descriptor.benchmark_comparison.focus_axes),
+            "preserve_axes": list(descriptor.benchmark_comparison.preserve_axes),
+            "confidence_hint": descriptor.benchmark_comparison.confidence_hint,
+        },
     }
     workflow_topology_hints = {
         **workflow_topology_hints,

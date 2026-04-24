@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.agent.memory import AgentSessionState
 from app.agent.workflow_descriptor_models import (
+    SurrogateBenchmarkComparisonFootprint,
     SurrogateExecutionDescriptor,
     SurrogateRepairDescriptor,
     SurrogateWorkflowDescriptor,
@@ -51,6 +52,16 @@ def build_surrogate_workflow_descriptor(
             metadata={
                 "latest_feedback": session.latest_feedback,
             },
+        ),
+        benchmark_comparison=SurrogateBenchmarkComparisonFootprint(
+            benchmark_source=str(
+                session.benchmark_comparison_summary.metadata.get("benchmark_source", "")
+            ),
+            compared_anchor_ids=list(session.benchmark_comparison_summary.compared_anchor_ids),
+            compared_candidate_ids=list(session.benchmark_comparison_summary.compared_candidate_ids),
+            focus_axes=list(session.benchmark_comparison_summary.focus_axes),
+            preserve_axes=list(session.benchmark_comparison_summary.preserve_axes),
+            confidence_hint=session.benchmark_comparison_summary.confidence_hint,
         ),
         metadata={
             "selected_reference_ids": list(session.selected_reference_ids),

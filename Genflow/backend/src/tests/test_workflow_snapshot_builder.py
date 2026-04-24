@@ -1,5 +1,6 @@
 import unittest
 
+from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
 from app.agent.memory import AgentMemoryService
 from app.agent.runtime_models import CommittedPatch, PreviewProbe
 from app.agent.workflow_snapshot_builder import (
@@ -28,6 +29,14 @@ class WorkflowSnapshotBuilderTest(unittest.TestCase):
         session.selected_gallery_index = 7
         session.selected_reference_ids = [101, 202]
         session.current_result_id = "result-1"
+        session.benchmark_comparison_summary = BenchmarkComparisonSummary(
+            compared_anchor_ids=[101, 202],
+            compared_candidate_ids=["benchmark-candidate-101", "benchmark-candidate-202"],
+            focus_axes=["style"],
+            preserve_axes=["composition"],
+            confidence_hint=0.67,
+            metadata={"benchmark_source": "refinement_search_bundle"},
+        )
         return session
 
     def test_snapshot_builder_is_stable_for_initial_state(self):
@@ -70,6 +79,14 @@ class WorkflowSnapshotBuilderTest(unittest.TestCase):
         self.assertEqual(snapshot.workflow_topology_exit_node_ids, ["patch.cp_p_001", "result.output"])
         self.assertEqual(snapshot.editable_scopes[0].node_ids, ["style", "model"])
         self.assertEqual(snapshot.protected_scopes[0].node_ids, ["composition"])
+        self.assertEqual(
+            snapshot.workflow_metadata["benchmark_comparison"]["benchmark_source"],
+            "refinement_search_bundle",
+        )
+        self.assertEqual(
+            snapshot.surrogate_payload["benchmark_comparison"]["compared_candidate_ids"],
+            ["benchmark-candidate-101", "benchmark-candidate-202"],
+        )
 
     def test_snapshot_defaults_are_safe(self):
         snapshot = SurrogateWorkflowSnapshot()

@@ -94,6 +94,14 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         self.assertEqual(session.last_execution_config.execution_kind, "repair_hypotheses")
         self.assertEqual(session.workflow_metadata["repair_hypothesis_count"], 2)
         self.assertEqual(session.workflow_state.surrogate_payload["repair_hypothesis_count"], 2)
+        self.assertEqual(
+            session.workflow_metadata["benchmark_comparison"]["benchmark_source"],
+            session.benchmark_comparison_summary.metadata["benchmark_source"],
+        )
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["benchmark_comparison"]["compared_anchor_ids"],
+            session.benchmark_comparison_summary.compared_anchor_ids,
+        )
 
         session = service.generate_local_probes(session.session_id)
         self.assertEqual(session.last_execution_config.execution_kind, "probe_generation")
@@ -212,6 +220,10 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_topology_exit_node_ids,
             document.exit_node_ids,
+        )
+        self.assertEqual(
+            session.workflow_state.workflow_metadata["benchmark_comparison"]["compared_candidate_ids"],
+            session.benchmark_comparison_summary.compared_candidate_ids,
         )
 
 

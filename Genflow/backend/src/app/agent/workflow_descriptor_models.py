@@ -11,6 +11,16 @@ from typing import Any, Dict, List
 
 
 @dataclass
+class SurrogateBenchmarkComparisonFootprint:
+    benchmark_source: str = ""
+    compared_anchor_ids: List[int] = field(default_factory=list)
+    compared_candidate_ids: List[str] = field(default_factory=list)
+    focus_axes: List[str] = field(default_factory=list)
+    preserve_axes: List[str] = field(default_factory=list)
+    confidence_hint: float = 0.0
+
+
+@dataclass
 class SurrogateExecutionDescriptor:
     execution_kind: str = ""
     preview: bool = False
@@ -50,4 +60,7 @@ class SurrogateWorkflowDescriptor:
     reference_bundle: Dict[str, Any] = field(default_factory=dict)
     execution: SurrogateExecutionDescriptor = field(default_factory=SurrogateExecutionDescriptor)
     repair: SurrogateRepairDescriptor = field(default_factory=SurrogateRepairDescriptor)
+    benchmark_comparison: SurrogateBenchmarkComparisonFootprint = field(
+        default_factory=SurrogateBenchmarkComparisonFootprint
+    )
     metadata: Dict[str, Any] = field(default_factory=dict)
