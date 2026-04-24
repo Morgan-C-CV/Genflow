@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""Build surrogate workflow graph placeholders from surrogate workflow documents.
+
+Current surrogate workflow-aware stack:
+session state -> descriptor -> document -> graph placeholder -> snapshot.
+The graph builder should only consume the document layer, not scattered session
+fields directly.
+"""
+
 from app.agent.memory import AgentSessionState
 from app.agent.workflow_document_builder import build_surrogate_workflow_document
 from app.agent.workflow_document_models import SurrogateWorkflowDocument

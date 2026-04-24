@@ -1,3 +1,10 @@
+"""Surrogate workflow document layer.
+
+The document layer expands the compact descriptor into explicit surrogate
+nodes, edges, and regions. It is still placeholder-only and exists so graph
+builders do not assemble topology directly from session state.
+"""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 

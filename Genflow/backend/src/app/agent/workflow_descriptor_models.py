@@ -1,3 +1,11 @@
+"""Surrogate workflow descriptor layer.
+
+This layer is the compact workflow-aware summary extracted from session state.
+It intentionally sits between session state and the richer surrogate document /
+graph / snapshot builders so those downstream builders do not re-read scattered
+session fields independently.
+"""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 

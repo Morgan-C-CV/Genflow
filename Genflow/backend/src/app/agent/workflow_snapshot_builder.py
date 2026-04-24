@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""Consolidate surrogate workflow-aware outputs into one snapshot.
+
+Current surrogate workflow-aware stack:
+session state -> descriptor -> document -> graph placeholder -> snapshot.
+Runtime sync should consume this snapshot as a write-back payload rather than
+rebuilding workflow-aware structures inline.
+"""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 

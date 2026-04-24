@@ -25,6 +25,18 @@ from .workflow_runtime_models import (
     WorkflowStateSnapshot,
     WorkflowTopologySlice,
 )
+from .workflow_descriptor_models import (
+    SurrogateExecutionDescriptor,
+    SurrogateRepairDescriptor,
+    SurrogateWorkflowDescriptor,
+)
+from .workflow_document_models import (
+    SurrogateWorkflowDocument,
+    SurrogateWorkflowEdge,
+    SurrogateWorkflowNode,
+    SurrogateWorkflowRegion,
+)
+from .workflow_snapshot_builder import SurrogateWorkflowSnapshot
 
 __all__ = [
     "AgentMemoryService",
@@ -45,4 +57,12 @@ __all__ = [
     "WorkflowScope",
     "WorkflowStateSnapshot",
     "WorkflowTopologySlice",
+    "SurrogateExecutionDescriptor",
+    "SurrogateRepairDescriptor",
+    "SurrogateWorkflowDescriptor",
+    "SurrogateWorkflowDocument",
+    "SurrogateWorkflowEdge",
+    "SurrogateWorkflowNode",
+    "SurrogateWorkflowRegion",
+    "SurrogateWorkflowSnapshot",
 ]
