@@ -151,6 +151,7 @@ class AgentRuntimeService:
             repair_hypotheses=session.repair_hypotheses,
             selected_gallery_index=session.selected_gallery_index,
             selected_reference_ids=session.selected_reference_ids,
+            refinement_benchmark_set=session.refinement_benchmark_set,
         )
         session.local_probes = probes
         session.preview_probe_candidates = probes

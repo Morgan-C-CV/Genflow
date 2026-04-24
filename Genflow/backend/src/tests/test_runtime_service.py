@@ -133,6 +133,9 @@ class FakeHypothesisBuilder:
 
 
 class FakeProbeGenerator:
+    def __init__(self):
+        self.last_refinement_benchmark_set = None
+
     def generate(
         self,
         current_schema,
@@ -140,7 +143,9 @@ class FakeProbeGenerator:
         repair_hypotheses,
         selected_gallery_index=None,
         selected_reference_ids=None,
+        refinement_benchmark_set=None,
     ):
+        self.last_refinement_benchmark_set = refinement_benchmark_set
         return [
             PreviewProbe(
                 probe_id="p_001",
@@ -252,6 +257,40 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.refinement_benchmark_set.anchor_ids, [101, 102, 103])
         self.assertTrue(session.refinement_benchmark_summary)
         self.assertIn("focus_axes=style", session.refinement_benchmark_summary)
+
+    def test_runtime_service_passes_refinement_benchmark_context_to_probe_generator(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-3")
+        probe_generator = FakeProbeGenerator()
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=probe_generator,
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+
+        self.assertEqual(
+            probe_generator.last_refinement_benchmark_set.benchmark_id,
+            session.refinement_benchmark_set.benchmark_id,
+        )
+        self.assertEqual(
+            probe_generator.last_refinement_benchmark_set.anchor_ids,
+            [101, 102, 103],
+        )
 
     def test_runtime_service_preview_probe_flow_updates_preview_state_only(self):
         memory = AgentMemoryService()
