@@ -3,6 +3,7 @@ import unittest
 from app.agent.memory import AgentMemoryService
 from app.agent.orchestration_policy import decide_next_action
 from app.agent.runtime_models import PreviewProbe, ResultSummary, VerifierResult, VerifierSignalSummary
+from app.agent.verifier_repair_recommendation import VerifierRepairRecommendation
 
 
 class OrchestrationPolicyTest(unittest.TestCase):
@@ -103,6 +104,12 @@ class OrchestrationPolicyTest(unittest.TestCase):
             ),
         )
         session.latest_verifier_signal_summary = session.latest_verifier_result.signal_summary
+        session.latest_verifier_repair_recommendation = VerifierRepairRecommendation(
+            recommended_action="stop",
+            rationale=["verifier accepts the current direction"],
+            priority="low",
+            supporting_signals=["strong_benchmark_support"],
+        )
         session.continue_recommended = False
         session.stop_reason = "verifier_accepts_current_direction"
 
@@ -110,6 +117,7 @@ class OrchestrationPolicyTest(unittest.TestCase):
 
         self.assertEqual(decision.next_action, "stop")
         self.assertFalse(decision.continue_loop)
+        self.assertIn("verifier_repair_recommendation=stop", decision.rationale)
 
     def test_policy_uses_high_preserve_risk_to_avoid_premature_stop(self):
         session = self._prepare_verified_session()
@@ -127,15 +135,51 @@ class OrchestrationPolicyTest(unittest.TestCase):
             ),
         )
         session.latest_verifier_signal_summary = session.latest_verifier_result.signal_summary
+        session.latest_verifier_repair_recommendation = VerifierRepairRecommendation(
+            recommended_action="reduce_preserve_risk",
+            rationale=["preserve risk is materially elevated"],
+            priority="high",
+            supporting_signals=["high_preserve_risk"],
+        )
         session.continue_recommended = False
         session.stop_reason = "verifier_accepts_current_direction"
 
         decision = decide_next_action(session)
 
         self.assertEqual(decision.next_action, "generate_probes")
-        self.assertIn("high_preserve_risk", decision.rationale)
+        self.assertIn("verifier_repair_recommendation=reduce_preserve_risk", decision.rationale)
 
     def test_policy_uses_weak_execution_evidence_to_retrieve_benchmarks(self):
+        session = self._prepare_verified_session()
+        session.current_uncertainty_estimate = 0.6
+        session.latest_verifier_result = VerifierResult(
+            improved=False,
+            continue_recommended=True,
+            confidence=0.4,
+            summary="verifier wants more evidence",
+            signal_summary=VerifierSignalSummary(
+                target_alignment_score=1.0,
+                preserve_risk_score=0.4,
+                benchmark_support_score=0.2,
+                execution_evidence_score=0.0,
+                total_score=0.8,
+            ),
+        )
+        session.latest_verifier_signal_summary = session.latest_verifier_result.signal_summary
+        session.latest_verifier_repair_recommendation = VerifierRepairRecommendation(
+            recommended_action="refresh_benchmarks",
+            rationale=["benchmark support is weak under high uncertainty"],
+            priority="high",
+            supporting_signals=["weak_execution_evidence", "low_benchmark_support"],
+        )
+        session.continue_recommended = True
+
+        decision = decide_next_action(session)
+
+        self.assertEqual(decision.next_action, "retrieve_benchmarks")
+        self.assertIn("verifier_repair_recommendation=refresh_benchmarks", decision.rationale)
+
+    def test_policy_falls_back_to_signal_based_logic_when_recommendation_is_missing(self):
         session = self._prepare_verified_session()
         session.current_uncertainty_estimate = 0.6
         session.latest_verifier_result = VerifierResult(

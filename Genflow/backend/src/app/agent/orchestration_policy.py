@@ -88,6 +88,34 @@ def _decide_post_verifier_action(session: "AgentSessionState") -> PolicyDecision
     if not session.latest_verifier_result.summary:
         return None
 
+    recommendation_decision = _decide_from_verifier_recommendation(session)
+    if recommendation_decision is not None:
+        return recommendation_decision
+
+    return _decide_from_verifier_signals(session)
+
+
+def _decide_from_verifier_recommendation(session: "AgentSessionState") -> PolicyDecision | None:
+    recommendation = session.latest_verifier_repair_recommendation.recommended_action
+    if not recommendation:
+        return None
+
+    rationale = [f"verifier_repair_recommendation={recommendation}"]
+    if recommendation == "probe_more":
+        return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
+    if recommendation == "refresh_benchmarks":
+        return PolicyDecision(next_action="retrieve_benchmarks", rationale=rationale, continue_loop=True)
+    if recommendation == "reduce_preserve_risk":
+        return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
+    if recommendation == "continue_current_direction":
+        rationale.append("continue_current_direction")
+        return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
+    if recommendation == "stop":
+        return PolicyDecision(next_action="stop", rationale=rationale, continue_loop=False)
+    return None
+
+
+def _decide_from_verifier_signals(session: "AgentSessionState") -> PolicyDecision:
     rationale: list[str] = []
     signal_summary = session.latest_verifier_signal_summary
     preserve_risk = float(signal_summary.preserve_risk_score or 0.0)
