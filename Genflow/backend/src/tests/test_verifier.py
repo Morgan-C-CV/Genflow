@@ -35,6 +35,8 @@ class VerifierTest(unittest.TestCase):
         self.assertIsInstance(result.regression_notes, list)
         self.assertTrue(result.summary)
         self.assertIn("signals[", result.summary)
+        self.assertGreater(result.signal_summary.target_alignment_score, 0.0)
+        self.assertGreater(result.signal_summary.execution_evidence_score, 0.0)
 
     def test_verifier_with_benchmark_summary_keeps_decision_shape_and_adds_context_note(self):
         verifier = Verifier()
@@ -147,6 +149,7 @@ class VerifierTest(unittest.TestCase):
 
         self.assertGreaterEqual(with_benchmark.confidence, without_benchmark.confidence)
         self.assertIn("benchmark_context=refinement_search_bundle:2_candidates", with_benchmark.regression_notes)
+        self.assertGreater(with_benchmark.signal_summary.benchmark_support_score, 0.0)
 
     def test_verifier_does_not_report_improvement_when_execution_change_evidence_is_weak(self):
         verifier = Verifier()
@@ -175,6 +178,7 @@ class VerifierTest(unittest.TestCase):
         self.assertTrue(result.continue_recommended)
         self.assertIn("updated result summary did not change relative to previous result", result.regression_notes)
         self.assertIn("execution evidence did not confirm committed target axes", result.regression_notes)
+        self.assertEqual(result.signal_summary.execution_evidence_score, 0.0)
 
 
 if __name__ == "__main__":

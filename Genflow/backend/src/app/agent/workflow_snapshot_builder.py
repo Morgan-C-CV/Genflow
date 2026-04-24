@@ -89,6 +89,15 @@ def build_surrogate_workflow_snapshot(
             "preserve_axes": list(descriptor.benchmark_comparison.preserve_axes),
             "confidence_hint": descriptor.benchmark_comparison.confidence_hint,
         },
+        "verifier_signal_summary": {
+            "target_alignment_score": session.latest_verifier_signal_summary.target_alignment_score,
+            "preserve_risk_score": session.latest_verifier_signal_summary.preserve_risk_score,
+            "benchmark_support_score": session.latest_verifier_signal_summary.benchmark_support_score,
+            "execution_evidence_score": session.latest_verifier_signal_summary.execution_evidence_score,
+            "total_score": session.latest_verifier_signal_summary.total_score,
+            "notes": list(session.latest_verifier_signal_summary.notes),
+            "regression_notes": list(session.latest_verifier_signal_summary.regression_notes),
+        },
     }
     surrogate_payload = {
         "schema": {
@@ -126,6 +135,15 @@ def build_surrogate_workflow_snapshot(
             "focus_axes": list(descriptor.benchmark_comparison.focus_axes),
             "preserve_axes": list(descriptor.benchmark_comparison.preserve_axes),
             "confidence_hint": descriptor.benchmark_comparison.confidence_hint,
+        },
+        "verifier_signal_summary": {
+            "target_alignment_score": session.latest_verifier_signal_summary.target_alignment_score,
+            "preserve_risk_score": session.latest_verifier_signal_summary.preserve_risk_score,
+            "benchmark_support_score": session.latest_verifier_signal_summary.benchmark_support_score,
+            "execution_evidence_score": session.latest_verifier_signal_summary.execution_evidence_score,
+            "total_score": session.latest_verifier_signal_summary.total_score,
+            "notes": list(session.latest_verifier_signal_summary.notes),
+            "regression_notes": list(session.latest_verifier_signal_summary.regression_notes),
         },
     }
     workflow_topology_hints = {

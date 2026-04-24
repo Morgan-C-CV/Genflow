@@ -90,3 +90,15 @@ class VerifierResult:
     confidence: float = 0.0
     regression_notes: List[str] = field(default_factory=list)
     summary: str = ""
+    signal_summary: "VerifierSignalSummary" = field(default_factory=lambda: VerifierSignalSummary())
+
+
+@dataclass
+class VerifierSignalSummary:
+    target_alignment_score: float = 0.0
+    preserve_risk_score: float = 0.0
+    benchmark_support_score: float = 0.0
+    execution_evidence_score: float = 0.0
+    total_score: float = 0.0
+    notes: List[str] = field(default_factory=list)
+    regression_notes: List[str] = field(default_factory=list)

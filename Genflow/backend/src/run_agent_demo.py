@@ -492,6 +492,7 @@ def build_session_artifact_payload(session) -> dict:
             "patch_history": session.patch_history,
             "previous_result_summary": session.previous_result_summary,
             "latest_verifier_result": session.latest_verifier_result,
+            "latest_verifier_signal_summary": session.latest_verifier_signal_summary,
             "continue_recommended": session.continue_recommended,
             "verifier_confidence": session.verifier_confidence,
             "stop_reason": session.stop_reason,

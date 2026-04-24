@@ -167,6 +167,31 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
             payload["workflow_state"]["workflow_metadata"]["backend_kind"],
         )
 
+    def test_verify_updates_workflow_state_with_verifier_signal_summary(self):
+        _, service = self._build_service(iter(["initial-1", "preview-1", "commit-1"]))
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_selected_probe(session.session_id)
+        session = service.commit_patch(session.session_id)
+        session = service.execute_patch(session.session_id)
+        session = service.verify_latest_result(session.session_id)
+
+        self.assertEqual(session.last_execution_config.execution_kind, "verify")
+        self.assertEqual(
+            session.workflow_metadata["verifier_signal_summary"]["total_score"],
+            session.latest_verifier_signal_summary.total_score,
+        )
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["verifier_signal_summary"]["execution_evidence_score"],
+            session.latest_verifier_signal_summary.execution_evidence_score,
+        )
+
     def test_runtime_sync_metadata_and_payload_align_with_descriptor_and_document(self):
         _, service = self._build_service(iter(["initial-1"]))
         session = service.start_episode("make a portrait")

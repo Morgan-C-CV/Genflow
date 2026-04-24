@@ -15,6 +15,7 @@ from app.agent.runtime_models import (
     ResultPayload,
     ResultSummary,
     VerifierResult,
+    VerifierSignalSummary,
 )
 from app.agent.refinement_benchmark_retriever import RefinementBenchmarkSet
 from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
@@ -90,6 +91,7 @@ class AgentSessionState:
     accepted_patch: CommittedPatch = field(default_factory=CommittedPatch)
     current_uncertainty_estimate: float = 0.0
     latest_verifier_result: VerifierResult = field(default_factory=VerifierResult)
+    latest_verifier_signal_summary: VerifierSignalSummary = field(default_factory=VerifierSignalSummary)
     continue_recommended: bool = False
     stop_reason: str = ""
     verifier_confidence: float = 0.0

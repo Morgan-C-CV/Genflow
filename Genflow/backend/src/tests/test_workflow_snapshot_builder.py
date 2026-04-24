@@ -2,7 +2,7 @@ import unittest
 
 from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
 from app.agent.memory import AgentMemoryService
-from app.agent.runtime_models import CommittedPatch, PreviewProbe
+from app.agent.runtime_models import CommittedPatch, PreviewProbe, VerifierSignalSummary
 from app.agent.workflow_snapshot_builder import (
     SurrogateWorkflowSnapshot,
     build_surrogate_workflow_snapshot,
@@ -36,6 +36,15 @@ class WorkflowSnapshotBuilderTest(unittest.TestCase):
             preserve_axes=["composition"],
             confidence_hint=0.67,
             metadata={"benchmark_source": "refinement_search_bundle"},
+        )
+        session.latest_verifier_signal_summary = VerifierSignalSummary(
+            target_alignment_score=1.6,
+            preserve_risk_score=0.0,
+            benchmark_support_score=1.1,
+            execution_evidence_score=2.0,
+            total_score=4.7,
+            notes=["benchmark_context=refinement_search_bundle:2_candidates"],
+            regression_notes=[],
         )
         return session
 
@@ -87,6 +96,8 @@ class WorkflowSnapshotBuilderTest(unittest.TestCase):
             snapshot.surrogate_payload["benchmark_comparison"]["compared_candidate_ids"],
             ["benchmark-candidate-101", "benchmark-candidate-202"],
         )
+        self.assertEqual(snapshot.workflow_metadata["verifier_signal_summary"]["total_score"], 4.7)
+        self.assertEqual(snapshot.surrogate_payload["verifier_signal_summary"]["target_alignment_score"], 1.6)
 
     def test_snapshot_defaults_are_safe(self):
         snapshot = SurrogateWorkflowSnapshot()

@@ -287,9 +287,11 @@ class AgentRuntimeService:
             benchmark_comparison_summary=session.benchmark_comparison_summary,
         )
         session.latest_verifier_result = result
+        session.latest_verifier_signal_summary = result.signal_summary
         session.continue_recommended = result.continue_recommended
         session.verifier_confidence = result.confidence
         session.stop_reason = "" if result.continue_recommended else "verifier_accepts_current_direction"
+        self._sync_workflow_state(session, execution_kind="verify", preview=False)
         return self.memory_service.save_session(session)
 
     def should_continue(self, session_id: str) -> bool:

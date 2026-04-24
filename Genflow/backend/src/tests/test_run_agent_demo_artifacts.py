@@ -8,7 +8,10 @@ from tests.test_runtime_service import (
     FakeFeedbackParser,
     FakeHypothesisBuilder,
     FakeOrchestrationService,
+    FakePatchPlanner,
     FakeSearchService,
+    FakeVerifier,
+    FakeProbeGenerator,
 )
 
 
@@ -54,6 +57,46 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["benchmark_comparison_summary"]["metadata"]["benchmark_kind"],
             "refinement_local_comparison",
+        )
+
+    def test_session_artifact_payload_contains_verifier_signal_summary(self):
+        memory = AgentMemoryService()
+        ids = iter(["artifact-initial-1", "artifact-commit-1", "artifact-commit-2"])
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=FakeOrchestrationService(memory),
+            search_service=FakeSearchService(),
+            execution_adapter=ResultExecutor(id_factory=lambda: next(ids)),
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            verifier=FakeVerifier(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_selected_probe(session.session_id)
+        session = service.commit_patch(session.session_id)
+        session = service.execute_patch(session.session_id)
+        session = service.verify_latest_result(session.session_id)
+
+        payload = build_session_artifact_payload(session)
+
+        self.assertIn("latest_verifier_signal_summary", payload)
+        self.assertEqual(
+            payload["latest_verifier_signal_summary"]["total_score"],
+            payload["latest_verifier_result"]["signal_summary"]["total_score"],
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["verifier_signal_summary"]["total_score"],
+            payload["latest_verifier_signal_summary"]["total_score"],
         )
 
 

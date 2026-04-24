@@ -714,10 +714,18 @@ class RuntimeServiceTest(unittest.TestCase):
 
         session = service.verify_latest_result(session.session_id)
         self.assertTrue(session.latest_verifier_result.summary)
+        self.assertEqual(
+            session.latest_verifier_signal_summary.total_score,
+            session.latest_verifier_result.signal_summary.total_score,
+        )
         self.assertFalse(session.continue_recommended)
         self.assertEqual(session.verifier_confidence, 0.88)
         self.assertEqual(session.stop_reason, "verifier_accepts_current_direction")
         self.assertFalse(service.should_continue(session.session_id))
+        self.assertEqual(
+            session.workflow_metadata["verifier_signal_summary"]["total_score"],
+            session.latest_verifier_signal_summary.total_score,
+        )
 
     def test_runtime_service_passes_benchmark_comparison_summary_to_verifier(self):
         memory = AgentMemoryService()

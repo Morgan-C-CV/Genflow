@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from typing import List
 
 from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
-from app.agent.runtime_models import CommittedPatch, PreviewProbe, ResultSummary, VerifierResult
+from app.agent.runtime_models import (
+    CommittedPatch,
+    PreviewProbe,
+    ResultSummary,
+    VerifierResult,
+    VerifierSignalSummary,
+)
 
 
 @dataclass
@@ -90,6 +96,15 @@ class Verifier:
             confidence=confidence,
             regression_notes=regression_notes,
             summary=summary,
+            signal_summary=VerifierSignalSummary(
+                target_alignment_score=round(breakdown.target_alignment_score, 2),
+                preserve_risk_score=round(breakdown.preserve_risk_score, 2),
+                benchmark_support_score=round(breakdown.benchmark_support_score, 2),
+                execution_evidence_score=round(breakdown.execution_evidence_score, 2),
+                total_score=round(total_score, 2),
+                notes=list(dict.fromkeys(breakdown.notes)),
+                regression_notes=list(dict.fromkeys(breakdown.regression_notes)),
+            ),
         )
 
     def _score_target_alignment(
