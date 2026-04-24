@@ -4,6 +4,7 @@ from app.agent.memory import AgentMemoryService
 from app.agent.runtime_models import CommittedPatch, PreviewProbe
 from app.agent.workflow_document_builder import build_surrogate_workflow_document
 from app.agent.workflow_document_models import SurrogateWorkflowDocument
+from app.agent.workflow_descriptor_builder import build_surrogate_workflow_descriptor
 from app.agent.workflow_graph_builder import build_surrogate_workflow_graph, build_surrogate_workflow_graph_from_document
 
 
@@ -63,6 +64,18 @@ class WorkflowDocumentBuilderTest(unittest.TestCase):
         self.assertEqual(document.exit_node_ids, ["patch.cp_p_001", "result.output"])
         self.assertTrue(any(node.role == "repair_probe" for node in document.nodes))
         self.assertTrue(any(node.role == "repair_patch" for node in document.nodes))
+
+    def test_builder_remains_consistent_when_using_descriptor_indirection(self):
+        session = self._make_session()
+        session.selected_gallery_index = 7
+        descriptor = build_surrogate_workflow_descriptor(session, execution_kind="initial", preview=False)
+
+        document = build_surrogate_workflow_document(session, execution_kind="initial", preview=False)
+
+        self.assertEqual(document.workflow_id, descriptor.workflow_id)
+        self.assertEqual(document.backend_kind, descriptor.execution.backend_kind)
+        self.assertEqual(document.workflow_profile, descriptor.execution.workflow_profile)
+        self.assertEqual(document.metadata["selected_probe_id"], descriptor.repair.selected_probe_id)
 
     def test_graph_builder_from_document_preserves_existing_graph_shape(self):
         session = self._make_session()
