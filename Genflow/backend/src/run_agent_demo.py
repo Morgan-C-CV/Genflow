@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 ARTIFACT_DIR = Path(__file__).resolve().parent.parent / "rounds" / "agent_demo"
 ALLOWED_EXECUTION_MODES = {"mock", "live"}
-ALLOWED_DEMO_MODES = {"interactive", "local_live_smoke"}
+ALLOWED_DEMO_MODES = {"interactive", "local_live_smoke", "policy_runner_demo"}
 
 
 def ensure_artifact_dir() -> Path:
@@ -67,6 +67,15 @@ def resolve_demo_mode(env: dict | None = None) -> str:
         allowed = ", ".join(sorted(ALLOWED_DEMO_MODES))
         raise ValueError(f"Invalid demo mode: {mode}. Allowed modes: {allowed}.")
     return mode
+
+
+def resolve_policy_runner_max_steps(env: dict | None = None) -> int:
+    env = env or os.environ
+    raw = str(env.get("GENFLOW_POLICY_RUNNER_MAX_STEPS", "6")).strip() or "6"
+    try:
+        return max(1, int(raw))
+    except ValueError as exc:
+        raise ValueError(f"Invalid GENFLOW_POLICY_RUNNER_MAX_STEPS: {raw}.") from exc
 
 
 def resolve_live_backend_config(env: dict | None = None):
@@ -274,6 +283,59 @@ def format_local_live_smoke_summary(smoke: dict) -> str:
     return "\n".join(lines)
 
 
+def run_policy_runner_demo(
+    env: dict | None = None,
+    user_intent: str = "make a portrait",
+    gallery_index: int = 7,
+    feedback_text: str = "Keep the composition, but improve style.",
+) -> dict:
+    execution_mode = resolve_execution_mode(env=env)
+    backend_client = None
+    if execution_mode == "live":
+        live_backend_config = resolve_live_backend_config(env=env)
+        backend_client = build_live_backend_client(live_backend_config)
+    runtime_service = build_runtime_service(execution_mode=execution_mode, backend_client=backend_client)
+    session = runtime_service.start_episode(user_intent)
+    session = runtime_service.generate_initial_candidates(
+        session_id=session.session_id,
+        refresh=False,
+        per_query_k=2,
+        top_k=12,
+    )
+    session = runtime_service.select_initial_reference(session.session_id, gallery_index)
+    session = runtime_service.generate_initial_schema(session.session_id)
+    session = runtime_service.produce_initial_result(session.session_id)
+    session = runtime_service.submit_feedback(session.session_id, feedback_text)
+    max_steps = resolve_policy_runner_max_steps(env=env)
+    run_result = runtime_service.run_policy_steps(session.session_id, max_steps=max_steps)
+    return {
+        "demo_mode": "policy_runner_demo",
+        "execution_mode": execution_mode,
+        "session_id": run_result.final_session.session_id,
+        "max_steps": max_steps,
+        "run_result": run_result,
+    }
+
+
+def format_policy_runner_demo_summary(result: dict) -> str:
+    run_result = result["run_result"]
+    final_session = run_result.final_session
+    actions = [step.action for step in run_result.steps]
+    lines = [
+        "GenFlow Policy Runner Demo",
+        f"execution_mode: {result['execution_mode']}",
+        f"session_id: {result['session_id']}",
+        f"max_steps: {result['max_steps']}",
+        f"actions_taken: {', '.join(actions) if actions else 'none'}",
+        f"stopped: {run_result.stopped}",
+        f"stop_reason: {run_result.stop_reason or 'none'}",
+        f"selected_probe: {final_session.selected_probe.probe_id or 'none'}",
+        f"accepted_patch: {final_session.accepted_patch.patch_id or 'none'}",
+        f"verifier_summary: {final_session.latest_verifier_result.summary or 'none'}",
+    ]
+    return "\n".join(lines)
+
+
 def run_demo_mode(env: dict | None = None) -> dict:
     demo_mode = resolve_demo_mode(env=env)
     if demo_mode == "local_live_smoke":
@@ -282,6 +344,13 @@ def run_demo_mode(env: dict | None = None) -> dict:
             "demo_mode": demo_mode,
             "summary_text": format_local_live_smoke_summary(smoke),
             "payload": smoke,
+        }
+    if demo_mode == "policy_runner_demo":
+        policy_demo = run_policy_runner_demo(env=env)
+        return {
+            "demo_mode": demo_mode,
+            "summary_text": format_policy_runner_demo_summary(policy_demo),
+            "payload": policy_demo,
         }
     return {
         "demo_mode": demo_mode,
@@ -488,7 +557,7 @@ def describe_cli_failure(exc: Exception) -> str:
 def main() -> None:
     try:
         demo_mode = resolve_demo_mode()
-        if demo_mode == "local_live_smoke":
+        if demo_mode in {"local_live_smoke", "policy_runner_demo"}:
             result = run_demo_mode()
             print(result["summary_text"])
             return
