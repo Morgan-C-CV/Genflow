@@ -18,6 +18,7 @@ from app.agent.refinement_benchmark_retriever import retrieve_refinement_benchma
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
+from app.agent.verifier_repair_recommendation import build_verifier_repair_recommendation
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
 
@@ -288,6 +289,11 @@ class AgentRuntimeService:
         )
         session.latest_verifier_result = result
         session.latest_verifier_signal_summary = result.signal_summary
+        session.latest_verifier_repair_recommendation = build_verifier_repair_recommendation(
+            verifier_signal_summary=result.signal_summary,
+            verifier_result=result,
+            session=session,
+        )
         session.continue_recommended = result.continue_recommended
         session.verifier_confidence = result.confidence
         session.stop_reason = "" if result.continue_recommended else "verifier_accepts_current_direction"

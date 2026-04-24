@@ -98,6 +98,12 @@ def build_surrogate_workflow_snapshot(
             "notes": list(session.latest_verifier_signal_summary.notes),
             "regression_notes": list(session.latest_verifier_signal_summary.regression_notes),
         },
+        "verifier_repair_recommendation": {
+            "recommended_action": session.latest_verifier_repair_recommendation.recommended_action,
+            "rationale": list(session.latest_verifier_repair_recommendation.rationale),
+            "priority": session.latest_verifier_repair_recommendation.priority,
+            "supporting_signals": list(session.latest_verifier_repair_recommendation.supporting_signals),
+        },
     }
     surrogate_payload = {
         "schema": {
@@ -144,6 +150,12 @@ def build_surrogate_workflow_snapshot(
             "total_score": session.latest_verifier_signal_summary.total_score,
             "notes": list(session.latest_verifier_signal_summary.notes),
             "regression_notes": list(session.latest_verifier_signal_summary.regression_notes),
+        },
+        "verifier_repair_recommendation": {
+            "recommended_action": session.latest_verifier_repair_recommendation.recommended_action,
+            "rationale": list(session.latest_verifier_repair_recommendation.rationale),
+            "priority": session.latest_verifier_repair_recommendation.priority,
+            "supporting_signals": list(session.latest_verifier_repair_recommendation.supporting_signals),
         },
     }
     workflow_topology_hints = {

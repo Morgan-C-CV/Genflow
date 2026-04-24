@@ -727,6 +727,10 @@ class RuntimeServiceTest(unittest.TestCase):
             session.latest_verifier_signal_summary.total_score,
             session.latest_verifier_result.signal_summary.total_score,
         )
+        self.assertEqual(
+            session.latest_verifier_repair_recommendation.recommended_action,
+            "stop",
+        )
         self.assertFalse(session.continue_recommended)
         self.assertEqual(session.verifier_confidence, 0.88)
         self.assertEqual(session.stop_reason, "verifier_accepts_current_direction")
@@ -734,6 +738,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["verifier_signal_summary"]["total_score"],
             session.latest_verifier_signal_summary.total_score,
+        )
+        self.assertEqual(
+            session.workflow_metadata["verifier_repair_recommendation"]["recommended_action"],
+            session.latest_verifier_repair_recommendation.recommended_action,
         )
 
     def test_runtime_service_passes_benchmark_comparison_summary_to_verifier(self):

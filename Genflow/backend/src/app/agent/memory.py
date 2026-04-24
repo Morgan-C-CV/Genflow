@@ -19,6 +19,7 @@ from app.agent.runtime_models import (
 )
 from app.agent.refinement_benchmark_retriever import RefinementBenchmarkSet
 from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
+from app.agent.verifier_repair_recommendation import VerifierRepairRecommendation
 from app.agent.workflow_runtime_models import (
     WorkflowExecutionConfig,
     WorkflowGraphPlaceholder,
@@ -92,6 +93,9 @@ class AgentSessionState:
     current_uncertainty_estimate: float = 0.0
     latest_verifier_result: VerifierResult = field(default_factory=VerifierResult)
     latest_verifier_signal_summary: VerifierSignalSummary = field(default_factory=VerifierSignalSummary)
+    latest_verifier_repair_recommendation: VerifierRepairRecommendation = field(
+        default_factory=VerifierRepairRecommendation
+    )
     continue_recommended: bool = False
     stop_reason: str = ""
     verifier_confidence: float = 0.0
