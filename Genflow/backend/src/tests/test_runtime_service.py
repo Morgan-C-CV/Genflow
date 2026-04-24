@@ -1,7 +1,7 @@
 import unittest
 
 from app.agent.memory import AgentMemoryService
-from app.agent.runtime_models import CommittedPatch, ParsedFeedbackEvidence, PreviewProbe, VerifierResult
+from app.agent.runtime_models import CommittedPatch, ParsedFeedbackEvidence, PreviewProbe, VerifierResult, VerifierSignalSummary
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_models import NormalizedSchema
 from app.agent.runtime_service import AgentRuntimeService
@@ -215,6 +215,15 @@ class FakeVerifier:
             confidence=0.88,
             regression_notes=[],
             summary="verifier accepts current direction",
+            signal_summary=VerifierSignalSummary(
+                target_alignment_score=2.0,
+                preserve_risk_score=0.2,
+                benchmark_support_score=1.1,
+                execution_evidence_score=2.0,
+                total_score=4.9,
+                notes=["strong_benchmark_support"],
+                regression_notes=[],
+            ),
         )
 
 

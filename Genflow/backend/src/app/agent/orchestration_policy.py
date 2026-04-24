@@ -19,12 +19,8 @@ class PolicyDecision:
 def decide_next_action(session: "AgentSessionState") -> PolicyDecision:
     rationale: list[str] = []
 
-    if session.stop_reason:
+    if session.stop_reason and session.stop_reason != "verifier_accepts_current_direction":
         rationale.append(f"stop_reason={session.stop_reason}")
-        return PolicyDecision(next_action="stop", rationale=rationale, continue_loop=False)
-
-    if session.latest_verifier_result.summary and not session.continue_recommended:
-        rationale.append("verifier_recommends_stop")
         return PolicyDecision(next_action="stop", rationale=rationale, continue_loop=False)
 
     if not session.repair_hypotheses:
@@ -55,6 +51,10 @@ def decide_next_action(session: "AgentSessionState") -> PolicyDecision:
         rationale.append(f"accepted_patch_needs_verification={session.accepted_patch.patch_id}")
         return PolicyDecision(next_action="verify_latest_result", rationale=rationale, continue_loop=True)
 
+    verifier_decision = _decide_post_verifier_action(session)
+    if verifier_decision is not None:
+        return verifier_decision
+
     if session.continue_recommended:
         rationale.append("verifier_requests_continue")
         return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
@@ -82,3 +82,41 @@ def _has_executed_accepted_patch(session: "AgentSessionState") -> bool:
     if session.previous_result_summary.summary_text:
         return True
     return False
+
+
+def _decide_post_verifier_action(session: "AgentSessionState") -> PolicyDecision | None:
+    if not session.latest_verifier_result.summary:
+        return None
+
+    rationale: list[str] = []
+    signal_summary = session.latest_verifier_signal_summary
+    preserve_risk = float(signal_summary.preserve_risk_score or 0.0)
+    execution_evidence = float(signal_summary.execution_evidence_score or 0.0)
+    benchmark_support = float(signal_summary.benchmark_support_score or 0.0)
+    uncertainty = float(session.current_uncertainty_estimate or 0.0)
+
+    if preserve_risk >= 2.0:
+        rationale.extend(["high_preserve_risk", "verifier_requests_direction_change"])
+        return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
+
+    if execution_evidence < 1.0:
+        rationale.append("weak_execution_evidence")
+        if benchmark_support < 0.5 and uncertainty >= 0.4:
+            rationale.append("low_benchmark_support")
+            return PolicyDecision(next_action="retrieve_benchmarks", rationale=rationale, continue_loop=True)
+        rationale.append("continue_probing")
+        return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
+
+    if not session.continue_recommended:
+        rationale.append("verifier_recommends_stop")
+        if benchmark_support >= 1.0:
+            rationale.append("strong_benchmark_support")
+        if preserve_risk < 1.0:
+            rationale.append("low_preserve_risk")
+        return PolicyDecision(next_action="stop", rationale=rationale, continue_loop=False)
+
+    rationale.append("verifier_requests_continue")
+    if benchmark_support < 0.5 and uncertainty >= 0.4:
+        rationale.append("low_benchmark_support")
+        return PolicyDecision(next_action="retrieve_benchmarks", rationale=rationale, continue_loop=True)
+    return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
