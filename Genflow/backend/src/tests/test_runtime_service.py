@@ -391,6 +391,43 @@ class RuntimeServiceTest(unittest.TestCase):
 
         self.assertEqual(decision.next_action, "generate_probes")
 
+    def test_runtime_service_policy_distinguishes_execute_then_verify_after_commit(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        ids = iter(["initial-rt-policy", "commit-rt-policy", "commit-rt-policy-2"])
+        executor = ResultExecutor(id_factory=lambda: next(ids))
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            verifier=FakeVerifier(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_selected_probe(session.session_id)
+        session = service.commit_patch(session.session_id)
+
+        decision = service.get_policy_decision(session.session_id)
+        self.assertEqual(decision.next_action, "execute_patch")
+
+        session = service.execute_patch(session.session_id)
+
+        decision = service.get_policy_decision(session.session_id)
+        self.assertEqual(decision.next_action, "verify_latest_result")
+
     def test_runtime_service_passes_refinement_benchmark_context_to_probe_generator(self):
         memory = AgentMemoryService()
         orchestration = FakeOrchestrationService(memory)

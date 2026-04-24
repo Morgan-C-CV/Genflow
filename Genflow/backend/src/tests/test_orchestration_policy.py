@@ -48,7 +48,7 @@ class OrchestrationPolicyTest(unittest.TestCase):
 
         self.assertEqual(decision.next_action, "preview_selected_probe")
 
-    def test_policy_requests_verify_after_patch_commit(self):
+    def test_policy_requests_execute_after_patch_commit_before_execution(self):
         session = self._make_session()
         session.repair_hypotheses = [object()]
         session.refinement_benchmark_set.comparison_candidates = [object()]
@@ -56,6 +56,20 @@ class OrchestrationPolicyTest(unittest.TestCase):
         session.selected_probe = PreviewProbe(probe_id="p_001")
         session.preview_probe_results = [type("PreviewResultStub", (), {"probe_id": "p_001"})()]
         session.accepted_patch.patch_id = "cp_001"
+
+        decision = decide_next_action(session)
+
+        self.assertEqual(decision.next_action, "execute_patch")
+
+    def test_policy_requests_verify_after_patch_execution(self):
+        session = self._make_session()
+        session.repair_hypotheses = [object()]
+        session.refinement_benchmark_set.comparison_candidates = [object()]
+        session.preview_probe_candidates = [PreviewProbe(probe_id="p_001")]
+        session.selected_probe = PreviewProbe(probe_id="p_001")
+        session.preview_probe_results = [type("PreviewResultStub", (), {"probe_id": "p_001"})()]
+        session.accepted_patch.patch_id = "cp_001"
+        session.previous_result_summary = ResultSummary(summary_text="pre-patch result")
 
         decision = decide_next_action(session)
 

@@ -47,7 +47,11 @@ def decide_next_action(session: "AgentSessionState") -> PolicyDecision:
         rationale.append(f"selected_probe_ready_for_commit={session.selected_probe.probe_id}")
         return PolicyDecision(next_action="commit_selected_patch", rationale=rationale, continue_loop=True)
 
-    if session.accepted_patch.patch_id and not session.latest_verifier_result.summary:
+    if session.accepted_patch.patch_id and not _has_executed_accepted_patch(session):
+        rationale.append(f"accepted_patch_needs_execution={session.accepted_patch.patch_id}")
+        return PolicyDecision(next_action="execute_patch", rationale=rationale, continue_loop=True)
+
+    if session.accepted_patch.patch_id and _has_executed_accepted_patch(session) and not session.latest_verifier_result.summary:
         rationale.append(f"accepted_patch_needs_verification={session.accepted_patch.patch_id}")
         return PolicyDecision(next_action="verify_latest_result", rationale=rationale, continue_loop=True)
 
@@ -70,3 +74,11 @@ def _has_preview_for_selected_probe(session: "AgentSessionState") -> bool:
     if not selected_probe_id:
         return False
     return any(result.probe_id == selected_probe_id for result in session.preview_probe_results)
+
+
+def _has_executed_accepted_patch(session: "AgentSessionState") -> bool:
+    if not session.accepted_patch.patch_id:
+        return False
+    if session.previous_result_summary.summary_text:
+        return True
+    return False
