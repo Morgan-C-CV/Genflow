@@ -13,6 +13,13 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             ExecutionRequest(
                 execution_kind="initial",
                 schema_snapshot={"prompt": "portrait", "model": "sdxl-base"},
+                workflow_payload={
+                    "workflow_id": "workflow-1",
+                    "workflow_kind": "workflow_native_surrogate",
+                    "nodes": [{"node_id": "intent.prompt"}],
+                    "edges": [{"edge_id": "intent.prompt->result.output"}],
+                    "execution_config": {"execution_kind": "initial"},
+                },
                 reference_info={"reference_ids": [101, 202]},
             ),
         )
@@ -30,6 +37,13 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "preview",
             PreviewExecutionRequest(
                 execution_kind="preview",
+                workflow_payload={
+                    "workflow_id": "workflow-1",
+                    "workflow_kind": "workflow_native_surrogate",
+                    "nodes": [{"node_id": "probe.p_001"}],
+                    "edges": [{"edge_id": "probe.p_001->result.output"}],
+                    "execution_config": {"execution_kind": "preview", "preview": True},
+                },
                 preview_spec={
                     "probe_id": "p_001",
                     "target_axes": ["style"],
@@ -51,6 +65,13 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "commit",
             CommitExecutionRequest(
                 execution_kind="commit",
+                workflow_payload={
+                    "workflow_id": "workflow-1",
+                    "workflow_kind": "workflow_native_surrogate",
+                    "nodes": [{"node_id": "patch.cp_001"}],
+                    "edges": [{"edge_id": "patch.cp_001->result.output"}],
+                    "execution_config": {"execution_kind": "commit"},
+                },
                 patch_spec={
                     "patch_id": "cp_001",
                     "target_fields": ["style"],
@@ -65,6 +86,18 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(response.response_id, "local-commit-cp_001")
         self.assertEqual(response.output_payload["patch_id"], "cp_001")
         self.assertEqual(response.changed_axes, ["style"])
+
+    def test_facade_rejects_missing_workflow_native_payload_shape(self):
+        facade = LocalWorkflowFacade()
+
+        with self.assertRaisesRegex(ValueError, "workflow_payload must include a nodes list."):
+            facade.run(
+                "initial",
+                ExecutionRequest(
+                    execution_kind="initial",
+                    workflow_payload={},
+                ),
+            )
 
 
 if __name__ == "__main__":

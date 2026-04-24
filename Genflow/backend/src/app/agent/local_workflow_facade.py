@@ -10,6 +10,7 @@ from app.agent.live_execution_models import (
 
 class LocalWorkflowFacade:
     def run(self, execution_kind: str, request: ExecutionRequest) -> ExecutionResponse:
+        self._validate_workflow_payload(request.workflow_payload)
         if execution_kind == "initial":
             return self._run_initial(request)
         if execution_kind == "preview":
@@ -42,6 +43,17 @@ class LocalWorkflowFacade:
             backend_metadata={"result_type": "live_initial_result", "backend": "local_workflow_facade"},
             comparison_notes=[f"reference_count={len(reference_ids)}"],
         )
+
+    @staticmethod
+    def _validate_workflow_payload(workflow_payload: dict) -> None:
+        if not isinstance(workflow_payload, dict):
+            raise ValueError("workflow_payload must be a dict.")
+        if not isinstance(workflow_payload.get("nodes"), list):
+            raise ValueError("workflow_payload must include a nodes list.")
+        if not isinstance(workflow_payload.get("edges"), list):
+            raise ValueError("workflow_payload must include an edges list.")
+        if not isinstance(workflow_payload.get("execution_config"), dict):
+            raise ValueError("workflow_payload must include execution_config.")
 
     @staticmethod
     def _run_preview(request: PreviewExecutionRequest) -> ExecutionResponse:

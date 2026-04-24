@@ -93,7 +93,10 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         request = client.initial_requests[0]
         self.assertEqual(request.execution_kind, "initial")
         self.assertEqual(request.schema_snapshot["model"], "sdxl-base")
-        self.assertEqual(request.workflow_payload["workflow_kind"], "normalized_schema_surrogate")
+        self.assertEqual(request.workflow_payload["workflow_kind"], "workflow_native_surrogate")
+        self.assertIn("nodes", request.workflow_payload)
+        self.assertIn("edges", request.workflow_payload)
+        self.assertNotIn("schema", request.workflow_payload)
         self.assertEqual(request.reference_info["reference_ids"], [101, 202])
         self.assertEqual(payload.result_id, "live-initial-1")
         self.assertEqual(payload.result_type, "live_initial_result")
@@ -118,6 +121,9 @@ class LiveExecutionAdapterTest(unittest.TestCase):
 
         request = client.preview_requests[0]
         self.assertEqual(request.execution_kind, "preview")
+        self.assertEqual(request.workflow_payload["execution_kind"], "preview")
+        self.assertTrue(request.workflow_payload["preview"])
+        self.assertIn("nodes", request.workflow_payload)
         self.assertEqual(request.preview_spec["probe_id"], "p_001")
         self.assertEqual(request.preview_spec["target_axes"], ["style"])
         self.assertEqual(preview_result.probe_id, "p_001")
@@ -142,6 +148,8 @@ class LiveExecutionAdapterTest(unittest.TestCase):
 
         request = client.commit_requests[0]
         self.assertEqual(request.execution_kind, "commit")
+        self.assertEqual(request.workflow_payload["execution_kind"], "commit")
+        self.assertIn("nodes", request.workflow_payload)
         self.assertEqual(request.patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.patch_spec["changes"]["model"], "sdxl-base-patched")
         self.assertEqual(payload.result_type, "live_committed_result")
