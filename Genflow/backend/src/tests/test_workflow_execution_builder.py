@@ -4,8 +4,16 @@ from app.agent.memory import AgentMemoryService
 from app.agent.runtime_models import CommittedPatch, PreviewProbe
 from app.agent.workflow_execution_builder import (
     build_workflow_commit_request,
+    build_workflow_commit_request_from_source,
     build_workflow_execution_payload,
+    build_workflow_execution_payload_from_source,
     build_workflow_preview_request,
+    build_workflow_preview_request_from_source,
+)
+from app.agent.workflow_execution_source_models import (
+    WorkflowCommitSource,
+    WorkflowExecutionSource,
+    WorkflowPreviewSource,
 )
 
 
@@ -53,6 +61,29 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(payload.execution_config["execution_kind"], "initial")
         self.assertEqual(payload.backend_metadata["source_document_id"], f"{session.workflow_id}:initial")
 
+    def test_build_workflow_execution_payload_from_source_produces_same_contract(self):
+        source = WorkflowExecutionSource(
+            workflow_id="workflow-source-1",
+            workflow_kind="workflow_native_surrogate",
+            workflow_version="phase-k-workflow-payload",
+            execution_kind="initial",
+            schema=self._make_session().current_schema,
+            selected_gallery_index=7,
+            selected_reference_ids=[101, 202],
+            selected_reference_bundle={"query_index": 7, "references": [{"id": 101}, {"id": 202}]},
+            backend_kind="live_backend",
+            workflow_profile="default",
+        )
+
+        payload = build_workflow_execution_payload_from_source(source)
+
+        self.assertEqual(payload.workflow_id, "workflow-source-1")
+        self.assertEqual(payload.workflow_kind, "workflow_native_surrogate")
+        self.assertEqual(payload.workflow_version, "phase-k-workflow-payload")
+        self.assertTrue(payload.nodes)
+        self.assertTrue(payload.edges)
+        self.assertEqual(payload.execution_config["backend_kind"], "live_backend")
+
     def test_build_workflow_preview_request_uses_selected_probe(self):
         session = self._make_session()
 
@@ -64,6 +95,29 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.preview_patch_spec["target_axes"], ["style"])
         self.assertEqual(request.reference_info["reference_ids"], [101, 202])
 
+    def test_build_workflow_preview_request_from_source_uses_typed_source(self):
+        session = self._make_session()
+        source = WorkflowPreviewSource(
+            workflow_id="workflow-preview-source",
+            workflow_kind="workflow_native_surrogate",
+            workflow_version="phase-k-workflow-payload",
+            execution_kind="preview",
+            preview=True,
+            schema=session.current_schema,
+            selected_reference_ids=[101, 202],
+            backend_kind="live_backend",
+            workflow_profile="default",
+            dissatisfaction_axes=["style"],
+            preserve_constraints=["composition"],
+            selected_probe=session.selected_probe,
+        )
+
+        request = build_workflow_preview_request_from_source(source)
+
+        self.assertEqual(request.workflow_payload.execution_kind, "preview")
+        self.assertEqual(request.preview_patch_spec["probe_id"], "p_001")
+        self.assertEqual(request.reference_info["reference_ids"], [101, 202])
+
     def test_build_workflow_commit_request_uses_committed_patch(self):
         session = self._make_session()
 
@@ -71,6 +125,27 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
 
         self.assertEqual(request.workflow_payload.execution_kind, "commit")
         self.assertFalse(request.workflow_payload.preview)
+        self.assertEqual(request.committed_patch_spec["patch_id"], "cp_001")
+        self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
+
+    def test_build_workflow_commit_request_from_source_uses_typed_source(self):
+        session = self._make_session()
+        source = WorkflowCommitSource(
+            workflow_id="workflow-commit-source",
+            workflow_kind="workflow_native_surrogate",
+            workflow_version="phase-k-workflow-payload",
+            execution_kind="commit",
+            schema=session.current_schema,
+            backend_kind="live_backend",
+            workflow_profile="default",
+            dissatisfaction_axes=["style"],
+            preserve_constraints=["composition"],
+            accepted_patch=session.accepted_patch,
+        )
+
+        request = build_workflow_commit_request_from_source(source)
+
+        self.assertEqual(request.workflow_payload.execution_kind, "commit")
         self.assertEqual(request.committed_patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
 

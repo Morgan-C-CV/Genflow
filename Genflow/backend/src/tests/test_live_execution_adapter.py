@@ -12,6 +12,11 @@ from app.agent.live_execution_models import (
 from app.agent.local_workflow_facade import LocalWorkflowFacade
 from app.agent.runtime_models import CommittedPatch, NormalizedSchema, PreviewProbe
 from app.agent.workflow_backend_transport import WorkflowBackendTransport
+from app.agent.workflow_execution_source_models import (
+    WorkflowCommitSource,
+    WorkflowExecutionSource,
+    WorkflowPreviewSource,
+)
 
 
 class FakeLiveBackendClient:
@@ -104,6 +109,17 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertIn("backend_artifacts", payload.artifacts)
         self.assertEqual(summary.summary_text, "Live initial result completed.")
 
+    def test_live_adapter_builds_typed_initial_execution_source(self):
+        schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
+        source = LiveExecutionAdapter._build_initial_execution_source(
+            schema,
+            {"query_index": 7, "references": [{"id": 101}, {"id": 202}]},
+        )
+
+        self.assertIsInstance(source, WorkflowExecutionSource)
+        self.assertEqual(source.execution_kind, "initial")
+        self.assertEqual(source.selected_reference_ids, [101, 202])
+
     def test_live_adapter_maps_preview_request_and_response(self):
         client = FakeLiveBackendClient()
         adapter = LiveExecutionAdapter(backend_client=client)
@@ -131,6 +147,16 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(preview_result.summary.changed_axes, ["style"])
         self.assertEqual(preview_result.comparison_notes, ["preview_source=schema_variation"])
 
+    def test_live_adapter_builds_typed_preview_execution_source(self):
+        schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
+        probe = PreviewProbe(probe_id="p_001", target_axes=["style"], preserve_axes=["composition"])
+
+        source = LiveExecutionAdapter._build_preview_execution_source(schema, probe)
+
+        self.assertIsInstance(source, WorkflowPreviewSource)
+        self.assertEqual(source.selected_probe.probe_id, "p_001")
+        self.assertTrue(source.preview)
+
     def test_live_adapter_maps_commit_request_and_response(self):
         client = FakeLiveBackendClient()
         adapter = LiveExecutionAdapter(backend_client=client)
@@ -156,6 +182,20 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(payload.content["patch_id"], "cp_001")
         self.assertEqual(summary.changed_axes, ["style"])
         self.assertEqual(summary.preserved_axes, ["composition"])
+
+    def test_live_adapter_builds_typed_commit_execution_source(self):
+        schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
+        patch = CommittedPatch(
+            patch_id="cp_001",
+            target_fields=["style"],
+            target_axes=["style"],
+            preserve_axes=["composition"],
+        )
+
+        source = LiveExecutionAdapter._build_commit_execution_source(schema, patch)
+
+        self.assertIsInstance(source, WorkflowCommitSource)
+        self.assertEqual(source.accepted_patch.patch_id, "cp_001")
 
     def test_live_adapter_works_with_concrete_default_client(self):
         client = DefaultLiveBackendClient(
