@@ -10,7 +10,9 @@ from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
-from app.agent.workflow_graph_builder import build_surrogate_workflow_graph
+from app.agent.workflow_descriptor_builder import build_surrogate_workflow_descriptor
+from app.agent.workflow_document_builder import build_surrogate_workflow_document_from_descriptor
+from app.agent.workflow_graph_builder import build_surrogate_workflow_graph_from_document
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_scope_materializer import (
     materialize_editable_scopes,
@@ -261,6 +263,27 @@ class AgentRuntimeService:
         backend_kind, workflow_profile = self._infer_backend_descriptor()
         editable_scopes = materialize_editable_scopes(session)
         protected_scopes = materialize_protected_scopes(session)
+        session.workflow_metadata.setdefault("backend_kind", backend_kind)
+        session.workflow_metadata.setdefault("workflow_profile", workflow_profile)
+        descriptor = build_surrogate_workflow_descriptor(
+            session=session,
+            execution_kind=execution_kind,
+            preview=preview,
+        )
+        document = build_surrogate_workflow_document_from_descriptor(descriptor)
+        topology_placeholder, topology_hints = build_surrogate_workflow_graph_from_document(
+            document=document,
+            scope_partitions=[scope.scope_id for scope in editable_scopes + protected_scopes],
+        )
+        workflow_metadata, surrogate_payload = self._build_workflow_sync_payloads(
+            session=session,
+            descriptor=descriptor,
+            document=document,
+            graph_placeholder=topology_placeholder,
+            topology_hints=topology_hints,
+            backend_kind=backend_kind,
+            workflow_profile=workflow_profile,
+        )
         execution_config = WorkflowExecutionConfig(
             execution_kind=execution_kind,
             preview=preview,
@@ -274,55 +297,6 @@ class AgentRuntimeService:
                 "current_result_id": session.current_result_id,
             },
         )
-        workflow_metadata = {
-            "backend_kind": backend_kind,
-            "workflow_profile": workflow_profile,
-            "surrogate_kind": "normalized_schema",
-            "has_schema": bool(session.current_schema_raw),
-            "has_preview_results": bool(session.preview_probe_results),
-            "has_committed_patch": bool(session.accepted_patch.patch_id),
-            "has_feedback": bool(session.latest_feedback),
-            "feedback_count": len(session.feedback_history),
-            "dissatisfaction_axes": list(session.dissatisfaction_axes),
-            "preserve_constraints": list(session.preserve_constraints),
-            "repair_hypothesis_count": len(session.repair_hypotheses),
-            "probe_count": len(session.preview_probe_candidates),
-            "selected_probe_id": session.selected_probe.probe_id,
-            "current_uncertainty_estimate": session.current_uncertainty_estimate,
-            "graph_entry_node_ids": list(session.workflow_topology_entry_node_ids),
-            "graph_exit_node_ids": list(session.workflow_topology_exit_node_ids),
-        }
-        topology_placeholder, topology_hints = build_surrogate_workflow_graph(
-            session=session,
-            execution_kind=execution_kind,
-            preview=preview,
-        )
-        surrogate_payload = {
-            "schema": {
-                "prompt": session.current_schema.prompt,
-                "negative_prompt": session.current_schema.negative_prompt,
-                "model": session.current_schema.model,
-                "sampler": session.current_schema.sampler,
-                "style": list(session.current_schema.style),
-                "lora": list(session.current_schema.lora),
-            },
-            "selected_gallery_index": session.selected_gallery_index,
-            "selected_reference_ids": list(session.selected_reference_ids),
-            "selected_probe_id": session.selected_probe.probe_id,
-            "accepted_patch_id": session.accepted_patch.patch_id,
-            "current_result_id": session.current_result_id,
-            "latest_feedback": session.latest_feedback,
-            "feedback_count": len(session.feedback_history),
-            "dissatisfaction_axes": list(session.dissatisfaction_axes),
-            "preserve_constraints": list(session.preserve_constraints),
-            "repair_hypothesis_count": len(session.repair_hypotheses),
-            "probe_count": len(session.preview_probe_candidates),
-            "current_uncertainty_estimate": session.current_uncertainty_estimate,
-            "workflow_topology_graph_id": topology_placeholder.graph_id,
-            "workflow_topology_slice_count": len(topology_placeholder.topology_slices),
-            "workflow_topology_entry_node_ids": list(session.workflow_topology_entry_node_ids),
-            "workflow_topology_exit_node_ids": list(session.workflow_topology_exit_node_ids),
-        }
 
         session.editable_scopes = editable_scopes
         session.protected_scopes = protected_scopes
@@ -330,6 +304,8 @@ class AgentRuntimeService:
         session.workflow_metadata = workflow_metadata
         session.workflow_graph_placeholder = topology_placeholder
         session.workflow_topology_hints = topology_hints
+        session.workflow_topology_entry_node_ids = list(topology_placeholder.entry_node_ids)
+        session.workflow_topology_exit_node_ids = list(topology_placeholder.exit_node_ids)
         session.workflow_state = WorkflowStateSnapshot(
             identity=session.workflow_identity,
             editable_scopes=editable_scopes,
@@ -339,6 +315,73 @@ class AgentRuntimeService:
             surrogate_payload=surrogate_payload,
             workflow_graph_placeholder=topology_placeholder,
         )
+
+    def _build_workflow_sync_payloads(
+        self,
+        session: AgentSessionState,
+        descriptor,
+        document,
+        graph_placeholder,
+        topology_hints,
+        backend_kind: str,
+        workflow_profile: str,
+    ) -> tuple[dict, dict]:
+        workflow_metadata = {
+            "backend_kind": backend_kind,
+            "workflow_profile": workflow_profile,
+            "surrogate_kind": "normalized_schema",
+            "has_schema": bool(descriptor.execution.metadata.get("has_schema", False)),
+            "has_preview_results": bool(session.preview_probe_results),
+            "has_committed_patch": bool(descriptor.repair.accepted_patch_id),
+            "has_feedback": descriptor.repair.has_feedback,
+            "feedback_count": descriptor.repair.feedback_count,
+            "dissatisfaction_axes": list(descriptor.repair.dissatisfaction_axes),
+            "preserve_constraints": list(descriptor.repair.preserve_constraints),
+            "repair_hypothesis_count": len(session.repair_hypotheses),
+            "probe_count": len(session.preview_probe_candidates),
+            "selected_probe_id": descriptor.repair.selected_probe_id,
+            "current_uncertainty_estimate": descriptor.repair.current_uncertainty_estimate,
+            "graph_entry_node_ids": list(document.entry_node_ids),
+            "graph_exit_node_ids": list(document.exit_node_ids),
+            "document_region_label": str(document.metadata.get("region_label", "")),
+        }
+        surrogate_payload = {
+            "schema": {
+                "prompt": descriptor.schema_prompt,
+                "negative_prompt": descriptor.schema_negative_prompt,
+                "model": descriptor.schema_model,
+                "sampler": descriptor.schema_sampler,
+                "style": list(descriptor.schema_style),
+                "lora": list(descriptor.schema_lora),
+            },
+            "selected_gallery_index": descriptor.selected_gallery_index,
+            "selected_reference_ids": list(descriptor.selected_reference_ids),
+            "selected_probe_id": descriptor.repair.selected_probe_id,
+            "accepted_patch_id": descriptor.repair.accepted_patch_id,
+            "current_result_id": descriptor.execution.current_result_id,
+            "latest_feedback": str(descriptor.repair.metadata.get("latest_feedback", "")),
+            "feedback_count": descriptor.repair.feedback_count,
+            "dissatisfaction_axes": list(descriptor.repair.dissatisfaction_axes),
+            "preserve_constraints": list(descriptor.repair.preserve_constraints),
+            "repair_hypothesis_count": len(session.repair_hypotheses),
+            "probe_count": len(session.preview_probe_candidates),
+            "current_uncertainty_estimate": descriptor.repair.current_uncertainty_estimate,
+            "workflow_document_id": document.document_id,
+            "workflow_document_region_label": document.metadata.get("region_label", ""),
+            "workflow_document_entry_node_ids": list(document.entry_node_ids),
+            "workflow_document_exit_node_ids": list(document.exit_node_ids),
+            "workflow_topology_graph_id": graph_placeholder.graph_id,
+            "workflow_topology_slice_count": len(graph_placeholder.topology_slices),
+            "workflow_topology_entry_node_ids": list(graph_placeholder.entry_node_ids),
+            "workflow_topology_exit_node_ids": list(graph_placeholder.exit_node_ids),
+        }
+        topology_hints.update(
+            {
+                "document_id": document.document_id,
+                "document_region_label": document.metadata.get("region_label", ""),
+            }
+        )
+        return workflow_metadata, surrogate_payload
 
     def _infer_backend_descriptor(self) -> tuple[str, str]:
         adapter_name = type(self.execution_adapter).__name__.lower()

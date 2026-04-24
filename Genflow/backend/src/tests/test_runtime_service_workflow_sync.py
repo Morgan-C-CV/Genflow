@@ -3,6 +3,8 @@ import unittest
 from app.agent.memory import AgentMemoryService
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_service import AgentRuntimeService
+from app.agent.workflow_descriptor_builder import build_surrogate_workflow_descriptor
+from app.agent.workflow_document_builder import build_surrogate_workflow_document_from_descriptor
 from run_agent_demo import build_session_artifact_payload
 from tests.test_runtime_service import (
     FakeFeedbackParser,
@@ -44,6 +46,10 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         self.assertEqual(session.workflow_identity.workflow_kind, "normalized_schema_surrogate")
         self.assertEqual(session.workflow_state.workflow_metadata["surrogate_kind"], "normalized_schema")
         self.assertEqual(session.workflow_state.surrogate_payload["schema"]["model"], "sdxl-base")
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["workflow_document_entry_node_ids"],
+            ["reference.bundle", "intent.prompt"],
+        )
         self.assertEqual(session.last_execution_config.execution_kind, "initial")
         self.assertFalse(session.last_execution_config.preview)
 
@@ -106,6 +112,7 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         self.assertEqual(session.last_execution_config.execution_kind, "probe_select")
         self.assertEqual(session.workflow_metadata["selected_probe_id"], "p_001")
         self.assertEqual(session.workflow_state.surrogate_payload["selected_probe_id"], "p_001")
+        self.assertEqual(session.workflow_metadata["document_region_label"], "repair_region")
         self.assertEqual(
             session.workflow_state.last_execution_config.execution_kind,
             session.last_execution_config.execution_kind,
@@ -150,6 +157,61 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         self.assertEqual(
             payload["workflow_metadata"]["backend_kind"],
             payload["workflow_state"]["workflow_metadata"]["backend_kind"],
+        )
+
+    def test_runtime_sync_metadata_and_payload_align_with_descriptor_and_document(self):
+        _, service = self._build_service(iter(["initial-1"]))
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.select_probe(session.session_id, "p_001")
+
+        descriptor = build_surrogate_workflow_descriptor(
+            session,
+            execution_kind=session.last_execution_config.execution_kind,
+            preview=session.last_execution_config.preview,
+        )
+        document = build_surrogate_workflow_document_from_descriptor(descriptor)
+
+        self.assertEqual(session.workflow_metadata["backend_kind"], descriptor.execution.backend_kind)
+        self.assertEqual(session.workflow_metadata["workflow_profile"], descriptor.execution.workflow_profile)
+        self.assertEqual(session.workflow_metadata["selected_probe_id"], descriptor.repair.selected_probe_id)
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["schema"]["model"],
+            descriptor.schema_model,
+        )
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["selected_reference_ids"],
+            descriptor.selected_reference_ids,
+        )
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["accepted_patch_id"],
+            descriptor.repair.accepted_patch_id,
+        )
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["workflow_document_region_label"],
+            document.metadata["region_label"],
+        )
+        self.assertEqual(
+            session.workflow_state.surrogate_payload["workflow_document_entry_node_ids"],
+            document.entry_node_ids,
+        )
+        self.assertEqual(
+            session.workflow_topology_hints["document_region_label"],
+            document.metadata["region_label"],
+        )
+        self.assertEqual(
+            session.workflow_topology_entry_node_ids,
+            document.entry_node_ids,
+        )
+        self.assertEqual(
+            session.workflow_topology_exit_node_ids,
+            document.exit_node_ids,
         )
 
 
