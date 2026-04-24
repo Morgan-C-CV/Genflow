@@ -149,16 +149,16 @@ class FakeProbeGenerator:
         return [
             PreviewProbe(
                 probe_id="p_001",
-                summary="preview style shift",
-                target_axes=["style"],
+                summary="preview color shift",
+                target_axes=["color_palette"],
                 preserve_axes=["composition"],
                 preview_execution_spec={"patch_family": "resource_shift", "reference_anchor": selected_gallery_index},
                 source_kind="resource_shift",
             ),
             PreviewProbe(
                 probe_id="p_002",
-                summary="preview color shift",
-                target_axes=["color_palette"],
+                summary="preview style shift",
+                target_axes=["style"],
                 preserve_axes=["composition"],
                 preview_execution_spec={"patch_family": "prompt_color_adjustment", "reference_anchor": selected_gallery_index},
                 source_kind="schema_variation",
@@ -202,6 +202,23 @@ class FakeVerifier:
             regression_notes=[],
             summary="verifier accepts current direction",
         )
+
+
+class FakePboProbeRanker:
+    def __init__(self):
+        self.last_benchmark_comparison_summary = None
+        self.last_refinement_benchmark_set = None
+
+    def __call__(
+        self,
+        probes,
+        parsed_feedback,
+        benchmark_comparison_summary=None,
+        refinement_benchmark_set=None,
+    ):
+        self.last_benchmark_comparison_summary = benchmark_comparison_summary
+        self.last_refinement_benchmark_set = refinement_benchmark_set
+        return list(reversed(probes))
 
 
 class RuntimeServiceTest(unittest.TestCase):
@@ -312,6 +329,43 @@ class RuntimeServiceTest(unittest.TestCase):
             [101, 102, 103],
         )
 
+    def test_runtime_service_reranks_generated_probes_with_pbo_ranker(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-4")
+        probe_generator = FakeProbeGenerator()
+        pbo_ranker = FakePboProbeRanker()
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=probe_generator,
+            pbo_probe_ranker=pbo_ranker,
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+
+        self.assertEqual(session.preview_probe_candidates[0].probe_id, "p_002")
+        self.assertEqual(
+            pbo_ranker.last_benchmark_comparison_summary.compared_candidate_ids,
+            session.benchmark_comparison_summary.compared_candidate_ids,
+        )
+        self.assertEqual(
+            pbo_ranker.last_refinement_benchmark_set.benchmark_id,
+            session.refinement_benchmark_set.benchmark_id,
+        )
+
     def test_runtime_service_preview_probe_flow_updates_preview_state_only(self):
         memory = AgentMemoryService()
         orchestration = FakeOrchestrationService(memory)
@@ -340,15 +394,17 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
         self.assertEqual(len(session.preview_probe_candidates), 2)
-        self.assertEqual(session.preview_probe_candidates[0].probe_id, "p_001")
+        self.assertEqual(session.preview_probe_candidates[0].probe_id, "p_002")
+        self.assertIn("pbo_score", session.preview_probe_candidates[0].preview_execution_spec)
+        self.assertIn("pbo_rationale", session.preview_probe_candidates[0].preview_execution_spec)
 
-        session = service.preview_probe(session.session_id, "p_001")
+        session = service.preview_probe(session.session_id, "p_002")
         self.assertEqual(len(session.preview_results), 1)
         self.assertEqual(len(session.preview_probe_results), 1)
-        self.assertEqual(session.preview_probe_results[0].probe_id, "p_001")
+        self.assertEqual(session.preview_probe_results[0].probe_id, "p_002")
 
-        session = service.select_probe(session.session_id, "p_001")
-        self.assertEqual(session.selected_probe.probe_id, "p_001")
+        session = service.select_probe(session.session_id, "p_002")
+        self.assertEqual(session.selected_probe.probe_id, "p_002")
         self.assertEqual(session.current_schema.prompt, original_schema_prompt)
         self.assertEqual(session.current_result_payload.result_id, original_result_id)
         self.assertEqual(session.current_result_summary.summary_text, original_summary_text)

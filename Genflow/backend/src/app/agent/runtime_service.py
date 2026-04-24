@@ -7,6 +7,7 @@ from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.benchmark_comparison_summary import build_benchmark_comparison_summary
 from app.agent.patch_planner import PatchPlanner
+from app.agent.pbo_probe_ranker import rank_probe_candidates
 from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.refinement_benchmark_retriever import retrieve_refinement_benchmark_set
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
@@ -27,6 +28,7 @@ class AgentRuntimeService:
         feedback_parser: Optional[FeedbackParser] = None,
         hypothesis_builder: Optional[RepairHypothesisBuilder] = None,
         probe_generator: Optional[PreviewProbeGenerator] = None,
+        pbo_probe_ranker=None,
         refinement_benchmark_retriever=None,
         patch_planner: Optional[PatchPlanner] = None,
         verifier: Optional[Verifier] = None,
@@ -39,6 +41,7 @@ class AgentRuntimeService:
         self.feedback_parser = feedback_parser or FeedbackParser()
         self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
         self.probe_generator = probe_generator or PreviewProbeGenerator()
+        self.pbo_probe_ranker = pbo_probe_ranker or rank_probe_candidates
         self.refinement_benchmark_retriever = refinement_benchmark_retriever or retrieve_refinement_benchmark_set
         self.patch_planner = patch_planner or PatchPlanner()
         self.verifier = verifier or Verifier()
@@ -155,8 +158,14 @@ class AgentRuntimeService:
             selected_reference_ids=session.selected_reference_ids,
             refinement_benchmark_set=session.refinement_benchmark_set,
         )
-        session.local_probes = probes
-        session.preview_probe_candidates = probes
+        ranked_probes = self.pbo_probe_ranker(
+            probes,
+            session.parsed_feedback,
+            benchmark_comparison_summary=session.benchmark_comparison_summary,
+            refinement_benchmark_set=session.refinement_benchmark_set,
+        )
+        session.local_probes = ranked_probes
+        session.preview_probe_candidates = ranked_probes
         self._sync_workflow_state(session, execution_kind="probe_generation", preview=False)
         return self.memory_service.save_session(session)
 
