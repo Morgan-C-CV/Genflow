@@ -199,6 +199,12 @@ class AgentRuntimeService:
         self._sync_workflow_state(session, execution_kind="preview", preview=True)
         return self.memory_service.save_session(session)
 
+    def preview_selected_probe(self, session_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        if not session.selected_probe.probe_id:
+            raise ValueError("No selected probe available for preview.")
+        return self.preview_probe(session_id, session.selected_probe.probe_id)
+
     def select_probe(self, session_id: str, probe_id: str) -> AgentSessionState:
         session = self.memory_service.get_session(session_id)
         probe = next((item for item in session.preview_probe_candidates if item.probe_id == probe_id), None)

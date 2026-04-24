@@ -416,6 +416,36 @@ class RuntimeServiceTest(unittest.TestCase):
 
         self.assertEqual(session.selected_probe.probe_id, "p_001")
 
+    def test_runtime_service_preview_selected_probe_uses_default_selected_probe(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "preview-rt-default")
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+
+        self.assertEqual(session.selected_probe.probe_id, "p_002")
+
+        session = service.preview_selected_probe(session.session_id)
+
+        self.assertEqual(session.preview_probe_results[-1].probe_id, "p_002")
+
     def test_runtime_service_reranks_generated_probes_with_pbo_ranker(self):
         memory = AgentMemoryService()
         orchestration = FakeOrchestrationService(memory)
@@ -524,13 +554,11 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertIn("pbo_score", session.preview_probe_candidates[0].preview_execution_spec)
         self.assertIn("pbo_rationale", session.preview_probe_candidates[0].preview_execution_spec)
 
-        session = service.preview_probe(session.session_id, "p_002")
+        session = service.preview_selected_probe(session.session_id)
         self.assertEqual(len(session.preview_results), 1)
         self.assertEqual(len(session.preview_probe_results), 1)
         self.assertEqual(session.preview_probe_results[0].probe_id, "p_002")
 
-        session = service.select_probe(session.session_id, "p_002")
-        self.assertEqual(session.selected_probe.probe_id, "p_002")
         self.assertEqual(session.current_schema.prompt, original_schema_prompt)
         self.assertEqual(session.current_result_payload.result_id, original_result_id)
         self.assertEqual(session.current_result_summary.summary_text, original_summary_text)
@@ -564,7 +592,7 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.preview_probe(session.session_id, session.selected_probe.probe_id)
+        session = service.preview_selected_probe(session.session_id)
         session = service.commit_patch(session.session_id)
 
         self.assertEqual(session.accepted_patch.patch_id, "cp_p_002")
@@ -624,6 +652,34 @@ class RuntimeServiceTest(unittest.TestCase):
             fake_verifier.last_benchmark_comparison_summary.compared_candidate_ids,
             session.benchmark_comparison_summary.compared_candidate_ids,
         )
+
+    def test_runtime_service_preview_probe_override_remains_available(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "preview-rt-override")
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+
+        session = service.preview_probe(session.session_id, "p_001")
+
+        self.assertEqual(session.preview_probe_results[-1].probe_id, "p_001")
 
 
 if __name__ == "__main__":

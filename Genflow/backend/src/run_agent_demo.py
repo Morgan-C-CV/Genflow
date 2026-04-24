@@ -573,8 +573,7 @@ def main() -> None:
             preview_probes_path = None
             preview_result_path = None
             if session.preview_probe_candidates:
-                effective_probe = session.selected_probe if session.selected_probe.probe_id else session.preview_probe_candidates[0]
-                session = runtime_service.preview_probe(session.session_id, effective_probe.probe_id)
+                session = runtime_service.preview_selected_probe(session.session_id)
                 latest_preview = session.preview_probe_results[-1]
                 print("\n[Preview Result]")
                 print(json.dumps(to_serializable(latest_preview), ensure_ascii=False, indent=2))
