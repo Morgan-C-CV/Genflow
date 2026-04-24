@@ -8,6 +8,7 @@ from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.benchmark_comparison_summary import build_benchmark_comparison_summary
 from app.agent.patch_planner import PatchPlanner
 from app.agent.patch_candidate_generator import PatchCandidateGenerator
+from app.agent.pbo_benchmark_ranker import rank_benchmark_candidates
 from app.agent.pbo_probe_ranker import rank_probe_candidates
 from app.agent.pbo_patch_ranker import rank_patch_candidates
 from app.agent.probe_generator import PreviewProbeGenerator
@@ -31,6 +32,7 @@ class AgentRuntimeService:
         hypothesis_builder: Optional[RepairHypothesisBuilder] = None,
         probe_generator: Optional[PreviewProbeGenerator] = None,
         pbo_probe_ranker=None,
+        pbo_benchmark_ranker=None,
         refinement_benchmark_retriever=None,
         patch_candidate_generator=None,
         pbo_patch_ranker=None,
@@ -46,6 +48,7 @@ class AgentRuntimeService:
         self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
         self.probe_generator = probe_generator or PreviewProbeGenerator()
         self.pbo_probe_ranker = pbo_probe_ranker or rank_probe_candidates
+        self.pbo_benchmark_ranker = pbo_benchmark_ranker or rank_benchmark_candidates
         self.refinement_benchmark_retriever = refinement_benchmark_retriever or retrieve_refinement_benchmark_set
         self.patch_candidate_generator = (
             patch_candidate_generator
@@ -154,6 +157,7 @@ class AgentRuntimeService:
         benchmark_set = self.refinement_benchmark_retriever(
             session,
             search_service=self.search_service,
+            pbo_benchmark_ranker=self.pbo_benchmark_ranker,
         )
         session.refinement_benchmark_set = benchmark_set
         session.refinement_benchmark_summary = " | ".join(benchmark_set.selection_rationale)

@@ -4,6 +4,7 @@ from dataclasses import asdict
 from app.agent.memory import AgentMemoryService
 from app.agent.refinement_benchmark_retriever import (
     RefinementBenchmarkSet,
+    build_benchmark_candidate_pool,
     retrieve_refinement_benchmark_set,
 )
 from app.agent.runtime_models import ParsedFeedbackEvidence
@@ -65,7 +66,41 @@ class RefinementBenchmarkRetrieverTest(unittest.TestCase):
         self.assertEqual(len(first.comparison_candidates), 2)
         self.assertIn("focus_axes=style", first.selection_rationale)
         self.assertIn("preserve=Keep the composition", first.selection_rationale)
-        self.assertEqual(first.comparison_candidates[0].reference_id, 101)
+        self.assertEqual(first.comparison_candidates[0].reference_id, 103)
+        self.assertIn("pbo_score", first.comparison_candidates[0].metadata)
+
+    def test_candidate_pool_build_and_reranked_selection_are_distinct_steps(self):
+        session = self._make_session()
+        search_service = FakeSearchService()
+
+        benchmark_source, candidate_pool = build_benchmark_candidate_pool(session, search_service=search_service)
+        benchmark_set = retrieve_refinement_benchmark_set(session, search_service=search_service, limit=2)
+
+        self.assertEqual(benchmark_source, "refinement_search_bundle")
+        self.assertEqual(len(candidate_pool), 3)
+        self.assertEqual(candidate_pool[0].candidate_id, "benchmark-candidate-101")
+        self.assertNotEqual(
+            [candidate.candidate_id for candidate in benchmark_set.comparison_candidates],
+            [candidate.candidate_id for candidate in candidate_pool[:2]],
+        )
+        self.assertEqual(
+            [candidate.candidate_id for candidate in benchmark_set.comparison_candidates],
+            ["benchmark-candidate-103", "benchmark-candidate-102"],
+        )
+
+    def test_retriever_reranking_changes_with_refinement_context(self):
+        session = self._make_session()
+        search_service = FakeSearchService()
+
+        exploratory_first = retrieve_refinement_benchmark_set(session, search_service=search_service, limit=3)
+        self.assertEqual(exploratory_first.comparison_candidates[0].candidate_id, "benchmark-candidate-103")
+
+        session.preserve_constraints = ["Keep the composition", "best"]
+        session.current_uncertainty_estimate = 0.05
+
+        preserve_first = retrieve_refinement_benchmark_set(session, search_service=search_service, limit=3)
+
+        self.assertEqual(preserve_first.comparison_candidates[0].candidate_id, "benchmark-candidate-101")
 
     def test_benchmark_set_is_independent_from_cold_start_bundle_and_serializable(self):
         session = self._make_session()

@@ -11,6 +11,8 @@ the benchmark data model.
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from app.agent.pbo_benchmark_ranker import rank_benchmark_candidates
+
 if TYPE_CHECKING:
     from app.agent.memory import AgentSessionState
 
@@ -41,43 +43,16 @@ def retrieve_refinement_benchmark_set(
     session: AgentSessionState,
     search_service,
     limit: int = 3,
+    pbo_benchmark_ranker=rank_benchmark_candidates,
 ) -> RefinementBenchmarkSet:
     limit = max(1, int(limit))
-    local_bundle = {}
-    if session.selected_gallery_index is not None and search_service is not None:
-        local_bundle = search_service.build_diverse_reference_bundle(session.selected_gallery_index) or {}
-
-    bundle_references = list(local_bundle.get("references", []))
-    if not bundle_references:
-        bundle_references = list(session.selected_reference_bundle.get("references", []))
-
+    benchmark_source, candidate_pool = build_benchmark_candidate_pool(session, search_service=search_service)
+    ranked_candidates = pbo_benchmark_ranker(candidate_pool, session)
     anchor_ids = list(session.selected_reference_ids)
     if not anchor_ids:
-        anchor_ids = _extract_reference_ids(bundle_references[:1])
+        anchor_ids = _extract_reference_ids([{"id": candidate.reference_id} for candidate in ranked_candidates[:1]])
 
-    rationale_parts = _build_selection_rationale(session, bundle_references)
-    comparison_candidates: list[RefinementBenchmarkCandidate] = []
-    for item in bundle_references:
-        reference_id = _coerce_reference_id(item)
-        if reference_id is None:
-            continue
-        candidate = RefinementBenchmarkCandidate(
-            candidate_id=f"benchmark-candidate-{reference_id}",
-            reference_id=reference_id,
-            source_index=_coerce_int(item.get("index")),
-            source_role=str(item.get("role", "")),
-            selection_rationale=_build_candidate_rationale(session, item),
-            metadata={
-                "anchor_overlap": reference_id in anchor_ids,
-                "current_result_id": session.current_result_id,
-                "schema_model": session.current_schema.model,
-            },
-        )
-        comparison_candidates.append(candidate)
-        if len(comparison_candidates) >= limit:
-            break
-
-    benchmark_source = "refinement_search_bundle" if local_bundle else "selected_reference_context"
+    rationale_parts = _build_selection_rationale(session, ranked_candidates)
     return RefinementBenchmarkSet(
         benchmark_id=f"refinement-benchmark-{session.session_id}",
         benchmark_kind="refinement_local_comparison",
@@ -85,7 +60,7 @@ def retrieve_refinement_benchmark_set(
         anchor_ids=anchor_ids,
         anchor_summary=session.current_gallery_anchor_summary
         or f"Refinement anchor for gallery index {session.selected_gallery_index}.",
-        comparison_candidates=comparison_candidates,
+        comparison_candidates=ranked_candidates[:limit],
         selection_rationale=rationale_parts,
         metadata={
             "selected_gallery_index": session.selected_gallery_index,
@@ -96,11 +71,58 @@ def retrieve_refinement_benchmark_set(
             "preserve_constraints": list(session.preserve_constraints),
             "current_uncertainty_estimate": session.current_uncertainty_estimate,
             "candidate_limit": limit,
+            "candidate_pool_size": len(candidate_pool),
         },
     )
 
 
-def _build_selection_rationale(session: AgentSessionState, bundle_references: List[Dict[str, Any]]) -> list[str]:
+def build_benchmark_candidate_pool(
+    session: AgentSessionState,
+    search_service,
+) -> tuple[str, list[RefinementBenchmarkCandidate]]:
+    local_bundle = {}
+    if session.selected_gallery_index is not None and search_service is not None:
+        local_bundle = search_service.build_diverse_reference_bundle(session.selected_gallery_index) or {}
+
+    bundle_references = list(local_bundle.get("references", []))
+    if not bundle_references:
+        bundle_references = list(session.selected_reference_bundle.get("references", []))
+
+    anchor_ids = list(session.selected_reference_ids)
+    benchmark_source = "refinement_search_bundle" if local_bundle else "selected_reference_context"
+    candidate_pool: list[RefinementBenchmarkCandidate] = []
+    for item in bundle_references:
+        reference_id = _coerce_reference_id(item)
+        if reference_id is None:
+            continue
+        anchor_overlap = reference_id in anchor_ids
+        novelty_score = 0.0 if anchor_overlap else 1.0
+        coverage_score = _compute_coverage_score(
+            session.selected_gallery_index,
+            _coerce_int(item.get("index")),
+        )
+        candidate_pool.append(
+            RefinementBenchmarkCandidate(
+                candidate_id=f"benchmark-candidate-{reference_id}",
+                reference_id=reference_id,
+                source_index=_coerce_int(item.get("index")),
+                source_role=str(item.get("role", "")),
+                selection_rationale=_build_candidate_rationale(session, item),
+                metadata={
+                    "anchor_overlap": anchor_overlap,
+                    "novelty_score": novelty_score,
+                    "coverage_score": coverage_score,
+                    "role": str(item.get("role", "")),
+                    "current_result_id": session.current_result_id,
+                    "schema_model": session.current_schema.model,
+                    "benchmark_source": benchmark_source,
+                },
+            )
+        )
+    return benchmark_source, candidate_pool
+
+
+def _build_selection_rationale(session: AgentSessionState, ranked_candidates: List[RefinementBenchmarkCandidate]) -> list[str]:
     rationale = []
     if session.selected_gallery_index is not None:
         rationale.append(f"anchor_gallery_index={session.selected_gallery_index}")
@@ -112,7 +134,9 @@ def _build_selection_rationale(session: AgentSessionState, bundle_references: Li
         rationale.append(f"preserve={','.join(session.preserve_constraints)}")
     if session.current_result_summary.summary_text:
         rationale.append("current_result_summary_available=true")
-    rationale.append(f"candidate_pool_size={len(bundle_references)}")
+    rationale.append(f"candidate_pool_size={len(ranked_candidates)}")
+    if ranked_candidates:
+        rationale.append(f"top_candidate={ranked_candidates[0].candidate_id}")
     return rationale
 
 
@@ -145,3 +169,13 @@ def _coerce_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _compute_coverage_score(
+    selected_gallery_index: int | None,
+    source_index: int | None,
+) -> float:
+    if selected_gallery_index is None or source_index is None:
+        return 0.0
+    distance = abs(selected_gallery_index - source_index)
+    return round(max(0.0, 1.0 - 0.25 * distance), 2)

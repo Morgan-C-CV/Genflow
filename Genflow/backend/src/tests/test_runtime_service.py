@@ -252,6 +252,15 @@ class FakePboPatchRanker:
         return list(reversed(patch_candidates))
 
 
+class FakePboBenchmarkRanker:
+    def __init__(self):
+        self.last_session_context = None
+
+    def __call__(self, candidates, session_context):
+        self.last_session_context = session_context
+        return list(reversed(candidates))
+
+
 class RuntimeServiceTest(unittest.TestCase):
     def test_runtime_service_initial_commit_path_persists_required_state(self):
         memory = AgentMemoryService()
@@ -319,12 +328,42 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertIn("focus_axes=style", session.refinement_benchmark_summary)
         self.assertEqual(
             session.benchmark_comparison_summary.compared_candidate_ids,
-            ["benchmark-candidate-101", "benchmark-candidate-102", "benchmark-candidate-103"],
+            ["benchmark-candidate-103", "benchmark-candidate-102", "benchmark-candidate-101"],
         )
         self.assertIn(
             "benchmark_source=refinement_search_bundle",
             session.benchmark_comparison_summary.summary_bullets,
         )
+
+    def test_runtime_service_uses_reranked_benchmark_set_after_repair_hypotheses(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-2b")
+        pbo_benchmark_ranker = FakePboBenchmarkRanker()
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            pbo_benchmark_ranker=pbo_benchmark_ranker,
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+
+        self.assertEqual(
+            [candidate.candidate_id for candidate in session.refinement_benchmark_set.comparison_candidates],
+            ["benchmark-candidate-103", "benchmark-candidate-102", "benchmark-candidate-101"],
+        )
+        self.assertEqual(pbo_benchmark_ranker.last_session_context.session_id, session.session_id)
 
     def test_runtime_service_passes_refinement_benchmark_context_to_probe_generator(self):
         memory = AgentMemoryService()
