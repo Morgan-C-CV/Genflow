@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
+from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
 from app.agent.runtime_models import CommittedPatch, PreviewProbe, ResultSummary, VerifierResult
 
 
@@ -13,6 +14,7 @@ class Verifier:
         selected_probe: PreviewProbe,
         committed_patch: CommittedPatch,
         preserve_constraints: List[str],
+        benchmark_comparison_summary: BenchmarkComparisonSummary | None = None,
     ) -> VerifierResult:
         regression_notes: List[str] = []
         preserve_text = " ".join(preserve_constraints).lower()
@@ -30,6 +32,7 @@ class Verifier:
             f"Verifier judged improvement={improved} for patch={committed_patch.patch_id}; "
             f"changed_axes={','.join(updated_result_summary.changed_axes) or 'none'}."
         )
+        benchmark_note = self._build_benchmark_note(benchmark_comparison_summary)
 
         if previous_result_summary.summary_text == updated_result_summary.summary_text:
             regression_notes.append("updated result summary did not change relative to previous result")
@@ -40,6 +43,9 @@ class Verifier:
                 f"Verifier judged improvement={improved} for patch={committed_patch.patch_id}; "
                 "updated result summary did not materially change."
             )
+        if benchmark_note:
+            regression_notes.append(benchmark_note)
+            summary = f"{summary} {benchmark_note}"
 
         return VerifierResult(
             improved=improved,
@@ -48,3 +54,13 @@ class Verifier:
             regression_notes=regression_notes,
             summary=summary,
         )
+
+    @staticmethod
+    def _build_benchmark_note(
+        benchmark_comparison_summary: BenchmarkComparisonSummary | None,
+    ) -> str:
+        if benchmark_comparison_summary is None or not benchmark_comparison_summary.compared_candidate_ids:
+            return ""
+        benchmark_source = str(benchmark_comparison_summary.metadata.get("benchmark_source", "benchmark"))
+        candidate_count = len(benchmark_comparison_summary.compared_candidate_ids)
+        return f"benchmark_context={benchmark_source}:{candidate_count}_candidates"

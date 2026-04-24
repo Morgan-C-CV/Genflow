@@ -226,6 +226,7 @@ class AgentRuntimeService:
             selected_probe=session.selected_probe,
             committed_patch=session.accepted_patch,
             preserve_constraints=session.preserve_constraints,
+            benchmark_comparison_summary=session.benchmark_comparison_summary,
         )
         session.latest_verifier_result = result
         session.continue_recommended = result.continue_recommended

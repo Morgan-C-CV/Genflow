@@ -182,7 +182,19 @@ class FakePatchPlanner:
 
 
 class FakeVerifier:
-    def verify(self, previous_result_summary, updated_result_summary, selected_probe, committed_patch, preserve_constraints):
+    def __init__(self):
+        self.last_benchmark_comparison_summary = None
+
+    def verify(
+        self,
+        previous_result_summary,
+        updated_result_summary,
+        selected_probe,
+        committed_patch,
+        preserve_constraints,
+        benchmark_comparison_summary=None,
+    ):
+        self.last_benchmark_comparison_summary = benchmark_comparison_summary
         return VerifierResult(
             improved=True,
             continue_recommended=False,
@@ -393,6 +405,43 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.verifier_confidence, 0.88)
         self.assertEqual(session.stop_reason, "verifier_accepts_current_direction")
         self.assertFalse(service.should_continue(session.session_id))
+
+    def test_runtime_service_passes_benchmark_comparison_summary_to_verifier(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        ids = iter(["initial-rt-1", "commit-rt-1"])
+        executor = ResultExecutor(id_factory=lambda: next(ids))
+        fake_verifier = FakeVerifier()
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            verifier=fake_verifier,
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.select_probe(session.session_id, "p_001")
+        session = service.commit_patch(session.session_id)
+        session = service.execute_patch(session.session_id)
+        session = service.verify_latest_result(session.session_id)
+
+        self.assertEqual(
+            fake_verifier.last_benchmark_comparison_summary.compared_candidate_ids,
+            session.benchmark_comparison_summary.compared_candidate_ids,
+        )
 
 
 if __name__ == "__main__":
