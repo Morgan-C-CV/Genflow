@@ -568,12 +568,13 @@ def main() -> None:
             session = runtime_service.generate_local_probes(session.session_id)
             print("\n[Preview Probes]")
             print(json.dumps(to_serializable(session.preview_probe_candidates), ensure_ascii=False, indent=2))
+            if session.selected_probe.probe_id:
+                print(f"\n[Default Selected Probe]\n{session.selected_probe.probe_id}")
             preview_probes_path = None
             preview_result_path = None
             if session.preview_probe_candidates:
-                first_probe = session.preview_probe_candidates[0]
-                session = runtime_service.preview_probe(session.session_id, first_probe.probe_id)
-                session = runtime_service.select_probe(session.session_id, first_probe.probe_id)
+                effective_probe = session.selected_probe if session.selected_probe.probe_id else session.preview_probe_candidates[0]
+                session = runtime_service.preview_probe(session.session_id, effective_probe.probe_id)
                 latest_preview = session.preview_probe_results[-1]
                 print("\n[Preview Result]")
                 print(json.dumps(to_serializable(latest_preview), ensure_ascii=False, indent=2))

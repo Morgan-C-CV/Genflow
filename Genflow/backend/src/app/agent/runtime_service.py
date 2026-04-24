@@ -179,6 +179,7 @@ class AgentRuntimeService:
         )
         session.local_probes = ranked_probes
         session.preview_probe_candidates = ranked_probes
+        self._select_default_probe(session)
         self._sync_workflow_state(session, execution_kind="probe_generation", preview=False)
         return self.memory_service.save_session(session)
 
@@ -346,6 +347,20 @@ class AgentRuntimeService:
                 )
             return ("live_backend", "default")
         return ("mock", "default")
+
+    @staticmethod
+    def _select_default_probe(session: AgentSessionState) -> None:
+        if not session.preview_probe_candidates:
+            return
+        if session.selected_probe.probe_id:
+            matched_probe = next(
+                (probe for probe in session.preview_probe_candidates if probe.probe_id == session.selected_probe.probe_id),
+                None,
+            )
+            if matched_probe is not None:
+                session.selected_probe = matched_probe
+                return
+        session.selected_probe = session.preview_probe_candidates[0]
 
     def _generate_patch_candidates(self, session: AgentSessionState):
         generator = self.patch_candidate_generator

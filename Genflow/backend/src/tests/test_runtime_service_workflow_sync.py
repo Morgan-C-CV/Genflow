@@ -107,6 +107,7 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         self.assertEqual(session.last_execution_config.execution_kind, "probe_generation")
         self.assertEqual(session.workflow_metadata["probe_count"], 2)
         self.assertEqual(session.workflow_state.surrogate_payload["probe_count"], 2)
+        self.assertEqual(session.selected_probe.probe_id, "p_002")
         self.assertEqual(
             session.workflow_state.editable_scopes[0].node_ids,
             session.editable_scopes[0].node_ids,
@@ -116,10 +117,10 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
             session.protected_scopes[0].node_ids,
         )
 
-        session = service.select_probe(session.session_id, "p_002")
+        session = service.select_probe(session.session_id, "p_001")
         self.assertEqual(session.last_execution_config.execution_kind, "probe_select")
-        self.assertEqual(session.workflow_metadata["selected_probe_id"], "p_002")
-        self.assertEqual(session.workflow_state.surrogate_payload["selected_probe_id"], "p_002")
+        self.assertEqual(session.workflow_metadata["selected_probe_id"], "p_001")
+        self.assertEqual(session.workflow_state.surrogate_payload["selected_probe_id"], "p_001")
         self.assertEqual(session.workflow_metadata["document_region_label"], "repair_region")
         self.assertEqual(
             session.workflow_state.last_execution_config.execution_kind,
@@ -136,8 +137,7 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.preview_probe(session.session_id, "p_002")
-        session = service.select_probe(session.session_id, "p_002")
+        session = service.preview_probe(session.session_id, session.selected_probe.probe_id)
         session = service.commit_patch(session.session_id)
         session = service.execute_patch(session.session_id)
 
@@ -177,7 +177,6 @@ class RuntimeServiceWorkflowSyncTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.select_probe(session.session_id, "p_002")
 
         descriptor = build_surrogate_workflow_descriptor(
             session,

@@ -360,6 +360,62 @@ class RuntimeServiceTest(unittest.TestCase):
             [101, 102, 103],
         )
 
+    def test_runtime_service_auto_selects_top_ranked_probe_without_manual_override(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-3a")
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+
+        self.assertEqual(session.preview_probe_candidates[0].probe_id, "p_002")
+        self.assertEqual(session.selected_probe.probe_id, "p_002")
+
+    def test_runtime_service_manual_probe_selection_overrides_default_probe(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        executor = ResultExecutor(id_factory=lambda: "result-rt-3b")
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        self.assertEqual(session.selected_probe.probe_id, "p_002")
+
+        session = service.select_probe(session.session_id, "p_001")
+
+        self.assertEqual(session.selected_probe.probe_id, "p_001")
+
     def test_runtime_service_reranks_generated_probes_with_pbo_ranker(self):
         memory = AgentMemoryService()
         orchestration = FakeOrchestrationService(memory)
@@ -508,8 +564,7 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.preview_probe(session.session_id, "p_002")
-        session = service.select_probe(session.session_id, "p_002")
+        session = service.preview_probe(session.session_id, session.selected_probe.probe_id)
         session = service.commit_patch(session.session_id)
 
         self.assertEqual(session.accepted_patch.patch_id, "cp_p_002")
@@ -561,7 +616,6 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.select_probe(session.session_id, "p_002")
         session = service.commit_patch(session.session_id)
         session = service.execute_patch(session.session_id)
         session = service.verify_latest_result(session.session_id)

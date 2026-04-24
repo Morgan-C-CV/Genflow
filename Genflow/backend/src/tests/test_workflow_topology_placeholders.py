@@ -65,7 +65,6 @@ class WorkflowTopologyPlaceholdersTest(unittest.TestCase):
         session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
         session = service.build_repair_hypotheses(session.session_id)
         session = service.generate_local_probes(session.session_id)
-        session = service.select_probe(session.session_id, "p_002")
         session = service.commit_patch(session.session_id)
 
         self.assertEqual(session.workflow_topology_hints["selected_probe_id"], "p_002")
