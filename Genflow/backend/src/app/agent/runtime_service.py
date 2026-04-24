@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 from app.agent.execution_adapter import ExecutionAdapter
@@ -19,6 +20,12 @@ from app.agent.schema_utils import parse_and_normalize_metadata, serialize_norma
 from app.agent.verifier import Verifier
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
+
+
+@dataclass
+class PolicyStepResult:
+    decision: PolicyDecision
+    updated_session: AgentSessionState
 
 
 class AgentRuntimeService:
@@ -277,6 +284,30 @@ class AgentRuntimeService:
     def get_policy_decision(self, session_id: str) -> PolicyDecision:
         session = self.memory_service.get_session(session_id)
         return decide_next_action(session)
+
+    def run_next_policy_step(self, session_id: str) -> PolicyStepResult:
+        decision = self.get_policy_decision(session_id)
+        action = decision.next_action
+        if action == "build_hypotheses":
+            updated_session = self.build_repair_hypotheses(session_id)
+        elif action == "retrieve_benchmarks":
+            # Benchmark retrieval currently lives inside build_repair_hypotheses().
+            updated_session = self.build_repair_hypotheses(session_id)
+        elif action == "generate_probes":
+            updated_session = self.generate_local_probes(session_id)
+        elif action == "preview_selected_probe":
+            updated_session = self.preview_selected_probe(session_id)
+        elif action == "commit_selected_patch":
+            updated_session = self.commit_patch(session_id)
+        elif action == "execute_patch":
+            updated_session = self.execute_patch(session_id)
+        elif action == "verify_latest_result":
+            updated_session = self.verify_latest_result(session_id)
+        elif action == "stop":
+            updated_session = self.memory_service.get_session(session_id)
+        else:
+            raise ValueError(f"Unsupported policy action: {action}")
+        return PolicyStepResult(decision=decision, updated_session=updated_session)
 
     @staticmethod
     def _build_anchor_summary(reference_bundle: dict) -> str:
