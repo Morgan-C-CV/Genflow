@@ -128,6 +128,18 @@ def build_surrogate_workflow_snapshot(
                 else 0.0
             ),
         },
+        "patch_winner_comparison": {
+            "top_schema_patch_id": session.top_schema_patch_candidate.patch_id,
+            "top_schema_patch_axes": list(session.top_schema_patch_candidate.target_axes),
+            "top_graph_patch_candidate_id": session.top_workflow_graph_patch_candidate.candidate_id,
+            "top_graph_patch_candidate_axes": list(session.top_workflow_graph_patch_candidate.target_axes),
+            "graph_native_aligned_winner": bool(
+                session.accepted_patch.metadata.get("graph_native_aligned_winner", False)
+            ),
+            "aligned_graph_candidate_id": str(
+                session.accepted_patch.metadata.get("aligned_graph_candidate_id", "")
+            ),
+        },
     }
     surrogate_payload = {
         "schema": {
@@ -227,6 +239,28 @@ def build_surrogate_workflow_snapshot(
             }
             for candidate in session.workflow_graph_patch_candidates
         ],
+        "patch_winner_comparison": {
+            "top_schema_patch_candidate": {
+                "patch_id": session.top_schema_patch_candidate.patch_id,
+                "target_axes": list(session.top_schema_patch_candidate.target_axes),
+                "preserve_axes": list(session.top_schema_patch_candidate.preserve_axes),
+                "target_fields": list(session.top_schema_patch_candidate.target_fields),
+                "metadata": dict(session.top_schema_patch_candidate.metadata),
+            },
+            "top_workflow_graph_patch_candidate": {
+                "candidate_id": session.top_workflow_graph_patch_candidate.candidate_id,
+                "candidate_kind": session.top_workflow_graph_patch_candidate.candidate_kind,
+                "target_axes": list(session.top_workflow_graph_patch_candidate.target_axes),
+                "preserve_axes": list(session.top_workflow_graph_patch_candidate.preserve_axes),
+                "metadata": dict(session.top_workflow_graph_patch_candidate.metadata),
+            },
+            "graph_native_aligned_winner": bool(
+                session.accepted_patch.metadata.get("graph_native_aligned_winner", False)
+            ),
+            "aligned_graph_candidate_id": str(
+                session.accepted_patch.metadata.get("aligned_graph_candidate_id", "")
+            ),
+        },
     }
     workflow_topology_hints = {
         **workflow_topology_hints,

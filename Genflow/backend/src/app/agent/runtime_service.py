@@ -268,6 +268,12 @@ class AgentRuntimeService:
             benchmark_comparison_summary=session.benchmark_comparison_summary,
             refinement_benchmark_set=session.refinement_benchmark_set,
         )
+        session.top_schema_patch_candidate = ranked_patch_candidates[0] if ranked_patch_candidates else CommittedPatch()
+        session.top_workflow_graph_patch_candidate = (
+            session.workflow_graph_patch_candidates[0]
+            if session.workflow_graph_patch_candidates
+            else type(session.top_workflow_graph_patch_candidate)()
+        )
         patch = ranked_patch_candidates[0]
         session.accepted_patch = patch
         session.patch_history.append(patch)
@@ -278,7 +284,13 @@ class AgentRuntimeService:
                 build_workflow_graph_patch_candidates(session),
                 session,
             )
+            session.top_workflow_graph_patch_candidate = (
+                session.workflow_graph_patch_candidates[0]
+                if session.workflow_graph_patch_candidates
+                else type(session.top_workflow_graph_patch_candidate)()
+            )
         session.current_workflow_graph_patch = build_workflow_graph_patch(session)
+        self._annotate_patch_winner_alignment(session)
         self._sync_workflow_state(session, execution_kind="commit_plan", preview=False)
         return self.memory_service.save_session(session)
 
@@ -396,6 +408,19 @@ class AgentRuntimeService:
             f"(best={counts.get('best', 0)}, complementary_knn={counts.get('complementary_knn', 0)}, "
             f"exploratory={counts.get('exploratory', 0)}, counterexample={counts.get('counterexample', 0)})."
         )
+
+    @staticmethod
+    def _annotate_patch_winner_alignment(session: AgentSessionState) -> None:
+        schema_winner = session.top_schema_patch_candidate
+        graph_winner = session.top_workflow_graph_patch_candidate
+        if not schema_winner.patch_id or not graph_winner.candidate_id:
+            return
+        schema_axes = set(schema_winner.target_axes)
+        graph_axes = set(graph_winner.target_axes)
+        aligned = bool(schema_axes) and schema_axes == graph_axes
+        if aligned:
+            session.accepted_patch.metadata["graph_native_aligned_winner"] = True
+            session.accepted_patch.metadata["aligned_graph_candidate_id"] = graph_winner.candidate_id
 
     def _sync_workflow_identity(self, session: AgentSessionState) -> None:
         workflow_id = session.workflow_id or f"workflow-{session.session_id}"

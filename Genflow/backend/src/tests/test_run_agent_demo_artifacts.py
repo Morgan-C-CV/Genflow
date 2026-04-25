@@ -105,6 +105,8 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["workflow_metadata"]["verifier_repair_recommendation"]["recommended_action"],
         )
         self.assertIn("current_workflow_graph_patch", payload)
+        self.assertIn("top_schema_patch_candidate", payload)
+        self.assertIn("top_workflow_graph_patch_candidate", payload)
         self.assertEqual(
             payload["current_workflow_graph_patch"]["patch_id"],
             payload["accepted_patch"]["patch_id"],
@@ -123,6 +125,22 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["workflow_graph_patch_candidates"][0]["candidate_id"],
         )
         self.assertIn("pbo_score", payload["workflow_graph_patch_candidates"][0]["metadata"])
+        self.assertEqual(
+            payload["top_schema_patch_candidate"]["patch_id"],
+            payload["accepted_patch"]["patch_id"],
+        )
+        self.assertEqual(
+            payload["top_workflow_graph_patch_candidate"]["candidate_id"],
+            payload["workflow_graph_patch_candidates"][0]["candidate_id"],
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["patch_winner_comparison"]["top_schema_patch_id"],
+            payload["top_schema_patch_candidate"]["patch_id"],
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["patch_winner_comparison"]["top_graph_patch_candidate_id"],
+            payload["top_workflow_graph_patch_candidate"]["candidate_id"],
+        )
 
 
 if __name__ == "__main__":
