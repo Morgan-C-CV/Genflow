@@ -13,6 +13,7 @@ from app.agent.patch_candidate_generator import PatchCandidateGenerator
 from app.agent.pbo_benchmark_ranker import rank_benchmark_candidates
 from app.agent.pbo_probe_ranker import rank_probe_candidates
 from app.agent.pbo_patch_ranker import rank_patch_candidates
+from app.agent.pbo_workflow_graph_patch_ranker import rank_workflow_graph_patch_candidates
 from app.agent.probe_generator import PreviewProbeGenerator
 from app.agent.refinement_benchmark_retriever import retrieve_refinement_benchmark_set
 from app.agent.repair_hypothesis import RepairHypothesisBuilder
@@ -62,6 +63,7 @@ class AgentRuntimeService:
         refinement_benchmark_retriever=None,
         patch_candidate_generator=None,
         pbo_patch_ranker=None,
+        pbo_workflow_graph_patch_ranker=None,
         patch_planner: Optional[PatchPlanner] = None,
         verifier: Optional[Verifier] = None,
     ):
@@ -85,6 +87,9 @@ class AgentRuntimeService:
             )
         )
         self.pbo_patch_ranker = pbo_patch_ranker or rank_patch_candidates
+        self.pbo_workflow_graph_patch_ranker = (
+            pbo_workflow_graph_patch_ranker or rank_workflow_graph_patch_candidates
+        )
         self.patch_planner = patch_planner or PatchPlanner()
         self.verifier = verifier or Verifier()
 
@@ -210,7 +215,10 @@ class AgentRuntimeService:
         session.local_probes = ranked_probes
         session.preview_probe_candidates = ranked_probes
         self._select_default_probe(session)
-        session.workflow_graph_patch_candidates = build_workflow_graph_patch_candidates(session)
+        session.workflow_graph_patch_candidates = self.pbo_workflow_graph_patch_ranker(
+            build_workflow_graph_patch_candidates(session),
+            session,
+        )
         self._sync_workflow_state(session, execution_kind="probe_generation", preview=False)
         return self.memory_service.save_session(session)
 
@@ -242,7 +250,10 @@ class AgentRuntimeService:
         if probe is None:
             raise ValueError(f"Preview probe not found: {probe_id}")
         session.selected_probe = probe
-        session.workflow_graph_patch_candidates = build_workflow_graph_patch_candidates(session)
+        session.workflow_graph_patch_candidates = self.pbo_workflow_graph_patch_ranker(
+            build_workflow_graph_patch_candidates(session),
+            session,
+        )
         self._sync_workflow_state(session, execution_kind="probe_select", preview=False)
         return self.memory_service.save_session(session)
 
@@ -263,7 +274,10 @@ class AgentRuntimeService:
         session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
         session.current_schema_raw = serialize_normalized_schema(session.current_schema)
         if not session.workflow_graph_patch_candidates:
-            session.workflow_graph_patch_candidates = build_workflow_graph_patch_candidates(session)
+            session.workflow_graph_patch_candidates = self.pbo_workflow_graph_patch_ranker(
+                build_workflow_graph_patch_candidates(session),
+                session,
+            )
         session.current_workflow_graph_patch = build_workflow_graph_patch(session)
         self._sync_workflow_state(session, execution_kind="commit_plan", preview=False)
         return self.memory_service.save_session(session)

@@ -118,6 +118,11 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["workflow_metadata"]["workflow_graph_patch_candidates"]["candidate_count"],
             len(payload["workflow_graph_patch_candidates"]),
         )
+        self.assertEqual(
+            payload["workflow_metadata"]["workflow_graph_patch_candidates"]["top_candidate_id"],
+            payload["workflow_graph_patch_candidates"][0]["candidate_id"],
+        )
+        self.assertIn("pbo_score", payload["workflow_graph_patch_candidates"][0]["metadata"])
 
 
 if __name__ == "__main__":

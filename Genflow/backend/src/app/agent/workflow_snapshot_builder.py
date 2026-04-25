@@ -117,6 +117,16 @@ def build_surrogate_workflow_snapshot(
             "candidate_count": len(session.workflow_graph_patch_candidates),
             "candidate_ids": [candidate.candidate_id for candidate in session.workflow_graph_patch_candidates],
             "candidate_kinds": [candidate.candidate_kind for candidate in session.workflow_graph_patch_candidates],
+            "top_candidate_id": (
+                session.workflow_graph_patch_candidates[0].candidate_id
+                if session.workflow_graph_patch_candidates
+                else ""
+            ),
+            "top_candidate_score": (
+                session.workflow_graph_patch_candidates[0].metadata.get("pbo_score", 0.0)
+                if session.workflow_graph_patch_candidates
+                else 0.0
+            ),
         },
     }
     surrogate_payload = {
@@ -212,6 +222,8 @@ def build_surrogate_workflow_snapshot(
                 "node_patch_count": len(candidate.node_patches),
                 "edge_patch_count": len(candidate.edge_patches),
                 "region_patch_count": len(candidate.region_patches),
+                "pbo_score": candidate.metadata.get("pbo_score", 0.0),
+                "pbo_rationale": list(candidate.metadata.get("pbo_rationale", [])),
             }
             for candidate in session.workflow_graph_patch_candidates
         ],
