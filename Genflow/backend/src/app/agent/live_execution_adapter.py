@@ -20,6 +20,7 @@ from app.agent.runtime_models import (
     ResultPayload,
     ResultSummary,
 )
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch
 from app.agent.workflow_execution_builder import (
     build_workflow_commit_request_from_source,
     build_workflow_execution_payload_from_source,
@@ -92,9 +93,11 @@ class LiveExecutionAdapter(ExecutionAdapter):
         self,
         schema: NormalizedSchema,
         patch: CommittedPatch,
+        graph_patch: WorkflowGraphPatch | None = None,
+        commit_execution_mode: str = "",
     ) -> tuple[ResultPayload, ResultSummary]:
         client = self._require_backend_client()
-        source = self._build_commit_execution_source(schema, patch)
+        source = self._build_commit_execution_source(schema, patch, graph_patch, commit_execution_mode)
         workflow_request = build_workflow_commit_request_from_source(source)
         request = CommitExecutionRequest(
             execution_kind="commit",
@@ -177,6 +180,8 @@ class LiveExecutionAdapter(ExecutionAdapter):
     def _build_commit_execution_source(
         schema: NormalizedSchema,
         patch: CommittedPatch,
+        graph_patch: WorkflowGraphPatch | None = None,
+        commit_execution_mode: str = "",
     ) -> WorkflowCommitSource:
         return WorkflowCommitSource(
             workflow_id="workflow-live-adapter-commit",
@@ -190,6 +195,8 @@ class LiveExecutionAdapter(ExecutionAdapter):
             dissatisfaction_axes=list(patch.target_axes),
             preserve_constraints=list(patch.preserve_axes),
             accepted_patch=patch,
+            selected_workflow_graph_patch=graph_patch or WorkflowGraphPatch(),
+            commit_execution_mode=commit_execution_mode or "schema_execution_fallback",
         )
 
     @staticmethod

@@ -10,6 +10,7 @@ from app.agent.runtime_models import (
     ResultPayload,
     ResultSummary,
 )
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch
 
 
 @runtime_checkable
@@ -32,5 +33,7 @@ class ExecutionAdapter(Protocol):
         self,
         schema: NormalizedSchema,
         patch: CommittedPatch,
+        graph_patch: WorkflowGraphPatch | None = None,
+        commit_execution_mode: str = "",
     ) -> tuple[ResultPayload, ResultSummary]:
         ...

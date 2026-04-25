@@ -334,6 +334,12 @@ class AgentRuntimeService:
         payload, summary = self.execution_adapter.execute_committed_patch(
             schema=session.current_schema,
             patch=session.accepted_patch,
+            graph_patch=(
+                session.selected_workflow_graph_patch
+                if session.commit_execution_mode == "graph_native_execution_handoff"
+                else type(session.selected_workflow_graph_patch)()
+            ),
+            commit_execution_mode=session.commit_execution_mode,
         )
         session.current_result_id = payload.result_id
         session.current_result_payload = payload
@@ -343,6 +349,10 @@ class AgentRuntimeService:
         session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
             commit_execution_mode=session.commit_execution_mode,
             preferred_commit_source=session.preferred_commit_source,
+            request_graph_native_artifact_input_received=bool(
+                session.commit_execution_mode == "graph_native_execution_handoff"
+                and session.selected_workflow_graph_patch.patch_id
+            ),
             selected_workflow_graph_patch_id=session.selected_workflow_graph_patch.patch_id,
             top_schema_patch_id=session.top_schema_patch_candidate.patch_id,
             top_graph_patch_candidate_id=session.top_workflow_graph_patch_candidate.candidate_id,
@@ -351,6 +361,9 @@ class AgentRuntimeService:
             backend_graph_patch_id=str(backend_metadata.get("graph_patch_id", "")),
             backend_echoed_commit_source=str(backend_metadata.get("preferred_commit_source", "")),
             backend_echoed_commit_execution_mode=str(backend_metadata.get("commit_execution_mode", "")),
+            backend_echoed_graph_native_artifact_input_received=bool(
+                backend_metadata.get("graph_native_artifact_input_received", False)
+            ),
             comparison_notes=list(summary.notes),
         )
         self._sync_workflow_state(session, execution_kind="commit", preview=False)

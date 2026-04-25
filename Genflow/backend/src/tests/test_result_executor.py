@@ -2,6 +2,7 @@ import unittest
 
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_models import NormalizedSchema, PreviewProbe, ResultPayload, ResultSummary
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch, WorkflowNodePatch
 
 
 class ResultExecutorTest(unittest.TestCase):
@@ -83,6 +84,33 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertIn("style", summary.changed_axes)
         self.assertIn("composition", summary.preserved_axes)
         self.assertIn("cp_p_001", summary.summary_text)
+
+    def test_execute_committed_patch_reports_graph_native_input_when_provided(self):
+        executor = ResultExecutor(id_factory=lambda: "commit-2")
+        schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
+        from app.agent.runtime_models import CommittedPatch
+
+        patch = CommittedPatch(patch_id="cp_p_002", target_fields=["style"], target_axes=["style"])
+        graph_patch = WorkflowGraphPatch(
+            workflow_id="workflow-1",
+            patch_id="wgp_002",
+            node_patches=[WorkflowNodePatch(node_id="render.model", operation="update")],
+        )
+
+        payload, summary = executor.execute_committed_patch(
+            schema,
+            patch,
+            graph_patch=graph_patch,
+            commit_execution_mode="graph_native_execution_handoff",
+        )
+
+        self.assertEqual(payload.content["graph_patch_input_id"], "wgp_002")
+        self.assertTrue(payload.artifacts["backend_metadata"]["graph_native_artifact_input_received"])
+        self.assertEqual(
+            payload.artifacts["backend_metadata"]["commit_execution_mode"],
+            "graph_native_execution_handoff",
+        )
+        self.assertIn("graph_native_artifact_input_received=True", summary.notes)
 
 
 if __name__ == "__main__":

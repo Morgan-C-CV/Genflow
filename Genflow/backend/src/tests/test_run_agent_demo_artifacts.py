@@ -167,6 +167,12 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["latest_execution_source_evidence"]["commit_execution_mode"],
             payload["commit_execution_mode"],
         )
+        self.assertTrue(
+            payload["latest_execution_source_evidence"]["request_graph_native_artifact_input_received"]
+        )
+        self.assertTrue(
+            payload["latest_execution_source_evidence"]["backend_echoed_graph_native_artifact_input_received"]
+        )
         self.assertEqual(
             payload["latest_execution_source_evidence"]["preferred_commit_source"],
             payload["preferred_commit_source"],
@@ -177,7 +183,7 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         )
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_commit_execution_mode"],
-            "",
+            "graph_native_execution_handoff",
         )
 
 

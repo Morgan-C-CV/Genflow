@@ -102,6 +102,9 @@ class LocalWorkflowFacade:
                 "image_id": f"commit-{patch_id}",
                 "patch_id": patch_id,
                 "target_fields": list(patch_spec.get("target_fields", [])),
+                "graph_native_artifact_input_received": bool(
+                    commit_source_payload.get("selected_workflow_graph_patch_id", "")
+                ),
             },
             summary_text=f"Local workflow facade committed patch={patch_id}.",
             changed_axes=target_axes,
@@ -113,6 +116,9 @@ class LocalWorkflowFacade:
                 "graph_patch_id": graph_patch_spec.get("patch_id", ""),
                 "commit_execution_mode": commit_source_payload.get("commit_execution_mode", ""),
                 "preferred_commit_source": commit_source_payload.get("preferred_commit_source", ""),
+                "graph_native_artifact_input_received": bool(
+                    commit_source_payload.get("selected_workflow_graph_patch_id", "")
+                ),
                 "selected_workflow_graph_patch_id": commit_source_payload.get(
                     "selected_workflow_graph_patch_id", ""
                 ),
@@ -124,6 +130,8 @@ class LocalWorkflowFacade:
                 f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
                 f"commit_execution_mode={commit_source_payload.get('commit_execution_mode', '')}",
                 f"preferred_commit_source={commit_source_payload.get('preferred_commit_source', '')}",
+                "graph_native_artifact_input_received="
+                f"{bool(commit_source_payload.get('selected_workflow_graph_patch_id', ''))}",
                 f"selected_workflow_graph_patch_id={commit_source_payload.get('selected_workflow_graph_patch_id', '')}",
             ],
         )

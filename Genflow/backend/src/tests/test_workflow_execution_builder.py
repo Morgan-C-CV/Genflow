@@ -217,6 +217,33 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.commit_source_payload["commit_execution_mode"], "schema_execution_fallback")
 
+    def test_build_workflow_commit_request_from_source_uses_graph_artifact_when_handoff_mode(self):
+        session = self._make_session()
+        graph_candidates = build_workflow_graph_patch_candidates(session)
+        selected_graph_patch = materialize_workflow_graph_patch_from_candidate(
+            graph_candidates[0],
+            session=session,
+        )
+        source = WorkflowCommitSource(
+            workflow_id="workflow-commit-source",
+            workflow_kind="workflow_native_surrogate",
+            workflow_version="phase-k-workflow-payload",
+            execution_kind="commit",
+            schema=session.current_schema,
+            backend_kind="live_backend",
+            workflow_profile="default",
+            dissatisfaction_axes=["style"],
+            preserve_constraints=["composition"],
+            accepted_patch=session.accepted_patch,
+            selected_workflow_graph_patch=selected_graph_patch,
+            commit_execution_mode="graph_native_execution_handoff",
+        )
+
+        request = build_workflow_commit_request_from_source(source)
+
+        self.assertEqual(request.commit_source_payload["commit_execution_mode"], "graph_native_execution_handoff")
+        self.assertEqual(request.graph_patch_spec["patch_id"], selected_graph_patch.patch_id)
+
 
 if __name__ == "__main__":
     unittest.main()

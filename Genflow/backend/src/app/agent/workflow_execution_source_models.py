@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from app.agent.runtime_models import CommittedPatch, NormalizedSchema, PreviewProbe
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch
 
 
 @dataclass
@@ -45,3 +46,5 @@ class WorkflowPreviewSource(WorkflowExecutionSource):
 class WorkflowCommitSource(WorkflowExecutionSource):
     selected_probe: PreviewProbe = field(default_factory=PreviewProbe)
     accepted_patch: CommittedPatch = field(default_factory=CommittedPatch)
+    selected_workflow_graph_patch: WorkflowGraphPatch = field(default_factory=WorkflowGraphPatch)
+    commit_execution_mode: str = "schema_execution_fallback"

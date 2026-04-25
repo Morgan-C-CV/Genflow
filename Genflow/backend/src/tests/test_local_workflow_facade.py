@@ -102,13 +102,16 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(response.execution_kind, "commit")
         self.assertEqual(response.response_id, "local-commit-cp_001")
         self.assertEqual(response.output_payload["patch_id"], "cp_001")
+        self.assertTrue(response.output_payload["graph_native_artifact_input_received"])
         self.assertEqual(response.changed_axes, ["style"])
         self.assertEqual(response.backend_metadata["graph_patch_id"], "cp_001")
         self.assertEqual(response.backend_metadata["commit_execution_mode"], "graph_native_execution_handoff")
+        self.assertTrue(response.backend_metadata["graph_native_artifact_input_received"])
         self.assertEqual(response.backend_metadata["preferred_commit_source"], "graph")
         self.assertEqual(response.backend_metadata["selected_workflow_graph_patch_id"], "wgp_001")
         self.assertIn("graph_patch_id=cp_001", response.comparison_notes)
         self.assertIn("commit_execution_mode=graph_native_execution_handoff", response.comparison_notes)
+        self.assertIn("graph_native_artifact_input_received=True", response.comparison_notes)
         self.assertIn("preferred_commit_source=graph", response.comparison_notes)
 
     def test_facade_rejects_preview_without_graph_patch_spec(self):

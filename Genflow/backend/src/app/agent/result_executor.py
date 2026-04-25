@@ -12,6 +12,7 @@ from app.agent.runtime_models import (
     ResultPayload,
     ResultSummary,
 )
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch
 
 
 class ResultExecutor(ExecutionAdapter):
@@ -109,8 +110,12 @@ class ResultExecutor(ExecutionAdapter):
         self,
         schema: NormalizedSchema,
         patch: CommittedPatch,
+        graph_patch: WorkflowGraphPatch | None = None,
+        commit_execution_mode: str = "",
     ) -> tuple[ResultPayload, ResultSummary]:
         changed_axes = list(patch.target_axes or patch.target_fields)
+        graph_patch = graph_patch or WorkflowGraphPatch()
+        effective_mode = commit_execution_mode or "schema_execution_fallback"
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_committed_result",
@@ -120,24 +125,35 @@ class ResultExecutor(ExecutionAdapter):
                 "target_fields": list(patch.target_fields),
                 "target_axes": changed_axes,
                 "rationale": patch.rationale,
+                "graph_patch_input_id": graph_patch.patch_id,
             },
             artifacts={
                 "render_mode": "mock_commit",
                 "changes": dict(patch.changes),
                 "preserve_axes": list(patch.preserve_axes),
+                "backend_metadata": {
+                    "graph_patch_id": graph_patch.patch_id,
+                    "commit_execution_mode": effective_mode,
+                    "graph_native_artifact_input_received": bool(graph_patch.patch_id),
+                },
             },
         )
         summary = ResultSummary(
             summary_text=(
                 f"Mock committed patch result for patch={patch.patch_id}, "
                 f"target_fields={','.join(patch.target_fields) or 'none'}, "
-                f"target_axes={','.join(changed_axes) or 'none'}."
+                f"target_axes={','.join(changed_axes) or 'none'}, "
+                f"handoff_mode={effective_mode}."
             ),
             changed_axes=changed_axes,
             preserved_axes=list(patch.preserve_axes),
             notes=[
                 patch.rationale,
                 f"change_keys={','.join(patch.changes.keys())}",
-            ] if patch.rationale else [f"change_keys={','.join(patch.changes.keys())}"],
+                f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
+            ] if patch.rationale else [
+                f"change_keys={','.join(patch.changes.keys())}",
+                f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
+            ],
         )
         return payload, summary

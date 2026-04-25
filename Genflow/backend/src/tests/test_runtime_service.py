@@ -270,6 +270,23 @@ class FakePboBenchmarkRanker:
         return list(reversed(candidates))
 
 
+class CapturingExecutionAdapter(ResultExecutor):
+    def __init__(self, id_factory=None):
+        super().__init__(id_factory=id_factory)
+        self.last_commit_graph_patch = None
+        self.last_commit_execution_mode = ""
+
+    def execute_committed_patch(self, schema, patch, graph_patch=None, commit_execution_mode=""):
+        self.last_commit_graph_patch = graph_patch
+        self.last_commit_execution_mode = commit_execution_mode
+        return super().execute_committed_patch(
+            schema,
+            patch,
+            graph_patch=graph_patch,
+            commit_execution_mode=commit_execution_mode,
+        )
+
+
 class RuntimeServiceTest(unittest.TestCase):
     def test_runtime_service_initial_commit_path_persists_required_state(self):
         memory = AgentMemoryService()
@@ -716,7 +733,7 @@ class RuntimeServiceTest(unittest.TestCase):
         orchestration = FakeOrchestrationService(memory)
         search = FakeSearchService()
         ids = iter(["initial-rt-1", "preview-rt-1", "commit-rt-1"])
-        executor = ResultExecutor(id_factory=lambda: next(ids))
+        executor = CapturingExecutionAdapter(id_factory=lambda: next(ids))
         service = AgentRuntimeService(
             memory_service=memory,
             orchestration_service=orchestration,
@@ -775,11 +792,15 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.previous_result_summary.summary_text, old_summary)
         self.assertNotEqual(session.current_result_payload.result_id, old_result_id)
         self.assertEqual(session.current_result_payload.result_type, "mock_committed_result")
+        self.assertEqual(executor.last_commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(executor.last_commit_graph_patch.patch_id, session.selected_workflow_graph_patch.patch_id)
         self.assertEqual(
             session.latest_execution_source_evidence.commit_execution_mode,
             "graph_native_execution_handoff",
         )
         self.assertEqual(session.latest_execution_source_evidence.preferred_commit_source, "graph")
+        self.assertTrue(session.latest_execution_source_evidence.request_graph_native_artifact_input_received)
+        self.assertTrue(session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received)
         self.assertEqual(
             session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
             session.selected_workflow_graph_patch.patch_id,

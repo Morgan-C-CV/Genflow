@@ -11,6 +11,7 @@ from app.agent.live_execution_models import (
 )
 from app.agent.local_workflow_facade import LocalWorkflowFacade
 from app.agent.runtime_models import CommittedPatch, NormalizedSchema, PreviewProbe
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch, WorkflowNodePatch
 from app.agent.workflow_backend_transport import WorkflowBackendTransport
 from app.agent.workflow_execution_source_models import (
     WorkflowCommitSource,
@@ -194,6 +195,37 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(summary.changed_axes, ["style"])
         self.assertEqual(summary.preserved_axes, ["composition"])
 
+    def test_live_adapter_accepts_graph_native_commit_artifact_input(self):
+        client = FakeLiveBackendClient()
+        adapter = LiveExecutionAdapter(backend_client=client)
+        schema = NormalizedSchema(prompt="a vivid portrait", model="sdxl-base-patched")
+        patch = CommittedPatch(
+            patch_id="cp_002",
+            target_fields=["style"],
+            target_axes=["style"],
+            preserve_axes=["composition"],
+            changes={"style": ["cinematic"]},
+        )
+        graph_patch = WorkflowGraphPatch(
+            workflow_id="workflow-live",
+            patch_id="wgp_002",
+            node_patches=[WorkflowNodePatch(node_id="render.model", operation="update")],
+        )
+
+        adapter.execute_committed_patch(
+            schema,
+            patch,
+            graph_patch=graph_patch,
+            commit_execution_mode="graph_native_execution_handoff",
+        )
+
+        request = client.commit_requests[-1]
+        self.assertEqual(request.patch_spec["graph_patch_spec"]["patch_id"], "wgp_002")
+        self.assertEqual(
+            request.patch_spec["commit_source_payload"]["commit_execution_mode"],
+            "graph_native_execution_handoff",
+        )
+
     def test_live_adapter_builds_typed_commit_execution_source(self):
         schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
         patch = CommittedPatch(
@@ -202,11 +234,24 @@ class LiveExecutionAdapterTest(unittest.TestCase):
             target_axes=["style"],
             preserve_axes=["composition"],
         )
+        graph_patch = WorkflowGraphPatch(
+            workflow_id="workflow-graph-1",
+            patch_id="wgp_001",
+            patch_kind="graph_candidate_materialized",
+            node_patches=[WorkflowNodePatch(node_id="render.model", operation="update")],
+        )
 
-        source = LiveExecutionAdapter._build_commit_execution_source(schema, patch)
+        source = LiveExecutionAdapter._build_commit_execution_source(
+            schema,
+            patch,
+            graph_patch=graph_patch,
+            commit_execution_mode="graph_native_execution_handoff",
+        )
 
         self.assertIsInstance(source, WorkflowCommitSource)
         self.assertEqual(source.accepted_patch.patch_id, "cp_001")
+        self.assertEqual(source.selected_workflow_graph_patch.patch_id, "wgp_001")
+        self.assertEqual(source.commit_execution_mode, "graph_native_execution_handoff")
 
     def test_live_adapter_works_with_concrete_default_client(self):
         client = DefaultLiveBackendClient(

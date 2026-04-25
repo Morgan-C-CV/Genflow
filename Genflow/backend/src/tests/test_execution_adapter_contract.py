@@ -3,6 +3,7 @@ import unittest
 from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.result_executor import ResultExecutor
 from app.agent.runtime_models import CommittedPatch, NormalizedSchema, PreviewProbe
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch, WorkflowNodePatch
 
 
 class ExecutionAdapterContractTest(unittest.TestCase):
@@ -35,10 +36,20 @@ class ExecutionAdapterContractTest(unittest.TestCase):
             changes={"style": ["editorial", "vivid"]},
             rationale="Commit the stronger style direction from preview.",
         )
+        graph_patch = WorkflowGraphPatch(
+            workflow_id="workflow-1",
+            patch_id="wgp-1",
+            node_patches=[WorkflowNodePatch(node_id="render.model", operation="update")],
+        )
 
         initial_payload, initial_summary = adapter.produce_initial_result(schema)
         preview_result = adapter.execute_preview_probe(schema, probe)
-        committed_payload, committed_summary = adapter.execute_committed_patch(schema, patch)
+        committed_payload, committed_summary = adapter.execute_committed_patch(
+            schema,
+            patch,
+            graph_patch=graph_patch,
+            commit_execution_mode="graph_native_execution_handoff",
+        )
 
         self.assertEqual(initial_payload.result_type, "mock_initial_result")
         self.assertIn("initial_generation", initial_summary.changed_axes)
@@ -46,3 +57,4 @@ class ExecutionAdapterContractTest(unittest.TestCase):
         self.assertEqual(preview_result.payload.result_type, "mock_preview_result")
         self.assertEqual(committed_payload.result_type, "mock_committed_result")
         self.assertIn("style", committed_summary.changed_axes)
+        self.assertEqual(committed_payload.content["graph_patch_input_id"], "wgp-1")

@@ -201,9 +201,14 @@ def build_workflow_commit_request_from_source(
 ) -> WorkflowCommitRequest:
     payload = build_workflow_execution_payload_from_source(source)
     graph_source = build_workflow_graph_source_from_execution_source(source)
-    graph_patch = build_workflow_graph_patch_from_committed_patch(
-        committed_patch=source.accepted_patch,
-        graph_source=graph_source,
+    graph_patch = (
+        source.selected_workflow_graph_patch
+        if source.commit_execution_mode == "graph_native_execution_handoff"
+        and source.selected_workflow_graph_patch.patch_id
+        else build_workflow_graph_patch_from_committed_patch(
+            committed_patch=source.accepted_patch,
+            graph_source=graph_source,
+        )
     )
     return WorkflowCommitRequest(
         workflow_payload=payload,
@@ -251,7 +256,9 @@ def _build_commit_source_payload_from_source(source: WorkflowCommitSource, graph
     metadata = dict(source.accepted_patch.metadata)
     return {
         "commit_execution_mode": str(
-            metadata.get("commit_execution_mode", "schema_execution_fallback") or "schema_execution_fallback"
+            source.commit_execution_mode
+            or metadata.get("commit_execution_mode", "schema_execution_fallback")
+            or "schema_execution_fallback"
         ),
         "preferred_commit_source": str(metadata.get("preferred_commit_source", "schema") or "schema"),
         "selected_workflow_graph_patch_id": str(

@@ -153,6 +153,9 @@ def build_surrogate_workflow_snapshot(
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
+            "request_graph_native_artifact_input_received": (
+                session.latest_execution_source_evidence.request_graph_native_artifact_input_received
+            ),
             "selected_workflow_graph_patch_id": session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
             "top_schema_patch_id": session.latest_execution_source_evidence.top_schema_patch_id,
             "top_graph_patch_candidate_id": session.latest_execution_source_evidence.top_graph_patch_candidate_id,
@@ -162,6 +165,9 @@ def build_surrogate_workflow_snapshot(
             "backend_echoed_commit_source": session.latest_execution_source_evidence.backend_echoed_commit_source,
             "backend_echoed_commit_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_mode
+            ),
+            "backend_echoed_graph_native_artifact_input_received": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received
             ),
             "comparison_notes": list(session.latest_execution_source_evidence.comparison_notes),
         },
@@ -285,6 +291,9 @@ def build_surrogate_workflow_snapshot(
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
+            "request_graph_native_artifact_input_received": (
+                session.latest_execution_source_evidence.request_graph_native_artifact_input_received
+            ),
             "selected_workflow_graph_patch_id": session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
             "top_schema_patch_id": session.latest_execution_source_evidence.top_schema_patch_id,
             "top_graph_patch_candidate_id": session.latest_execution_source_evidence.top_graph_patch_candidate_id,
@@ -294,6 +303,9 @@ def build_surrogate_workflow_snapshot(
             "backend_echoed_commit_source": session.latest_execution_source_evidence.backend_echoed_commit_source,
             "backend_echoed_commit_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_mode
+            ),
+            "backend_echoed_graph_native_artifact_input_received": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received
             ),
             "comparison_notes": list(session.latest_execution_source_evidence.comparison_notes),
         },
