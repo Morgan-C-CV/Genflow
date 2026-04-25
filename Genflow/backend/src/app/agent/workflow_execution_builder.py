@@ -3,11 +3,6 @@ from __future__ import annotations
 """Build workflow-native execution payloads from the current surrogate stack."""
 
 from app.agent.memory import AgentSessionState
-from app.agent.workflow_descriptor_builder import (
-    build_surrogate_workflow_descriptor,
-    build_surrogate_workflow_descriptor_from_execution_source,
-)
-from app.agent.workflow_document_builder import build_surrogate_workflow_document_from_descriptor
 from app.agent.workflow_execution_models import (
     WorkflowCommitRequest,
     WorkflowExecutionArtifact,
@@ -19,6 +14,11 @@ from app.agent.workflow_execution_source_models import (
     WorkflowExecutionSource,
     WorkflowPreviewSource,
 )
+from app.agent.workflow_graph_source_builder import (
+    build_workflow_graph_source,
+    build_workflow_graph_source_from_execution_source,
+)
+from app.agent.workflow_graph_source_models import WorkflowGraphSource
 
 
 def build_workflow_execution_payload(
@@ -26,74 +26,90 @@ def build_workflow_execution_payload(
     execution_kind: str,
     preview: bool = False,
 ) -> WorkflowExecutionPayload:
-    descriptor = build_surrogate_workflow_descriptor(
+    graph_source = build_workflow_graph_source(
         session=session,
         execution_kind=execution_kind,
         preview=preview,
     )
-    return _build_workflow_execution_payload_from_descriptor(descriptor)
+    return build_workflow_execution_payload_from_graph_source(
+        graph_source,
+        execution_kind=execution_kind,
+        preview=preview,
+    )
 
 
 def build_workflow_execution_payload_from_source(
     source: WorkflowExecutionSource,
 ) -> WorkflowExecutionPayload:
-    descriptor = build_surrogate_workflow_descriptor_from_execution_source(source)
-    return _build_workflow_execution_payload_from_descriptor(descriptor)
+    graph_source = build_workflow_graph_source_from_execution_source(source)
+    return build_workflow_execution_payload_from_graph_source(
+        graph_source,
+        execution_kind=source.execution_kind,
+        preview=source.preview,
+    )
 
 
-def _build_workflow_execution_payload_from_descriptor(
-    descriptor,
+def build_workflow_execution_payload_from_graph_source(
+    graph_source: WorkflowGraphSource,
+    execution_kind: str,
+    preview: bool = False,
 ) -> WorkflowExecutionPayload:
-    document = build_surrogate_workflow_document_from_descriptor(descriptor)
     return WorkflowExecutionPayload(
-        workflow_id=document.workflow_id,
-        workflow_kind=document.workflow_kind or "workflow_native_surrogate",
-        workflow_version=descriptor.metadata.get("workflow_version", "phase-k-workflow-payload"),
-        execution_kind=descriptor.execution.execution_kind,
-        preview=descriptor.execution.preview,
+        workflow_id=graph_source.workflow_id,
+        workflow_kind=graph_source.workflow_kind or "workflow_native_surrogate",
+        workflow_version=graph_source.workflow_version or "phase-k-workflow-payload",
+        execution_kind=execution_kind,
+        preview=preview,
         nodes=[
             {
                 "node_id": node.node_id,
-                "node_kind": node.node_kind,
+                "node_kind": node.node_type,
                 "role": node.role,
                 "label": node.label,
-                "metadata": dict(node.metadata),
+                "metadata": {
+                    **dict(node.metadata),
+                    "graph_node_type": node.node_type,
+                },
             }
-            for node in document.nodes
+            for node in graph_source.nodes
         ],
         edges=[
             {
                 "edge_id": edge.edge_id,
                 "source_node_id": edge.source_node_id,
                 "target_node_id": edge.target_node_id,
-                "edge_kind": edge.edge_kind,
-                "metadata": dict(edge.metadata),
+                "edge_kind": edge.edge_type,
+                "metadata": {
+                    **dict(edge.metadata),
+                    "graph_edge_type": edge.edge_type,
+                },
             }
-            for edge in document.edges
+            for edge in graph_source.edges
         ],
-        entry_node_ids=list(document.entry_node_ids),
-        exit_node_ids=list(document.exit_node_ids),
+        entry_node_ids=list(graph_source.entry_node_ids),
+        exit_node_ids=list(graph_source.exit_node_ids),
         execution_config={
-            "execution_kind": descriptor.execution.execution_kind,
-            "preview": descriptor.execution.preview,
-            "backend_kind": document.backend_kind,
-            "workflow_profile": document.workflow_profile,
-            "region_label": document.metadata.get("region_label", ""),
-            "selected_probe_id": document.metadata.get("selected_probe_id", ""),
-            "accepted_patch_id": document.metadata.get("accepted_patch_id", ""),
+            "execution_kind": execution_kind,
+            "preview": preview,
+            "backend_kind": graph_source.backend_kind,
+            "workflow_profile": graph_source.workflow_profile,
+            "region_label": graph_source.metadata.get("region_label", ""),
+            "selected_probe_id": graph_source.metadata.get("selected_probe_id", ""),
+            "accepted_patch_id": graph_source.metadata.get("accepted_patch_id", ""),
         },
         backend_metadata={
-            "backend_kind": document.backend_kind,
-            "workflow_profile": document.workflow_profile,
-            "graph_regions": list(document.metadata.get("graph_regions", [])),
-            "source_document_id": document.document_id,
+            "backend_kind": graph_source.backend_kind,
+            "workflow_profile": graph_source.workflow_profile,
+            "graph_regions": list(graph_source.metadata.get("graph_regions", [])),
+            "source_document_id": graph_source.metadata.get("source_document_id", ""),
+            "source_graph_id": graph_source.workflow_id,
         },
         artifacts=[
             WorkflowExecutionArtifact(
-                artifact_id=document.document_id,
-                artifact_kind="workflow_document",
-                uri=f"memory://workflow-execution/{document.document_id}",
-                metadata={"region_label": document.metadata.get("region_label", "")},
+                artifact_id=graph_source.workflow_id,
+                artifact_kind="workflow_graph_source",
+                uri=f"memory://workflow-execution/{graph_source.workflow_id}",
+                metadata={"region_label": graph_source.metadata.get("region_label", "")},
             )
         ],
     )

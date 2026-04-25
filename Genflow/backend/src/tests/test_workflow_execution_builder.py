@@ -6,10 +6,12 @@ from app.agent.workflow_execution_builder import (
     build_workflow_commit_request,
     build_workflow_commit_request_from_source,
     build_workflow_execution_payload,
+    build_workflow_execution_payload_from_graph_source,
     build_workflow_execution_payload_from_source,
     build_workflow_preview_request,
     build_workflow_preview_request_from_source,
 )
+from app.agent.workflow_graph_source_builder import build_workflow_graph_source
 from app.agent.workflow_execution_source_models import (
     WorkflowCommitSource,
     WorkflowExecutionSource,
@@ -83,6 +85,22 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertTrue(payload.nodes)
         self.assertTrue(payload.edges)
         self.assertEqual(payload.execution_config["backend_kind"], "live_backend")
+
+    def test_build_workflow_execution_payload_from_graph_source_preserves_contract(self):
+        session = self._make_session()
+        graph_source = build_workflow_graph_source(session, execution_kind="initial", preview=False)
+
+        payload = build_workflow_execution_payload_from_graph_source(
+            graph_source,
+            execution_kind="initial",
+            preview=False,
+        )
+
+        self.assertEqual(payload.workflow_id, session.workflow_id)
+        self.assertEqual(payload.execution_kind, "initial")
+        self.assertTrue(payload.nodes)
+        self.assertTrue(payload.edges)
+        self.assertEqual(payload.backend_metadata["source_graph_id"], session.workflow_id)
 
     def test_build_workflow_preview_request_uses_selected_probe(self):
         session = self._make_session()
