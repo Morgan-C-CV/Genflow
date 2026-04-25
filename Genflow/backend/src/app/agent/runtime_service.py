@@ -352,6 +352,9 @@ class AgentRuntimeService:
         session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
             commit_execution_mode=session.commit_execution_mode,
             commit_execution_authority=session.commit_execution_authority,
+            request_primary_plan_kind=(
+                "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
+            ),
             preferred_commit_source=session.preferred_commit_source,
             request_graph_native_artifact_input_received=bool(
                 session.commit_execution_mode == "graph_native_execution_handoff"
@@ -368,6 +371,7 @@ class AgentRuntimeService:
             backend_echoed_commit_execution_authority=str(
                 backend_metadata.get("commit_execution_authority", "")
             ),
+            backend_echoed_primary_plan_kind=str(backend_metadata.get("request_primary_plan_kind", "")),
             backend_echoed_graph_native_artifact_input_received=bool(
                 backend_metadata.get("graph_native_artifact_input_received", False)
             ),

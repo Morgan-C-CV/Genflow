@@ -142,6 +142,9 @@ def build_surrogate_workflow_snapshot(
             "preferred_commit_source": session.preferred_commit_source,
             "commit_execution_mode": session.commit_execution_mode,
             "commit_execution_authority": session.commit_execution_authority,
+            "request_primary_plan_kind": (
+                "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
+            ),
             "selected_graph_native_patch_candidate_id": session.selected_graph_native_patch_candidate.candidate_id,
             "selected_workflow_graph_patch_id": session.selected_workflow_graph_patch.patch_id,
             "graph_native_aligned_winner": bool(
@@ -154,6 +157,7 @@ def build_surrogate_workflow_snapshot(
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,
+            "request_primary_plan_kind": session.latest_execution_source_evidence.request_primary_plan_kind,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.request_graph_native_artifact_input_received
@@ -170,6 +174,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_commit_execution_authority": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_authority
+            ),
+            "backend_echoed_primary_plan_kind": (
+                session.latest_execution_source_evidence.backend_echoed_primary_plan_kind
             ),
             "backend_echoed_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received
@@ -294,9 +301,13 @@ def build_surrogate_workflow_snapshot(
         },
         "commit_execution_mode": session.commit_execution_mode,
         "commit_execution_authority": session.commit_execution_authority,
+        "request_primary_plan_kind": (
+            "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
+        ),
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,
+            "request_primary_plan_kind": session.latest_execution_source_evidence.request_primary_plan_kind,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.request_graph_native_artifact_input_received
@@ -313,6 +324,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_commit_execution_authority": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_authority
+            ),
+            "backend_echoed_primary_plan_kind": (
+                session.latest_execution_source_evidence.backend_echoed_primary_plan_kind
             ),
             "backend_echoed_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received

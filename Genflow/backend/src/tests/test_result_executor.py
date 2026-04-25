@@ -102,11 +102,12 @@ class ResultExecutorTest(unittest.TestCase):
             patch,
             graph_patch=graph_patch,
             commit_execution_mode="graph_native_execution_handoff",
-            commit_execution_authority="graph_supplemental",
+            commit_execution_authority="graph_authoritative",
         )
 
         self.assertEqual(payload.content["graph_patch_input_id"], "wgp_002")
-        self.assertEqual(payload.content["commit_execution_authority"], "graph_supplemental")
+        self.assertEqual(payload.content["commit_execution_authority"], "graph_authoritative")
+        self.assertEqual(payload.content["request_primary_plan_kind"], "graph_primary")
         self.assertTrue(payload.artifacts["backend_metadata"]["graph_native_artifact_input_received"])
         self.assertEqual(
             payload.artifacts["backend_metadata"]["commit_execution_mode"],
@@ -114,10 +115,12 @@ class ResultExecutorTest(unittest.TestCase):
         )
         self.assertEqual(
             payload.artifacts["backend_metadata"]["commit_execution_authority"],
-            "graph_supplemental",
+            "graph_authoritative",
         )
+        self.assertEqual(payload.artifacts["backend_metadata"]["request_primary_plan_kind"], "graph_primary")
         self.assertIn("graph_native_artifact_input_received=True", summary.notes)
-        self.assertIn("commit_execution_authority=graph_supplemental", summary.notes)
+        self.assertIn("commit_execution_authority=graph_authoritative", summary.notes)
+        self.assertIn("request_primary_plan_kind=graph_primary", summary.notes)
 
 
 if __name__ == "__main__":

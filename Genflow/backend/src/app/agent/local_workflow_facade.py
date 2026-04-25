@@ -90,6 +90,7 @@ class LocalWorkflowFacade:
     def _run_commit(request: CommitExecutionRequest) -> ExecutionResponse:
         patch_spec = dict(request.patch_spec)
         graph_patch_spec = dict(patch_spec.get("graph_patch_spec", {}))
+        primary_commit_plan = dict(patch_spec.get("primary_commit_plan", {}))
         commit_source_payload = dict(patch_spec.get("commit_source_payload", {}))
         LocalWorkflowFacade._validate_graph_patch_spec(graph_patch_spec, "commit")
         patch_id = str(patch_spec.get("patch_id", "commit"))
@@ -105,6 +106,7 @@ class LocalWorkflowFacade:
                 "graph_native_artifact_input_received": bool(
                     commit_source_payload.get("selected_workflow_graph_patch_id", "")
                 ),
+                "request_primary_plan_kind": primary_commit_plan.get("plan_kind", ""),
             },
             summary_text=f"Local workflow facade committed patch={patch_id}.",
             changed_axes=target_axes,
@@ -116,6 +118,7 @@ class LocalWorkflowFacade:
                 "graph_patch_id": graph_patch_spec.get("patch_id", ""),
                 "commit_execution_mode": commit_source_payload.get("commit_execution_mode", ""),
                 "commit_execution_authority": commit_source_payload.get("commit_execution_authority", ""),
+                "request_primary_plan_kind": primary_commit_plan.get("plan_kind", ""),
                 "preferred_commit_source": commit_source_payload.get("preferred_commit_source", ""),
                 "graph_native_artifact_input_received": bool(
                     commit_source_payload.get("selected_workflow_graph_patch_id", "")
@@ -129,6 +132,7 @@ class LocalWorkflowFacade:
             comparison_notes=[
                 f"commit_rationale={patch_spec.get('rationale', '')}",
                 f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
+                f"request_primary_plan_kind={primary_commit_plan.get('plan_kind', '')}",
                 f"commit_execution_mode={commit_source_payload.get('commit_execution_mode', '')}",
                 f"commit_execution_authority={commit_source_payload.get('commit_execution_authority', '')}",
                 f"preferred_commit_source={commit_source_payload.get('preferred_commit_source', '')}",

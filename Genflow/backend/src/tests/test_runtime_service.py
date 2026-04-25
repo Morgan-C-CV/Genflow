@@ -790,6 +790,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.commit_execution_mode, "graph_native_execution_handoff")
         self.assertEqual(session.commit_execution_authority, "graph_authoritative")
         self.assertEqual(
+            session.workflow_metadata["patch_winner_comparison"]["request_primary_plan_kind"],
+            "graph_primary",
+        )
+        self.assertEqual(
             session.accepted_patch.metadata["commit_execution_mode"],
             "graph_native_execution_handoff",
         )
@@ -817,6 +821,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.latest_execution_source_evidence.commit_execution_authority,
             "graph_authoritative",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.request_primary_plan_kind,
+            "graph_primary",
         )
         self.assertEqual(session.latest_execution_source_evidence.preferred_commit_source, "graph")
         self.assertTrue(session.latest_execution_source_evidence.request_graph_native_artifact_input_received)
@@ -848,6 +856,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["commit_execution_authority"],
             "graph_authoritative",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["backend_echoed_primary_plan_kind"],
+            "graph_primary",
         )
 
         session = service.verify_latest_result(session.session_id)
@@ -919,9 +931,14 @@ class RuntimeServiceTest(unittest.TestCase):
             session.latest_execution_source_evidence.commit_execution_authority,
             "graph_supplemental",
         )
+        self.assertEqual(session.latest_execution_source_evidence.request_primary_plan_kind, "schema_primary")
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_commit_execution_authority,
             "graph_supplemental",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_primary_plan_kind,
+            "schema_primary",
         )
 
     def test_runtime_service_passes_benchmark_comparison_summary_to_verifier(self):

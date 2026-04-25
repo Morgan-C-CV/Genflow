@@ -114,6 +114,7 @@ class LiveExecutionAdapter(ExecutionAdapter):
             patch_spec={
                 **dict(workflow_request.committed_patch_spec),
                 "graph_patch_spec": dict(workflow_request.graph_patch_spec),
+                "primary_commit_plan": dict(workflow_request.primary_commit_plan),
                 "commit_source_payload": dict(workflow_request.commit_source_payload),
             },
         )

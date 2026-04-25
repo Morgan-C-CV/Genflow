@@ -159,8 +159,11 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertTrue(request.graph_patch_spec["node_patches"])
         self.assertEqual(request.commit_source_payload["commit_execution_mode"], "schema_execution_fallback")
         self.assertEqual(request.commit_source_payload["commit_execution_authority"], "schema_authoritative")
+        self.assertEqual(request.commit_source_payload["request_primary_plan_kind"], "schema_primary")
         self.assertEqual(request.commit_source_payload["preferred_commit_source"], "schema")
         self.assertEqual(request.commit_source_payload["top_schema_patch_id"], "cp_001")
+        self.assertEqual(request.primary_commit_plan["plan_kind"], "schema_primary")
+        self.assertEqual(request.committed_patch_spec["schema_patch_role"], "primary")
 
     def test_build_workflow_commit_request_prefers_selected_workflow_graph_patch_when_graph_preferred(self):
         session = self._make_session()
@@ -194,6 +197,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
             request.commit_source_payload["commit_execution_authority"],
             "schema_authoritative",
         )
+        self.assertEqual(request.primary_commit_plan["plan_kind"], "schema_primary")
         self.assertEqual(
             request.commit_source_payload["top_graph_patch_candidate_id"],
             session.top_workflow_graph_patch_candidate.candidate_id,
@@ -222,6 +226,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.commit_source_payload["commit_execution_mode"], "schema_execution_fallback")
         self.assertEqual(request.commit_source_payload["commit_execution_authority"], "schema_authoritative")
+        self.assertEqual(request.primary_commit_plan["plan_kind"], "schema_primary")
 
     def test_build_workflow_commit_request_from_source_uses_graph_artifact_when_handoff_mode(self):
         session = self._make_session()
@@ -243,14 +248,17 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
             accepted_patch=session.accepted_patch,
             selected_workflow_graph_patch=selected_graph_patch,
             commit_execution_mode="graph_native_execution_handoff",
-            commit_execution_authority="graph_supplemental",
+            commit_execution_authority="graph_authoritative",
         )
 
         request = build_workflow_commit_request_from_source(source)
 
         self.assertEqual(request.commit_source_payload["commit_execution_mode"], "graph_native_execution_handoff")
-        self.assertEqual(request.commit_source_payload["commit_execution_authority"], "graph_supplemental")
+        self.assertEqual(request.commit_source_payload["commit_execution_authority"], "graph_authoritative")
+        self.assertEqual(request.commit_source_payload["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(request.graph_patch_spec["patch_id"], selected_graph_patch.patch_id)
+        self.assertEqual(request.primary_commit_plan["plan_kind"], "graph_primary")
+        self.assertEqual(request.committed_patch_spec["schema_patch_role"], "compatibility_fallback")
 
 
 if __name__ == "__main__":

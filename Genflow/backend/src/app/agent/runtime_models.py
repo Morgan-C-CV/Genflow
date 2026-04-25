@@ -108,6 +108,7 @@ class VerifierSignalSummary:
 class ExecutionSourceEvidenceSummary:
     commit_execution_mode: str = ""
     commit_execution_authority: str = ""
+    request_primary_plan_kind: str = ""
     preferred_commit_source: str = ""
     request_graph_native_artifact_input_received: bool = False
     selected_workflow_graph_patch_id: str = ""
@@ -119,5 +120,6 @@ class ExecutionSourceEvidenceSummary:
     backend_echoed_commit_source: str = ""
     backend_echoed_commit_execution_mode: str = ""
     backend_echoed_commit_execution_authority: str = ""
+    backend_echoed_primary_plan_kind: str = ""
     backend_echoed_graph_native_artifact_input_received: bool = False
     comparison_notes: List[str] = field(default_factory=list)

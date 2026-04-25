@@ -182,15 +182,16 @@ def build_workflow_commit_request(session: AgentSessionState) -> WorkflowCommitR
         )
     return WorkflowCommitRequest(
         workflow_payload=payload,
-        committed_patch_spec={
-            "patch_id": session.accepted_patch.patch_id,
-            "target_fields": list(session.accepted_patch.target_fields),
-            "target_axes": list(session.accepted_patch.target_axes),
-            "preserve_axes": list(session.accepted_patch.preserve_axes),
-            "changes": dict(session.accepted_patch.changes),
-            "rationale": session.accepted_patch.rationale,
-        },
+        committed_patch_spec=_build_committed_patch_spec(
+            session.accepted_patch,
+            authority=session.commit_execution_authority,
+        ),
         graph_patch_spec=_serialize_graph_patch(graph_patch),
+        primary_commit_plan=_build_primary_commit_plan(
+            authority=session.commit_execution_authority,
+            patch=session.accepted_patch,
+            graph_patch=graph_patch,
+        ),
         commit_source_payload=_build_commit_source_payload(session),
         reference_info=_build_reference_info(session),
     )
@@ -212,15 +213,16 @@ def build_workflow_commit_request_from_source(
     )
     return WorkflowCommitRequest(
         workflow_payload=payload,
-        committed_patch_spec={
-            "patch_id": source.accepted_patch.patch_id,
-            "target_fields": list(source.accepted_patch.target_fields),
-            "target_axes": list(source.accepted_patch.target_axes),
-            "preserve_axes": list(source.accepted_patch.preserve_axes),
-            "changes": dict(source.accepted_patch.changes),
-            "rationale": source.accepted_patch.rationale,
-        },
+        committed_patch_spec=_build_committed_patch_spec(
+            source.accepted_patch,
+            authority=source.commit_execution_authority,
+        ),
         graph_patch_spec=_serialize_graph_patch(graph_patch),
+        primary_commit_plan=_build_primary_commit_plan(
+            authority=source.commit_execution_authority,
+            patch=source.accepted_patch,
+            graph_patch=graph_patch,
+        ),
         commit_source_payload=_build_commit_source_payload_from_source(source, graph_patch),
         reference_info=_build_reference_info_from_source(source),
     )
@@ -246,6 +248,9 @@ def _build_commit_source_payload(session: AgentSessionState) -> dict:
     return {
         "commit_execution_mode": session.commit_execution_mode,
         "commit_execution_authority": session.commit_execution_authority,
+        "request_primary_plan_kind": (
+            "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
+        ),
         "preferred_commit_source": session.preferred_commit_source,
         "selected_workflow_graph_patch_id": session.selected_workflow_graph_patch.patch_id,
         "top_schema_patch_id": session.top_schema_patch_candidate.patch_id,
@@ -266,12 +271,59 @@ def _build_commit_source_payload_from_source(source: WorkflowCommitSource, graph
             or metadata.get("commit_execution_authority", "schema_authoritative")
             or "schema_authoritative"
         ),
+        "request_primary_plan_kind": (
+            "graph_primary"
+            if (
+                source.commit_execution_authority
+                or metadata.get("commit_execution_authority", "schema_authoritative")
+            )
+            == "graph_authoritative"
+            else "schema_primary"
+        ),
         "preferred_commit_source": str(metadata.get("preferred_commit_source", "schema") or "schema"),
         "selected_workflow_graph_patch_id": str(
             metadata.get("selected_workflow_graph_patch_id", graph_patch.patch_id)
         ),
         "top_schema_patch_id": str(metadata.get("top_schema_patch_id", source.accepted_patch.patch_id)),
         "top_graph_patch_candidate_id": str(metadata.get("top_graph_patch_candidate_id", "")),
+    }
+
+
+def _build_committed_patch_spec(patch, authority: str) -> dict:
+    spec = {
+        "patch_id": patch.patch_id,
+        "target_fields": list(patch.target_fields),
+        "target_axes": list(patch.target_axes),
+        "preserve_axes": list(patch.preserve_axes),
+        "changes": dict(patch.changes),
+        "rationale": patch.rationale,
+    }
+    if authority == "graph_authoritative":
+        spec["schema_patch_role"] = "compatibility_fallback"
+        spec["schema_shadow_fields"] = list(patch.target_fields)
+    else:
+        spec["schema_patch_role"] = "primary"
+    return spec
+
+
+def _build_primary_commit_plan(authority: str, patch, graph_patch) -> dict:
+    if authority == "graph_authoritative":
+        return {
+            "plan_kind": "graph_primary",
+            "graph_patch_id": graph_patch.patch_id,
+            "graph_patch_kind": graph_patch.patch_kind,
+            "target_axes": list(graph_patch.metadata.get("target_axes", [])),
+            "preserve_axes": list(graph_patch.metadata.get("preserve_axes", [])),
+            "schema_patch_id": patch.patch_id,
+            "schema_patch_role": "compatibility_fallback",
+        }
+    return {
+        "plan_kind": "schema_primary",
+        "schema_patch_id": patch.patch_id,
+        "target_axes": list(patch.target_axes),
+        "preserve_axes": list(patch.preserve_axes),
+        "graph_patch_id": graph_patch.patch_id,
+        "graph_patch_role": "supplemental" if graph_patch.patch_id else "absent",
     }
 
 
