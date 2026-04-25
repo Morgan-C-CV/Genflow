@@ -476,6 +476,11 @@ class RuntimeServiceTest(unittest.TestCase):
             probe_generator.last_refinement_benchmark_set.anchor_ids,
             [101, 102, 103],
         )
+        self.assertGreater(len(session.workflow_graph_patch_candidates), 1)
+        self.assertEqual(
+            session.workflow_graph_patch_candidates[0].metadata["probe_id"],
+            session.selected_probe.probe_id,
+        )
 
     def test_runtime_service_auto_selects_top_ranked_probe_without_manual_override(self):
         memory = AgentMemoryService()
@@ -503,6 +508,7 @@ class RuntimeServiceTest(unittest.TestCase):
 
         self.assertEqual(session.preview_probe_candidates[0].probe_id, "p_002")
         self.assertEqual(session.selected_probe.probe_id, "p_002")
+        self.assertGreater(len(session.workflow_graph_patch_candidates), 1)
 
     def test_runtime_service_manual_probe_selection_overrides_default_probe(self):
         memory = AgentMemoryService()
@@ -532,6 +538,10 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.select_probe(session.session_id, "p_001")
 
         self.assertEqual(session.selected_probe.probe_id, "p_001")
+        self.assertEqual(
+            session.workflow_graph_patch_candidates[0].metadata["probe_id"],
+            "p_001",
+        )
 
     def test_runtime_service_preview_selected_probe_uses_default_selected_probe(self):
         memory = AgentMemoryService()

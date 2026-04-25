@@ -46,3 +46,17 @@ class WorkflowGraphPatch:
     edge_patches: List[WorkflowEdgePatch] = field(default_factory=list)
     region_patches: List[WorkflowRegionPatch] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class WorkflowGraphPatchCandidate:
+    workflow_id: str = ""
+    candidate_id: str = ""
+    candidate_kind: str = ""
+    node_patches: List[WorkflowNodePatch] = field(default_factory=list)
+    edge_patches: List[WorkflowEdgePatch] = field(default_factory=list)
+    region_patches: List[WorkflowRegionPatch] = field(default_factory=list)
+    target_axes: List[str] = field(default_factory=list)
+    preserve_axes: List[str] = field(default_factory=list)
+    candidate_rationale: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)

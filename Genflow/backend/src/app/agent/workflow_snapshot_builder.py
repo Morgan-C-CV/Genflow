@@ -113,6 +113,11 @@ def build_surrogate_workflow_snapshot(
             "target_fields": list(session.current_workflow_graph_patch.metadata.get("target_fields", [])),
             "target_axes": list(session.current_workflow_graph_patch.metadata.get("target_axes", [])),
         },
+        "workflow_graph_patch_candidates": {
+            "candidate_count": len(session.workflow_graph_patch_candidates),
+            "candidate_ids": [candidate.candidate_id for candidate in session.workflow_graph_patch_candidates],
+            "candidate_kinds": [candidate.candidate_kind for candidate in session.workflow_graph_patch_candidates],
+        },
     }
     surrogate_payload = {
         "schema": {
@@ -197,6 +202,19 @@ def build_surrogate_workflow_snapshot(
                 for patch in session.current_workflow_graph_patch.region_patches
             ],
         },
+        "workflow_graph_patch_candidates": [
+            {
+                "candidate_id": candidate.candidate_id,
+                "candidate_kind": candidate.candidate_kind,
+                "target_axes": list(candidate.target_axes),
+                "preserve_axes": list(candidate.preserve_axes),
+                "candidate_rationale": candidate.candidate_rationale,
+                "node_patch_count": len(candidate.node_patches),
+                "edge_patch_count": len(candidate.edge_patches),
+                "region_patch_count": len(candidate.region_patches),
+            }
+            for candidate in session.workflow_graph_patch_candidates
+        ],
     }
     workflow_topology_hints = {
         **workflow_topology_hints,

@@ -20,7 +20,7 @@ from app.agent.runtime_models import (
 from app.agent.refinement_benchmark_retriever import RefinementBenchmarkSet
 from app.agent.benchmark_comparison_summary import BenchmarkComparisonSummary
 from app.agent.verifier_repair_recommendation import VerifierRepairRecommendation
-from app.agent.workflow_graph_patch_models import WorkflowGraphPatch
+from app.agent.workflow_graph_patch_models import WorkflowGraphPatch, WorkflowGraphPatchCandidate
 from app.agent.workflow_runtime_models import (
     WorkflowExecutionConfig,
     WorkflowGraphPlaceholder,
@@ -92,6 +92,7 @@ class AgentSessionState:
     patch_history: List[CommittedPatch] = field(default_factory=list)
     accepted_patch: CommittedPatch = field(default_factory=CommittedPatch)
     current_workflow_graph_patch: WorkflowGraphPatch = field(default_factory=WorkflowGraphPatch)
+    workflow_graph_patch_candidates: List[WorkflowGraphPatchCandidate] = field(default_factory=list)
     current_uncertainty_estimate: float = 0.0
     latest_verifier_result: VerifierResult = field(default_factory=VerifierResult)
     latest_verifier_signal_summary: VerifierSignalSummary = field(default_factory=VerifierSignalSummary)

@@ -46,6 +46,7 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertIn("refinement_benchmark_set", payload)
         self.assertIn("refinement_benchmark_summary", payload)
         self.assertIn("benchmark_comparison_summary", payload)
+        self.assertIn("workflow_graph_patch_candidates", payload)
         self.assertEqual(payload["parsed_feedback"]["raw_feedback"], "Keep the composition, but improve style.")
         self.assertEqual(payload["preserve_constraints"], ["Keep the composition"])
         self.assertEqual(payload["dissatisfaction_axes"], ["style"])
@@ -111,6 +112,11 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["workflow_metadata"]["workflow_graph_patch"]["patch_id"],
             payload["current_workflow_graph_patch"]["patch_id"],
+        )
+        self.assertGreater(len(payload["workflow_graph_patch_candidates"]), 1)
+        self.assertEqual(
+            payload["workflow_metadata"]["workflow_graph_patch_candidates"]["candidate_count"],
+            len(payload["workflow_graph_patch_candidates"]),
         )
 
 
