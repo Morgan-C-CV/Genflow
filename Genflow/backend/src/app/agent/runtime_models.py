@@ -111,6 +111,8 @@ class ExecutionSourceEvidenceSummary:
     request_primary_plan_kind: str = ""
     commit_execution_implementation_mode: str = ""
     request_backend_execution_mode: str = ""
+    backend_accepted_execution_mode: str = ""
+    backend_realized_execution_mode: str = ""
     execution_behavior_branch: str = ""
     preferred_commit_source: str = ""
     request_graph_native_artifact_input_received: bool = False
@@ -126,6 +128,8 @@ class ExecutionSourceEvidenceSummary:
     backend_echoed_primary_plan_kind: str = ""
     backend_echoed_commit_execution_implementation_mode: str = ""
     backend_echoed_backend_execution_mode: str = ""
+    backend_echoed_accepted_backend_execution_mode: str = ""
+    backend_echoed_realized_backend_execution_mode: str = ""
     backend_echoed_execution_behavior_branch: str = ""
     backend_echoed_graph_native_artifact_input_received: bool = False
     comparison_notes: List[str] = field(default_factory=list)

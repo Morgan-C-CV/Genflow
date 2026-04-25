@@ -121,8 +121,24 @@ class ResultExecutor(ExecutionAdapter):
         effective_authority = commit_execution_authority or "schema_authoritative"
         implementation_mode = commit_execution_implementation_mode or "schema_compatible_execution"
         primary_plan_kind = "graph_primary" if effective_authority == "graph_authoritative" else "schema_primary"
+        requested_backend_execution_mode = (
+            "graph_primary_backend_execution"
+            if implementation_mode == "graph_primary_execution"
+            else "schema_compatible_backend_execution"
+        )
+        accepted_backend_execution_mode = requested_backend_execution_mode
+        realized_backend_execution_mode = (
+            "schema_compatible_backend_execution"
+            if (
+                requested_backend_execution_mode == "graph_primary_backend_execution"
+                and not (graph_patch.edge_patches or graph_patch.region_patches)
+            )
+            else requested_backend_execution_mode
+        )
         execution_behavior_branch = (
-            "graph_primary_execution_branch" if primary_plan_kind == "graph_primary" else "schema_primary_execution_branch"
+            "graph_primary_execution_branch"
+            if realized_backend_execution_mode == "graph_primary_backend_execution"
+            else "schema_primary_execution_branch"
         )
         payload = ResultPayload(
             result_id=self._id_factory(),
@@ -137,8 +153,15 @@ class ResultExecutor(ExecutionAdapter):
                 "commit_execution_authority": effective_authority,
                 "request_primary_plan_kind": primary_plan_kind,
                 "commit_execution_implementation_mode": implementation_mode,
+                "requested_backend_execution_mode": requested_backend_execution_mode,
+                "accepted_backend_execution_mode": accepted_backend_execution_mode,
+                "realized_backend_execution_mode": realized_backend_execution_mode,
                 "execution_behavior_branch": execution_behavior_branch,
-                "graph_driven_node_count": len(graph_patch.node_patches) if primary_plan_kind == "graph_primary" else 0,
+                "graph_driven_node_count": (
+                    len(graph_patch.node_patches)
+                    if realized_backend_execution_mode == "graph_primary_backend_execution"
+                    else 0
+                ),
             },
             artifacts={
                 "render_mode": "mock_commit",
@@ -150,13 +173,13 @@ class ResultExecutor(ExecutionAdapter):
                     "commit_execution_authority": effective_authority,
                     "request_primary_plan_kind": primary_plan_kind,
                     "commit_execution_implementation_mode": implementation_mode,
-                    "backend_execution_mode": (
-                        "graph_primary_backend_execution"
-                        if implementation_mode == "graph_primary_execution"
-                        else "schema_compatible_backend_execution"
-                    ),
+                    "backend_execution_mode": accepted_backend_execution_mode,
+                    "accepted_backend_execution_mode": accepted_backend_execution_mode,
+                    "realized_backend_execution_mode": realized_backend_execution_mode,
                     "execution_behavior_branch": execution_behavior_branch,
-                    "graph_primary_behavior_applied": primary_plan_kind == "graph_primary",
+                    "graph_primary_behavior_applied": (
+                        realized_backend_execution_mode == "graph_primary_backend_execution"
+                    ),
                     "graph_native_artifact_input_received": bool(graph_patch.patch_id),
                 },
             },
@@ -168,7 +191,7 @@ class ResultExecutor(ExecutionAdapter):
                     f"graph_patch={graph_patch.patch_id or 'none'}, "
                     f"graph_nodes={len(graph_patch.node_patches)}, "
                     f"implementation_mode={implementation_mode}."
-                    if primary_plan_kind == "graph_primary"
+                    if realized_backend_execution_mode == "graph_primary_backend_execution"
                     else f"Mock schema-primary execution branch for patch={patch.patch_id}, "
                     f"target_fields={','.join(patch.target_fields) or 'none'}, "
                     f"target_axes={','.join(changed_axes) or 'none'}, "
@@ -184,6 +207,9 @@ class ResultExecutor(ExecutionAdapter):
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
+                f"requested_backend_execution_mode={requested_backend_execution_mode}",
+                f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
+                f"realized_backend_execution_mode={realized_backend_execution_mode}",
                 f"execution_behavior_branch={execution_behavior_branch}",
             ] if patch.rationale else [
                 f"change_keys={','.join(patch.changes.keys())}",
@@ -191,6 +217,9 @@ class ResultExecutor(ExecutionAdapter):
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
+                f"requested_backend_execution_mode={requested_backend_execution_mode}",
+                f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
+                f"realized_backend_execution_mode={realized_backend_execution_mode}",
                 f"execution_behavior_branch={execution_behavior_branch}",
             ],
         )

@@ -842,6 +842,14 @@ class RuntimeServiceTest(unittest.TestCase):
             "graph_primary_backend_execution",
         )
         self.assertEqual(
+            session.latest_execution_source_evidence.backend_accepted_execution_mode,
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_realized_execution_mode,
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
             session.latest_execution_source_evidence.execution_behavior_branch,
             "graph_primary_execution_branch",
         )
@@ -886,6 +894,14 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_backend_execution_mode"],
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["backend_echoed_accepted_backend_execution_mode"],
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["backend_echoed_realized_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
         self.assertEqual(
@@ -980,6 +996,14 @@ class RuntimeServiceTest(unittest.TestCase):
             session.latest_execution_source_evidence.request_backend_execution_mode,
             "schema_compatible_backend_execution",
         )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_accepted_execution_mode,
+            "schema_compatible_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_realized_execution_mode,
+            "schema_compatible_backend_execution",
+        )
         self.assertEqual(session.latest_execution_source_evidence.request_primary_plan_kind, "schema_primary")
         self.assertEqual(
             session.latest_execution_source_evidence.execution_behavior_branch,
@@ -1000,6 +1024,89 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_backend_execution_mode,
             "schema_compatible_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_accepted_backend_execution_mode,
+            "schema_compatible_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_realized_backend_execution_mode,
+            "schema_compatible_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch,
+            "schema_primary_execution_branch",
+        )
+
+    def test_runtime_service_persists_backend_mode_downgrade_trace(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        ids = iter(["initial-rt-dg-1", "preview-rt-dg-1", "commit-rt-dg-1"])
+        executor = CapturingExecutionAdapter(id_factory=lambda: next(ids))
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            verifier=FakeVerifier(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_selected_probe(session.session_id)
+        session = service.commit_patch(session.session_id)
+
+        session.selected_workflow_graph_patch.edge_patches = []
+        session.selected_workflow_graph_patch.region_patches = []
+        session.commit_execution_mode = "graph_native_execution_handoff"
+        session.commit_execution_authority = "graph_authoritative"
+        session.commit_execution_implementation_mode = "graph_primary_execution"
+        session.accepted_patch.metadata["commit_execution_mode"] = session.commit_execution_mode
+        session.accepted_patch.metadata["commit_execution_authority"] = session.commit_execution_authority
+        session.accepted_patch.metadata["commit_execution_implementation_mode"] = (
+            session.commit_execution_implementation_mode
+        )
+        memory.save_session(session)
+
+        session = service.execute_patch(session.session_id)
+
+        self.assertEqual(executor.last_commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(executor.last_commit_execution_authority, "graph_authoritative")
+        self.assertEqual(executor.last_commit_execution_implementation_mode, "graph_primary_execution")
+        self.assertEqual(
+            session.latest_execution_source_evidence.request_backend_execution_mode,
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_accepted_execution_mode,
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_realized_execution_mode,
+            "schema_compatible_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_accepted_backend_execution_mode,
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_realized_backend_execution_mode,
+            "schema_compatible_backend_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.execution_behavior_branch,
+            "schema_primary_execution_branch",
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch,

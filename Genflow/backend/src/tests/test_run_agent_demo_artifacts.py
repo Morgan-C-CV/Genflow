@@ -190,6 +190,14 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             "graph_primary_backend_execution",
         )
         self.assertEqual(
+            payload["latest_execution_source_evidence"]["backend_accepted_execution_mode"],
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            payload["latest_execution_source_evidence"]["backend_realized_execution_mode"],
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
             payload["latest_execution_source_evidence"]["request_primary_plan_kind"],
             "graph_primary",
         )
@@ -219,6 +227,14 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         )
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_backend_execution_mode"],
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_accepted_backend_execution_mode"],
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_realized_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
         self.assertEqual(

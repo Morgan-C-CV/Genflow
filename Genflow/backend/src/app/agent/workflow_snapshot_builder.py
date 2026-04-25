@@ -165,6 +165,12 @@ def build_surrogate_workflow_snapshot(
             "request_backend_execution_mode": (
                 session.latest_execution_source_evidence.request_backend_execution_mode
             ),
+            "backend_accepted_execution_mode": (
+                session.latest_execution_source_evidence.backend_accepted_execution_mode
+            ),
+            "backend_realized_execution_mode": (
+                session.latest_execution_source_evidence.backend_realized_execution_mode
+            ),
             "execution_behavior_branch": session.latest_execution_source_evidence.execution_behavior_branch,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
@@ -191,6 +197,12 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode
+            ),
+            "backend_echoed_accepted_backend_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_accepted_backend_execution_mode
+            ),
+            "backend_echoed_realized_backend_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_realized_backend_execution_mode
             ),
             "backend_echoed_execution_behavior_branch": (
                 session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch
@@ -332,6 +344,12 @@ def build_surrogate_workflow_snapshot(
             "request_backend_execution_mode": (
                 session.latest_execution_source_evidence.request_backend_execution_mode
             ),
+            "backend_accepted_execution_mode": (
+                session.latest_execution_source_evidence.backend_accepted_execution_mode
+            ),
+            "backend_realized_execution_mode": (
+                session.latest_execution_source_evidence.backend_realized_execution_mode
+            ),
             "execution_behavior_branch": session.latest_execution_source_evidence.execution_behavior_branch,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
@@ -358,6 +376,12 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode
+            ),
+            "backend_echoed_accepted_backend_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_accepted_backend_execution_mode
+            ),
+            "backend_echoed_realized_backend_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_realized_backend_execution_mode
             ),
             "backend_echoed_execution_behavior_branch": (
                 session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch
