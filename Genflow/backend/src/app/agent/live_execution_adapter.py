@@ -96,6 +96,7 @@ class LiveExecutionAdapter(ExecutionAdapter):
         graph_patch: WorkflowGraphPatch | None = None,
         commit_execution_mode: str = "",
         commit_execution_authority: str = "",
+        commit_execution_implementation_mode: str = "",
     ) -> tuple[ResultPayload, ResultSummary]:
         client = self._require_backend_client()
         source = self._build_commit_execution_source(
@@ -104,6 +105,7 @@ class LiveExecutionAdapter(ExecutionAdapter):
             graph_patch,
             commit_execution_mode,
             commit_execution_authority,
+            commit_execution_implementation_mode,
         )
         workflow_request = build_workflow_commit_request_from_source(source)
         request = CommitExecutionRequest(
@@ -191,6 +193,7 @@ class LiveExecutionAdapter(ExecutionAdapter):
         graph_patch: WorkflowGraphPatch | None = None,
         commit_execution_mode: str = "",
         commit_execution_authority: str = "",
+        commit_execution_implementation_mode: str = "",
     ) -> WorkflowCommitSource:
         return WorkflowCommitSource(
             workflow_id="workflow-live-adapter-commit",
@@ -207,6 +210,9 @@ class LiveExecutionAdapter(ExecutionAdapter):
             selected_workflow_graph_patch=graph_patch or WorkflowGraphPatch(),
             commit_execution_mode=commit_execution_mode or "schema_execution_fallback",
             commit_execution_authority=commit_execution_authority or "schema_authoritative",
+            commit_execution_implementation_mode=(
+                commit_execution_implementation_mode or "schema_compatible_execution"
+            ),
         )
 
     @staticmethod

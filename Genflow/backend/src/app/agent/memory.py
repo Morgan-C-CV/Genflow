@@ -100,6 +100,7 @@ class AgentSessionState:
     preferred_commit_source: str = "schema"
     commit_execution_mode: str = "schema_execution_fallback"
     commit_execution_authority: str = "schema_authoritative"
+    commit_execution_implementation_mode: str = "schema_compatible_execution"
     selected_graph_native_patch_candidate: WorkflowGraphPatchCandidate = field(
         default_factory=WorkflowGraphPatchCandidate
     )

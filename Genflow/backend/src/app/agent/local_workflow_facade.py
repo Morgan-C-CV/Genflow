@@ -97,6 +97,9 @@ class LocalWorkflowFacade:
         target_axes = list(patch_spec.get("target_axes", []))
         preserve_axes = list(patch_spec.get("preserve_axes", []))
         primary_plan_kind = str(primary_commit_plan.get("plan_kind", "schema_primary"))
+        implementation_mode = str(
+            commit_source_payload.get("commit_execution_implementation_mode", "schema_compatible_execution")
+        )
         execution_behavior_branch = (
             "graph_primary_execution_branch"
             if primary_plan_kind == "graph_primary"
@@ -113,6 +116,7 @@ class LocalWorkflowFacade:
                     commit_source_payload.get("selected_workflow_graph_patch_id", "")
                 ),
                 "request_primary_plan_kind": primary_plan_kind,
+                "commit_execution_implementation_mode": implementation_mode,
                 "execution_behavior_branch": execution_behavior_branch,
                 "graph_driven_node_count": len(graph_patch_spec.get("node_patches", []))
                 if primary_plan_kind == "graph_primary"
@@ -133,6 +137,7 @@ class LocalWorkflowFacade:
                 "commit_execution_mode": commit_source_payload.get("commit_execution_mode", ""),
                 "commit_execution_authority": commit_source_payload.get("commit_execution_authority", ""),
                 "request_primary_plan_kind": primary_plan_kind,
+                "commit_execution_implementation_mode": implementation_mode,
                 "execution_behavior_branch": execution_behavior_branch,
                 "graph_primary_behavior_applied": primary_plan_kind == "graph_primary",
                 "preferred_commit_source": commit_source_payload.get("preferred_commit_source", ""),
@@ -149,6 +154,7 @@ class LocalWorkflowFacade:
                 f"commit_rationale={patch_spec.get('rationale', '')}",
                 f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
                 f"request_primary_plan_kind={primary_plan_kind}",
+                f"commit_execution_implementation_mode={implementation_mode}",
                 f"execution_behavior_branch={execution_behavior_branch}",
                 f"commit_execution_mode={commit_source_payload.get('commit_execution_mode', '')}",
                 f"commit_execution_authority={commit_source_payload.get('commit_execution_authority', '')}",

@@ -113,11 +113,13 @@ class ResultExecutor(ExecutionAdapter):
         graph_patch: WorkflowGraphPatch | None = None,
         commit_execution_mode: str = "",
         commit_execution_authority: str = "",
+        commit_execution_implementation_mode: str = "",
     ) -> tuple[ResultPayload, ResultSummary]:
         changed_axes = list(patch.target_axes or patch.target_fields)
         graph_patch = graph_patch or WorkflowGraphPatch()
         effective_mode = commit_execution_mode or "schema_execution_fallback"
         effective_authority = commit_execution_authority or "schema_authoritative"
+        implementation_mode = commit_execution_implementation_mode or "schema_compatible_execution"
         primary_plan_kind = "graph_primary" if effective_authority == "graph_authoritative" else "schema_primary"
         execution_behavior_branch = (
             "graph_primary_execution_branch" if primary_plan_kind == "graph_primary" else "schema_primary_execution_branch"
@@ -134,6 +136,7 @@ class ResultExecutor(ExecutionAdapter):
                 "graph_patch_input_id": graph_patch.patch_id,
                 "commit_execution_authority": effective_authority,
                 "request_primary_plan_kind": primary_plan_kind,
+                "commit_execution_implementation_mode": implementation_mode,
                 "execution_behavior_branch": execution_behavior_branch,
                 "graph_driven_node_count": len(graph_patch.node_patches) if primary_plan_kind == "graph_primary" else 0,
             },
@@ -146,6 +149,7 @@ class ResultExecutor(ExecutionAdapter):
                     "commit_execution_mode": effective_mode,
                     "commit_execution_authority": effective_authority,
                     "request_primary_plan_kind": primary_plan_kind,
+                    "commit_execution_implementation_mode": implementation_mode,
                     "execution_behavior_branch": execution_behavior_branch,
                     "graph_primary_behavior_applied": primary_plan_kind == "graph_primary",
                     "graph_native_artifact_input_received": bool(graph_patch.patch_id),
@@ -157,11 +161,13 @@ class ResultExecutor(ExecutionAdapter):
                 (
                     f"Mock graph-primary execution branch for patch={patch.patch_id}, "
                     f"graph_patch={graph_patch.patch_id or 'none'}, "
-                    f"graph_nodes={len(graph_patch.node_patches)}."
+                    f"graph_nodes={len(graph_patch.node_patches)}, "
+                    f"implementation_mode={implementation_mode}."
                     if primary_plan_kind == "graph_primary"
                     else f"Mock schema-primary execution branch for patch={patch.patch_id}, "
                     f"target_fields={','.join(patch.target_fields) or 'none'}, "
-                    f"target_axes={','.join(changed_axes) or 'none'}."
+                    f"target_axes={','.join(changed_axes) or 'none'}, "
+                    f"implementation_mode={implementation_mode}."
                 )
             ),
             changed_axes=changed_axes,
@@ -172,12 +178,14 @@ class ResultExecutor(ExecutionAdapter):
                 f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
+                f"commit_execution_implementation_mode={implementation_mode}",
                 f"execution_behavior_branch={execution_behavior_branch}",
             ] if patch.rationale else [
                 f"change_keys={','.join(patch.changes.keys())}",
                 f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
+                f"commit_execution_implementation_mode={implementation_mode}",
                 f"execution_behavior_branch={execution_behavior_branch}",
             ],
         )

@@ -299,10 +299,14 @@ class AgentRuntimeService:
         )
         session.commit_execution_mode = self._determine_commit_execution_mode(session)
         session.commit_execution_authority = self._determine_commit_execution_authority(session)
+        session.commit_execution_implementation_mode = self._determine_commit_execution_implementation_mode(session)
         session.accepted_patch.metadata["commit_selection_rationale"] = list(commit_selection.rationale)
         session.accepted_patch.metadata["preferred_commit_source"] = session.preferred_commit_source
         session.accepted_patch.metadata["commit_execution_mode"] = session.commit_execution_mode
         session.accepted_patch.metadata["commit_execution_authority"] = session.commit_execution_authority
+        session.accepted_patch.metadata["commit_execution_implementation_mode"] = (
+            session.commit_execution_implementation_mode
+        )
         session.accepted_patch.metadata["top_schema_patch_id"] = session.top_schema_patch_candidate.patch_id
         session.accepted_patch.metadata["top_graph_patch_candidate_id"] = (
             session.top_workflow_graph_patch_candidate.candidate_id
@@ -332,6 +336,10 @@ class AgentRuntimeService:
         session = self.memory_service.get_session(session_id)
         if not session.accepted_patch.patch_id:
             raise ValueError("No committed patch available for execution.")
+        session.commit_execution_implementation_mode = self._determine_commit_execution_implementation_mode(session)
+        session.accepted_patch.metadata["commit_execution_implementation_mode"] = (
+            session.commit_execution_implementation_mode
+        )
         session.previous_result_summary = session.current_result_summary
         payload, summary = self.execution_adapter.execute_committed_patch(
             schema=session.current_schema,
@@ -343,6 +351,7 @@ class AgentRuntimeService:
             ),
             commit_execution_mode=session.commit_execution_mode,
             commit_execution_authority=session.commit_execution_authority,
+            commit_execution_implementation_mode=session.commit_execution_implementation_mode,
         )
         session.current_result_id = payload.result_id
         session.current_result_payload = payload
@@ -355,6 +364,7 @@ class AgentRuntimeService:
             request_primary_plan_kind=(
                 "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
             ),
+            commit_execution_implementation_mode=session.commit_execution_implementation_mode,
             execution_behavior_branch=str(
                 backend_metadata.get(
                     "execution_behavior_branch",
@@ -380,6 +390,9 @@ class AgentRuntimeService:
                 backend_metadata.get("commit_execution_authority", "")
             ),
             backend_echoed_primary_plan_kind=str(backend_metadata.get("request_primary_plan_kind", "")),
+            backend_echoed_commit_execution_implementation_mode=str(
+                backend_metadata.get("commit_execution_implementation_mode", "")
+            ),
             backend_echoed_execution_behavior_branch=str(
                 backend_metadata.get("execution_behavior_branch", "")
             ),
@@ -543,6 +556,15 @@ class AgentRuntimeService:
         if session.preferred_commit_source == "graph":
             return "graph_supplemental"
         return "schema_authoritative"
+
+    @staticmethod
+    def _determine_commit_execution_implementation_mode(session: AgentSessionState) -> str:
+        if (
+            session.commit_execution_authority == "graph_authoritative"
+            and session.commit_execution_mode == "graph_native_execution_handoff"
+        ):
+            return "graph_primary_execution"
+        return "schema_compatible_execution"
 
     def _sync_workflow_identity(self, session: AgentSessionState) -> None:
         workflow_id = session.workflow_id or f"workflow-{session.session_id}"

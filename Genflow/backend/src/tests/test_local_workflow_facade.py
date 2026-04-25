@@ -87,6 +87,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                     "commit_source_payload": {
                         "commit_execution_mode": "graph_native_execution_handoff",
                         "commit_execution_authority": "graph_authoritative",
+                        "commit_execution_implementation_mode": "graph_primary_execution",
                         "request_primary_plan_kind": "graph_primary",
                         "preferred_commit_source": "graph",
                         "selected_workflow_graph_patch_id": "wgp_001",
@@ -110,12 +111,20 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(response.output_payload["patch_id"], "cp_001")
         self.assertTrue(response.output_payload["graph_native_artifact_input_received"])
         self.assertEqual(response.output_payload["request_primary_plan_kind"], "graph_primary")
+        self.assertEqual(
+            response.output_payload["commit_execution_implementation_mode"],
+            "graph_primary_execution",
+        )
         self.assertEqual(response.output_payload["execution_behavior_branch"], "graph_primary_execution_branch")
         self.assertEqual(response.output_payload["graph_driven_node_count"], 1)
         self.assertEqual(response.changed_axes, ["style"])
         self.assertEqual(response.backend_metadata["graph_patch_id"], "cp_001")
         self.assertEqual(response.backend_metadata["commit_execution_mode"], "graph_native_execution_handoff")
         self.assertEqual(response.backend_metadata["commit_execution_authority"], "graph_authoritative")
+        self.assertEqual(
+            response.backend_metadata["commit_execution_implementation_mode"],
+            "graph_primary_execution",
+        )
         self.assertEqual(response.backend_metadata["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(response.backend_metadata["execution_behavior_branch"], "graph_primary_execution_branch")
         self.assertTrue(response.backend_metadata["graph_primary_behavior_applied"])
@@ -125,6 +134,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertIn("Local workflow facade ran graph-primary execution branch", response.summary_text)
         self.assertIn("graph_patch_id=cp_001", response.comparison_notes)
         self.assertIn("request_primary_plan_kind=graph_primary", response.comparison_notes)
+        self.assertIn("commit_execution_implementation_mode=graph_primary_execution", response.comparison_notes)
         self.assertIn("execution_behavior_branch=graph_primary_execution_branch", response.comparison_notes)
         self.assertIn("commit_execution_mode=graph_native_execution_handoff", response.comparison_notes)
         self.assertIn("commit_execution_authority=graph_authoritative", response.comparison_notes)

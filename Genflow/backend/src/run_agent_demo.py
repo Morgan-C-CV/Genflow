@@ -493,6 +493,7 @@ def build_session_artifact_payload(session) -> dict:
             "preferred_commit_source": session.preferred_commit_source,
             "commit_execution_mode": session.commit_execution_mode,
             "commit_execution_authority": session.commit_execution_authority,
+            "commit_execution_implementation_mode": session.commit_execution_implementation_mode,
             "request_primary_plan_kind": (
                 "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
             ),

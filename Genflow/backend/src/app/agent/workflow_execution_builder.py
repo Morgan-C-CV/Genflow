@@ -248,6 +248,7 @@ def _build_commit_source_payload(session: AgentSessionState) -> dict:
     return {
         "commit_execution_mode": session.commit_execution_mode,
         "commit_execution_authority": session.commit_execution_authority,
+        "commit_execution_implementation_mode": session.commit_execution_implementation_mode,
         "request_primary_plan_kind": (
             "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
         ),
@@ -270,6 +271,11 @@ def _build_commit_source_payload_from_source(source: WorkflowCommitSource, graph
             source.commit_execution_authority
             or metadata.get("commit_execution_authority", "schema_authoritative")
             or "schema_authoritative"
+        ),
+        "commit_execution_implementation_mode": str(
+            source.commit_execution_implementation_mode
+            or metadata.get("commit_execution_implementation_mode", "schema_compatible_execution")
+            or "schema_compatible_execution"
         ),
         "request_primary_plan_kind": (
             "graph_primary"
