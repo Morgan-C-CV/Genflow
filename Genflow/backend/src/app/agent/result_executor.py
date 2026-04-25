@@ -161,6 +161,20 @@ class ResultExecutor(ExecutionAdapter):
         backend_graph_native_execution_realized = (
             realized_backend_execution_mode == "graph_primary_backend_execution"
         )
+        backend_graph_native_realization_reason = (
+            "graph_native_realization_achieved"
+            if backend_graph_native_execution_realized
+            else (
+                "unsupported_backend_capability"
+                if request_graph_native_realization and not backend_graph_primary_capable
+                else (
+                    "preserve_safety_downgrade"
+                    if (not request_graph_native_realization)
+                    or (request_graph_native_realization and not backend_graph_commit_payload_consumed)
+                    else "insufficient_graph_payload_completeness"
+                )
+            )
+        )
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_committed_result",
@@ -183,6 +197,7 @@ class ResultExecutor(ExecutionAdapter):
                 "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
                 "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                 "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
+                "backend_graph_native_realization_reason": backend_graph_native_realization_reason,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
                 "execution_behavior_branch": execution_behavior_branch,
@@ -210,6 +225,7 @@ class ResultExecutor(ExecutionAdapter):
                     "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
                     "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                     "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
+                    "backend_graph_native_realization_reason": backend_graph_native_realization_reason,
                     "backend_execution_mode": accepted_backend_execution_mode,
                     "accepted_backend_execution_mode": accepted_backend_execution_mode,
                     "realized_backend_execution_mode": realized_backend_execution_mode,
@@ -251,6 +267,8 @@ class ResultExecutor(ExecutionAdapter):
                 f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
                 f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
                 f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",
+                "backend_graph_native_realization_reason="
+                f"{backend_graph_native_realization_reason}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",
@@ -268,6 +286,8 @@ class ResultExecutor(ExecutionAdapter):
                 f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
                 f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
                 f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",
+                "backend_graph_native_realization_reason="
+                f"{backend_graph_native_realization_reason}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",

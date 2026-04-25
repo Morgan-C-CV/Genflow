@@ -139,6 +139,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertTrue(response.output_payload["backend_graph_commit_payload_consumed"])
         self.assertTrue(response.output_payload["backend_graph_native_execution_realized"])
         self.assertEqual(
+            response.output_payload["backend_graph_native_realization_reason"],
+            "graph_native_realization_achieved",
+        )
+        self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
@@ -171,6 +175,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertTrue(response.backend_metadata["backend_graph_commit_payload_supplied"])
         self.assertTrue(response.backend_metadata["backend_graph_commit_payload_consumed"])
         self.assertTrue(response.backend_metadata["backend_graph_native_execution_realized"])
+        self.assertEqual(
+            response.backend_metadata["backend_graph_native_realization_reason"],
+            "graph_native_realization_achieved",
+        )
         self.assertEqual(response.backend_metadata["backend_graph_commit_payload_id"], "wgp_001")
         self.assertEqual(
             response.backend_metadata["realized_backend_execution_mode"],
@@ -192,6 +200,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertIn("backend_graph_commit_payload_supplied=True", response.comparison_notes)
         self.assertIn("backend_graph_commit_payload_consumed=True", response.comparison_notes)
         self.assertIn("backend_graph_native_execution_realized=True", response.comparison_notes)
+        self.assertIn(
+            "backend_graph_native_realization_reason=graph_native_realization_achieved",
+            response.comparison_notes,
+        )
         self.assertIn("requested_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
         self.assertIn("accepted_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
         self.assertIn("realized_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
@@ -267,6 +279,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertTrue(response.output_payload["backend_graph_commit_payload_consumed"])
         self.assertFalse(response.output_payload["backend_graph_native_execution_realized"])
         self.assertEqual(
+            response.output_payload["backend_graph_native_realization_reason"],
+            "insufficient_graph_payload_completeness",
+        )
+        self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
@@ -292,6 +308,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertTrue(response.backend_metadata["backend_graph_commit_payload_supplied"])
         self.assertTrue(response.backend_metadata["backend_graph_commit_payload_consumed"])
         self.assertFalse(response.backend_metadata["backend_graph_native_execution_realized"])
+        self.assertEqual(
+            response.backend_metadata["backend_graph_native_realization_reason"],
+            "insufficient_graph_payload_completeness",
+        )
         self.assertFalse(response.backend_metadata["graph_primary_behavior_applied"])
         self.assertIn(
             "accepted_backend_execution_mode=graph_primary_backend_execution",
@@ -303,6 +323,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         )
         self.assertIn("backend_graph_native_realization_supported=True", response.comparison_notes)
         self.assertIn("backend_graph_native_execution_realized=False", response.comparison_notes)
+        self.assertIn(
+            "backend_graph_native_realization_reason=insufficient_graph_payload_completeness",
+            response.comparison_notes,
+        )
 
     def test_commit_path_distinguishes_backend_not_capable_from_downgraded_realization(self):
         facade = LocalWorkflowFacade()
@@ -365,6 +389,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertTrue(response.output_payload["backend_graph_commit_payload_consumed"])
         self.assertFalse(response.output_payload["backend_graph_native_execution_realized"])
         self.assertEqual(
+            response.output_payload["backend_graph_native_realization_reason"],
+            "unsupported_backend_capability",
+        )
+        self.assertEqual(
             response.output_payload["requested_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
@@ -381,9 +409,17 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertTrue(response.backend_metadata["backend_graph_commit_payload_supplied"])
         self.assertTrue(response.backend_metadata["backend_graph_commit_payload_consumed"])
         self.assertFalse(response.backend_metadata["backend_graph_native_execution_realized"])
+        self.assertEqual(
+            response.backend_metadata["backend_graph_native_realization_reason"],
+            "unsupported_backend_capability",
+        )
         self.assertIn("backend_graph_primary_capable=False", response.comparison_notes)
         self.assertIn("backend_graph_native_realization_supported=False", response.comparison_notes)
         self.assertIn("backend_graph_native_execution_realized=False", response.comparison_notes)
+        self.assertIn(
+            "backend_graph_native_realization_reason=unsupported_backend_capability",
+            response.comparison_notes,
+        )
 
     def test_facade_rejects_preview_without_graph_patch_spec(self):
         facade = LocalWorkflowFacade()
