@@ -157,11 +157,16 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["workflow_metadata"]["patch_winner_comparison"]["preferred_commit_source"],
             payload["preferred_commit_source"],
         )
+        self.assertEqual(payload["commit_execution_mode"], "graph_native_execution_handoff")
         self.assertEqual(
             payload["workflow_metadata"]["patch_winner_comparison"]["selected_workflow_graph_patch_id"],
             payload["selected_workflow_graph_patch"]["patch_id"],
         )
         self.assertIn("latest_execution_source_evidence", payload)
+        self.assertEqual(
+            payload["latest_execution_source_evidence"]["commit_execution_mode"],
+            payload["commit_execution_mode"],
+        )
         self.assertEqual(
             payload["latest_execution_source_evidence"]["preferred_commit_source"],
             payload["preferred_commit_source"],
@@ -169,6 +174,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["selected_workflow_graph_patch_id"],
             payload["selected_workflow_graph_patch"]["patch_id"],
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_commit_execution_mode"],
+            "",
         )
 
 

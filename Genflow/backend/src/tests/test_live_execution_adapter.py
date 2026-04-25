@@ -183,6 +183,10 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(request.patch_spec["graph_patch_spec"]["patch_id"], "cp_001")
         self.assertTrue(request.patch_spec["graph_patch_spec"]["node_patches"])
         self.assertIn("commit_source_payload", request.patch_spec)
+        self.assertEqual(
+            request.patch_spec["commit_source_payload"]["commit_execution_mode"],
+            "schema_execution_fallback",
+        )
         self.assertEqual(request.patch_spec["commit_source_payload"]["preferred_commit_source"], "schema")
         self.assertEqual(request.patch_spec["commit_source_payload"]["top_schema_patch_id"], "cp_001")
         self.assertEqual(payload.result_type, "live_committed_result")

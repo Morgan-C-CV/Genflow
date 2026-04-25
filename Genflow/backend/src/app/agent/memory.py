@@ -98,6 +98,7 @@ class AgentSessionState:
     workflow_graph_patch_candidates: List[WorkflowGraphPatchCandidate] = field(default_factory=list)
     top_workflow_graph_patch_candidate: WorkflowGraphPatchCandidate = field(default_factory=WorkflowGraphPatchCandidate)
     preferred_commit_source: str = "schema"
+    commit_execution_mode: str = "schema_execution_fallback"
     selected_graph_native_patch_candidate: WorkflowGraphPatchCandidate = field(
         default_factory=WorkflowGraphPatchCandidate
     )

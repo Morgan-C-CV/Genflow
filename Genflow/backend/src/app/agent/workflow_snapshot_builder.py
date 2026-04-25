@@ -140,6 +140,7 @@ def build_surrogate_workflow_snapshot(
             "top_graph_patch_candidate_id": session.top_workflow_graph_patch_candidate.candidate_id,
             "top_graph_patch_candidate_axes": list(session.top_workflow_graph_patch_candidate.target_axes),
             "preferred_commit_source": session.preferred_commit_source,
+            "commit_execution_mode": session.commit_execution_mode,
             "selected_graph_native_patch_candidate_id": session.selected_graph_native_patch_candidate.candidate_id,
             "selected_workflow_graph_patch_id": session.selected_workflow_graph_patch.patch_id,
             "graph_native_aligned_winner": bool(
@@ -150,6 +151,7 @@ def build_surrogate_workflow_snapshot(
             ),
         },
         "execution_source_evidence": {
+            "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "selected_workflow_graph_patch_id": session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
             "top_schema_patch_id": session.latest_execution_source_evidence.top_schema_patch_id,
@@ -158,6 +160,9 @@ def build_surrogate_workflow_snapshot(
             "response_patch_id": session.latest_execution_source_evidence.response_patch_id,
             "backend_graph_patch_id": session.latest_execution_source_evidence.backend_graph_patch_id,
             "backend_echoed_commit_source": session.latest_execution_source_evidence.backend_echoed_commit_source,
+            "backend_echoed_commit_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_commit_execution_mode
+            ),
             "comparison_notes": list(session.latest_execution_source_evidence.comparison_notes),
         },
     }
@@ -276,7 +281,9 @@ def build_surrogate_workflow_snapshot(
                 for patch in session.selected_workflow_graph_patch.region_patches
             ],
         },
+        "commit_execution_mode": session.commit_execution_mode,
         "execution_source_evidence": {
+            "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "selected_workflow_graph_patch_id": session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
             "top_schema_patch_id": session.latest_execution_source_evidence.top_schema_patch_id,
@@ -285,6 +292,9 @@ def build_surrogate_workflow_snapshot(
             "response_patch_id": session.latest_execution_source_evidence.response_patch_id,
             "backend_graph_patch_id": session.latest_execution_source_evidence.backend_graph_patch_id,
             "backend_echoed_commit_source": session.latest_execution_source_evidence.backend_echoed_commit_source,
+            "backend_echoed_commit_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_commit_execution_mode
+            ),
             "comparison_notes": list(session.latest_execution_source_evidence.comparison_notes),
         },
         "workflow_graph_patch_candidates": [

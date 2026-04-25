@@ -157,6 +157,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
         self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
         self.assertTrue(request.graph_patch_spec["node_patches"])
+        self.assertEqual(request.commit_source_payload["commit_execution_mode"], "schema_execution_fallback")
         self.assertEqual(request.commit_source_payload["preferred_commit_source"], "schema")
         self.assertEqual(request.commit_source_payload["top_schema_patch_id"], "cp_001")
 
@@ -185,6 +186,10 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
             session.selected_workflow_graph_patch.patch_id,
         )
         self.assertEqual(
+            request.commit_source_payload["commit_execution_mode"],
+            "schema_execution_fallback",
+        )
+        self.assertEqual(
             request.commit_source_payload["top_graph_patch_candidate_id"],
             session.top_workflow_graph_patch_candidate.candidate_id,
         )
@@ -210,6 +215,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.committed_patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
         self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
+        self.assertEqual(request.commit_source_payload["commit_execution_mode"], "schema_execution_fallback")
 
 
 if __name__ == "__main__":

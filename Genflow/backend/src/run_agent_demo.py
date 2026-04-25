@@ -491,6 +491,7 @@ def build_session_artifact_payload(session) -> dict:
             "accepted_patch": session.accepted_patch,
             "top_schema_patch_candidate": session.top_schema_patch_candidate,
             "preferred_commit_source": session.preferred_commit_source,
+            "commit_execution_mode": session.commit_execution_mode,
             "current_workflow_graph_patch": session.current_workflow_graph_patch,
             "selected_workflow_graph_patch": session.selected_workflow_graph_patch,
             "workflow_graph_patch_candidates": session.workflow_graph_patch_candidates,

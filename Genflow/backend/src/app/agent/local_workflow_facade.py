@@ -111,6 +111,7 @@ class LocalWorkflowFacade:
                 "result_type": "live_committed_result",
                 "backend": "local_workflow_facade",
                 "graph_patch_id": graph_patch_spec.get("patch_id", ""),
+                "commit_execution_mode": commit_source_payload.get("commit_execution_mode", ""),
                 "preferred_commit_source": commit_source_payload.get("preferred_commit_source", ""),
                 "selected_workflow_graph_patch_id": commit_source_payload.get(
                     "selected_workflow_graph_patch_id", ""
@@ -121,6 +122,7 @@ class LocalWorkflowFacade:
             comparison_notes=[
                 f"commit_rationale={patch_spec.get('rationale', '')}",
                 f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
+                f"commit_execution_mode={commit_source_payload.get('commit_execution_mode', '')}",
                 f"preferred_commit_source={commit_source_payload.get('preferred_commit_source', '')}",
                 f"selected_workflow_graph_patch_id={commit_source_payload.get('selected_workflow_graph_patch_id', '')}",
             ],

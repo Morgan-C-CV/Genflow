@@ -106,6 +106,7 @@ class VerifierSignalSummary:
 
 @dataclass
 class ExecutionSourceEvidenceSummary:
+    commit_execution_mode: str = ""
     preferred_commit_source: str = ""
     selected_workflow_graph_patch_id: str = ""
     top_schema_patch_id: str = ""
@@ -114,4 +115,5 @@ class ExecutionSourceEvidenceSummary:
     response_patch_id: str = ""
     backend_graph_patch_id: str = ""
     backend_echoed_commit_source: str = ""
+    backend_echoed_commit_execution_mode: str = ""
     comparison_notes: List[str] = field(default_factory=list)

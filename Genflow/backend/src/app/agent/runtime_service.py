@@ -297,8 +297,10 @@ class AgentRuntimeService:
             if session.preferred_commit_source == "graph"
             else type(session.selected_workflow_graph_patch)()
         )
+        session.commit_execution_mode = self._determine_commit_execution_mode(session)
         session.accepted_patch.metadata["commit_selection_rationale"] = list(commit_selection.rationale)
         session.accepted_patch.metadata["preferred_commit_source"] = session.preferred_commit_source
+        session.accepted_patch.metadata["commit_execution_mode"] = session.commit_execution_mode
         session.accepted_patch.metadata["top_schema_patch_id"] = session.top_schema_patch_candidate.patch_id
         session.accepted_patch.metadata["top_graph_patch_candidate_id"] = (
             session.top_workflow_graph_patch_candidate.candidate_id
@@ -339,6 +341,7 @@ class AgentRuntimeService:
         session.accepted_results.append(payload)
         backend_metadata = dict(payload.artifacts.get("backend_metadata", {}))
         session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
+            commit_execution_mode=session.commit_execution_mode,
             preferred_commit_source=session.preferred_commit_source,
             selected_workflow_graph_patch_id=session.selected_workflow_graph_patch.patch_id,
             top_schema_patch_id=session.top_schema_patch_candidate.patch_id,
@@ -347,6 +350,7 @@ class AgentRuntimeService:
             response_patch_id=str(payload.content.get("patch_id", "")),
             backend_graph_patch_id=str(backend_metadata.get("graph_patch_id", "")),
             backend_echoed_commit_source=str(backend_metadata.get("preferred_commit_source", "")),
+            backend_echoed_commit_execution_mode=str(backend_metadata.get("commit_execution_mode", "")),
             comparison_notes=list(summary.notes),
         )
         self._sync_workflow_state(session, execution_kind="commit", preview=False)
@@ -463,6 +467,14 @@ class AgentRuntimeService:
         if aligned:
             session.accepted_patch.metadata["graph_native_aligned_winner"] = True
             session.accepted_patch.metadata["aligned_graph_candidate_id"] = graph_winner.candidate_id
+
+    @staticmethod
+    def _determine_commit_execution_mode(session: AgentSessionState) -> str:
+        graph_patch = session.selected_workflow_graph_patch
+        graph_artifact_complete = bool(graph_patch.patch_id and graph_patch.node_patches)
+        if session.preferred_commit_source == "graph" and graph_artifact_complete:
+            return "graph_native_execution_handoff"
+        return "schema_execution_fallback"
 
     def _sync_workflow_identity(self, session: AgentSessionState) -> None:
         workflow_id = session.workflow_id or f"workflow-{session.session_id}"

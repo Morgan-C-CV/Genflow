@@ -760,6 +760,11 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertTrue(session.current_workflow_graph_patch.region_patches)
         self.assertIn("graph_native_aligned_winner", session.accepted_patch.metadata)
         self.assertEqual(session.accepted_patch.patch_id, session.top_schema_patch_candidate.patch_id)
+        self.assertEqual(session.commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(
+            session.accepted_patch.metadata["commit_execution_mode"],
+            "graph_native_execution_handoff",
+        )
         self.assertEqual(session.current_schema.model, "sdxl-base-patched")
         self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
         self.assertNotEqual(session.current_schema_raw.strip(), "")
@@ -770,6 +775,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.previous_result_summary.summary_text, old_summary)
         self.assertNotEqual(session.current_result_payload.result_id, old_result_id)
         self.assertEqual(session.current_result_payload.result_type, "mock_committed_result")
+        self.assertEqual(
+            session.latest_execution_source_evidence.commit_execution_mode,
+            "graph_native_execution_handoff",
+        )
         self.assertEqual(session.latest_execution_source_evidence.preferred_commit_source, "graph")
         self.assertEqual(
             session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
@@ -786,6 +795,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["preferred_commit_source"],
             "graph",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["commit_execution_mode"],
+            "graph_native_execution_handoff",
         )
 
         session = service.verify_latest_result(session.session_id)

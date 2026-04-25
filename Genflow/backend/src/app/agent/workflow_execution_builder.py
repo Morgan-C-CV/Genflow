@@ -239,6 +239,7 @@ def _build_reference_info_from_source(source: WorkflowExecutionSource) -> dict:
 
 def _build_commit_source_payload(session: AgentSessionState) -> dict:
     return {
+        "commit_execution_mode": session.commit_execution_mode,
         "preferred_commit_source": session.preferred_commit_source,
         "selected_workflow_graph_patch_id": session.selected_workflow_graph_patch.patch_id,
         "top_schema_patch_id": session.top_schema_patch_candidate.patch_id,
@@ -249,6 +250,9 @@ def _build_commit_source_payload(session: AgentSessionState) -> dict:
 def _build_commit_source_payload_from_source(source: WorkflowCommitSource, graph_patch) -> dict:
     metadata = dict(source.accepted_patch.metadata)
     return {
+        "commit_execution_mode": str(
+            metadata.get("commit_execution_mode", "schema_execution_fallback") or "schema_execution_fallback"
+        ),
         "preferred_commit_source": str(metadata.get("preferred_commit_source", "schema") or "schema"),
         "selected_workflow_graph_patch_id": str(
             metadata.get("selected_workflow_graph_patch_id", graph_patch.patch_id)
