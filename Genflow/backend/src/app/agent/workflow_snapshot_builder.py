@@ -162,11 +162,17 @@ def build_surrogate_workflow_snapshot(
             "commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.commit_execution_implementation_mode
             ),
+            "request_graph_native_realization": (
+                session.latest_execution_source_evidence.request_graph_native_realization
+            ),
             "request_backend_execution_mode": (
                 session.latest_execution_source_evidence.request_backend_execution_mode
             ),
             "backend_graph_primary_capable": (
                 session.latest_execution_source_evidence.backend_graph_primary_capable
+            ),
+            "backend_graph_native_realization_supported": (
+                session.latest_execution_source_evidence.backend_graph_native_realization_supported
             ),
             "backend_graph_commit_payload_supplied": (
                 session.latest_execution_source_evidence.backend_graph_commit_payload_supplied
@@ -209,6 +215,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_graph_primary_capable": (
                 session.latest_execution_source_evidence.backend_echoed_graph_primary_capable
+            ),
+            "backend_echoed_graph_native_realization_supported": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_realization_supported
             ),
             "backend_echoed_graph_commit_payload_supplied": (
                 session.latest_execution_source_evidence.backend_echoed_graph_commit_payload_supplied
@@ -365,11 +374,17 @@ def build_surrogate_workflow_snapshot(
             "commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.commit_execution_implementation_mode
             ),
+            "request_graph_native_realization": (
+                session.latest_execution_source_evidence.request_graph_native_realization
+            ),
             "request_backend_execution_mode": (
                 session.latest_execution_source_evidence.request_backend_execution_mode
             ),
             "backend_graph_primary_capable": (
                 session.latest_execution_source_evidence.backend_graph_primary_capable
+            ),
+            "backend_graph_native_realization_supported": (
+                session.latest_execution_source_evidence.backend_graph_native_realization_supported
             ),
             "backend_graph_commit_payload_supplied": (
                 session.latest_execution_source_evidence.backend_graph_commit_payload_supplied
@@ -412,6 +427,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_graph_primary_capable": (
                 session.latest_execution_source_evidence.backend_echoed_graph_primary_capable
+            ),
+            "backend_echoed_graph_native_realization_supported": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_realization_supported
             ),
             "backend_echoed_graph_commit_payload_supplied": (
                 session.latest_execution_source_evidence.backend_echoed_graph_commit_payload_supplied

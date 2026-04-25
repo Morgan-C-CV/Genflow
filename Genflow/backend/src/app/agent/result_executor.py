@@ -122,6 +122,7 @@ class ResultExecutor(ExecutionAdapter):
         implementation_mode = commit_execution_implementation_mode or "schema_compatible_execution"
         primary_plan_kind = "graph_primary" if effective_authority == "graph_authoritative" else "schema_primary"
         backend_graph_commit_payload_supplied = bool(graph_patch.patch_id)
+        request_graph_native_realization = implementation_mode == "graph_primary_execution"
         requested_backend_execution_mode = (
             "graph_primary_backend_execution"
             if implementation_mode == "graph_primary_execution"
@@ -152,6 +153,11 @@ class ResultExecutor(ExecutionAdapter):
         backend_graph_commit_payload_consumed = (
             backend_graph_commit_payload_supplied and primary_plan_kind == "graph_primary"
         )
+        backend_graph_native_realization_supported = (
+            request_graph_native_realization
+            and backend_graph_primary_capable
+            and backend_graph_commit_payload_consumed
+        )
         backend_graph_native_execution_realized = (
             realized_backend_execution_mode == "graph_primary_backend_execution"
         )
@@ -168,8 +174,12 @@ class ResultExecutor(ExecutionAdapter):
                 "commit_execution_authority": effective_authority,
                 "request_primary_plan_kind": primary_plan_kind,
                 "commit_execution_implementation_mode": implementation_mode,
+                "request_graph_native_realization": request_graph_native_realization,
                 "requested_backend_execution_mode": requested_backend_execution_mode,
                 "backend_graph_primary_capable": backend_graph_primary_capable,
+                "backend_graph_native_realization_supported": (
+                    backend_graph_native_realization_supported
+                ),
                 "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
                 "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                 "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
@@ -192,7 +202,11 @@ class ResultExecutor(ExecutionAdapter):
                     "commit_execution_authority": effective_authority,
                     "request_primary_plan_kind": primary_plan_kind,
                     "commit_execution_implementation_mode": implementation_mode,
+                    "request_graph_native_realization": request_graph_native_realization,
                     "backend_graph_primary_capable": backend_graph_primary_capable,
+                    "backend_graph_native_realization_supported": (
+                        backend_graph_native_realization_supported
+                    ),
                     "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
                     "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                     "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
@@ -230,7 +244,10 @@ class ResultExecutor(ExecutionAdapter):
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
+                f"request_graph_native_realization={request_graph_native_realization}",
                 f"backend_graph_primary_capable={backend_graph_primary_capable}",
+                "backend_graph_native_realization_supported="
+                f"{backend_graph_native_realization_supported}",
                 f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
                 f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
                 f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",
@@ -244,7 +261,10 @@ class ResultExecutor(ExecutionAdapter):
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
+                f"request_graph_native_realization={request_graph_native_realization}",
                 f"backend_graph_primary_capable={backend_graph_primary_capable}",
+                "backend_graph_native_realization_supported="
+                f"{backend_graph_native_realization_supported}",
                 f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
                 f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
                 f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",

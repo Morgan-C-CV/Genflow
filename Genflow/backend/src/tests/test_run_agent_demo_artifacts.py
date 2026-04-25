@@ -160,8 +160,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(payload["commit_execution_mode"], "graph_native_execution_handoff")
         self.assertEqual(payload["commit_execution_authority"], "graph_authoritative")
         self.assertEqual(payload["commit_execution_implementation_mode"], "graph_primary_execution")
+        self.assertTrue(payload["request_graph_native_realization"])
         self.assertEqual(payload["request_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertTrue(payload["backend_graph_primary_capable"])
+        self.assertTrue(payload["backend_graph_native_realization_supported"])
         self.assertTrue(payload["backend_graph_commit_payload_supplied"])
         self.assertTrue(payload["backend_graph_commit_payload_consumed"])
         self.assertTrue(payload["backend_graph_native_execution_realized"])
@@ -189,12 +191,18 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["latest_execution_source_evidence"]["commit_execution_implementation_mode"],
             "graph_primary_execution",
         )
+        self.assertTrue(
+            payload["latest_execution_source_evidence"]["request_graph_native_realization"],
+        )
         self.assertEqual(
             payload["latest_execution_source_evidence"]["request_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
         self.assertTrue(
             payload["latest_execution_source_evidence"]["backend_graph_primary_capable"],
+        )
+        self.assertTrue(
+            payload["latest_execution_source_evidence"]["backend_graph_native_realization_supported"],
         )
         self.assertTrue(
             payload["latest_execution_source_evidence"]["backend_graph_commit_payload_supplied"],
@@ -240,6 +248,9 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_commit_execution_implementation_mode"],
             "graph_primary_execution",
+        )
+        self.assertTrue(
+            payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_graph_native_realization_supported"],
         )
         self.assertTrue(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_graph_primary_capable"],

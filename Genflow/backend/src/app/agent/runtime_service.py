@@ -366,6 +366,12 @@ class AgentRuntimeService:
             request_graph_commit_payload_supplied
             and session.commit_execution_authority == "graph_authoritative"
         )
+        request_graph_native_realization = (
+            session.commit_execution_implementation_mode == "graph_primary_execution"
+        )
+        backend_graph_native_realization_supported = bool(
+            backend_metadata.get("backend_graph_native_realization_supported", False)
+        )
         backend_graph_native_execution_realized = bool(
             backend_metadata.get("backend_graph_native_execution_realized", False)
             or backend_metadata.get("realized_backend_execution_mode", "") == "graph_primary_backend_execution"
@@ -377,6 +383,7 @@ class AgentRuntimeService:
                 "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
             ),
             commit_execution_implementation_mode=session.commit_execution_implementation_mode,
+            request_graph_native_realization=request_graph_native_realization,
             request_backend_execution_mode=(
                 "graph_primary_backend_execution"
                 if session.commit_execution_implementation_mode == "graph_primary_execution"
@@ -385,6 +392,7 @@ class AgentRuntimeService:
             backend_graph_primary_capable=bool(
                 backend_metadata.get("backend_graph_primary_capable", False)
             ),
+            backend_graph_native_realization_supported=backend_graph_native_realization_supported,
             backend_graph_commit_payload_supplied=request_graph_commit_payload_supplied,
             backend_graph_commit_payload_consumed=request_graph_commit_payload_consumed,
             backend_graph_native_execution_realized=backend_graph_native_execution_realized,
@@ -427,6 +435,9 @@ class AgentRuntimeService:
             ),
             backend_echoed_graph_primary_capable=bool(
                 backend_metadata.get("backend_graph_primary_capable", False)
+            ),
+            backend_echoed_graph_native_realization_supported=bool(
+                backend_metadata.get("backend_graph_native_realization_supported", False)
             ),
             backend_echoed_graph_commit_payload_supplied=bool(
                 backend_metadata.get("backend_graph_commit_payload_supplied", False)

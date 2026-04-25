@@ -494,6 +494,9 @@ def build_session_artifact_payload(session) -> dict:
             "commit_execution_mode": session.commit_execution_mode,
             "commit_execution_authority": session.commit_execution_authority,
             "commit_execution_implementation_mode": session.commit_execution_implementation_mode,
+            "request_graph_native_realization": (
+                session.latest_execution_source_evidence.request_graph_native_realization
+            ),
             "request_backend_execution_mode": (
                 "graph_primary_backend_execution"
                 if session.commit_execution_implementation_mode == "graph_primary_execution"
@@ -501,6 +504,9 @@ def build_session_artifact_payload(session) -> dict:
             ),
             "backend_graph_primary_capable": (
                 session.latest_execution_source_evidence.backend_graph_primary_capable
+            ),
+            "backend_graph_native_realization_supported": (
+                session.latest_execution_source_evidence.backend_graph_native_realization_supported
             ),
             "backend_graph_commit_payload_supplied": (
                 session.latest_execution_source_evidence.backend_graph_commit_payload_supplied

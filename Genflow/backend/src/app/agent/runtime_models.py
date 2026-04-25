@@ -110,8 +110,10 @@ class ExecutionSourceEvidenceSummary:
     commit_execution_authority: str = ""
     request_primary_plan_kind: str = ""
     commit_execution_implementation_mode: str = ""
+    request_graph_native_realization: bool = False
     request_backend_execution_mode: str = ""
     backend_graph_primary_capable: bool = False
+    backend_graph_native_realization_supported: bool = False
     backend_graph_commit_payload_supplied: bool = False
     backend_graph_commit_payload_consumed: bool = False
     backend_graph_native_execution_realized: bool = False
@@ -132,6 +134,7 @@ class ExecutionSourceEvidenceSummary:
     backend_echoed_primary_plan_kind: str = ""
     backend_echoed_commit_execution_implementation_mode: str = ""
     backend_echoed_graph_primary_capable: bool = False
+    backend_echoed_graph_native_realization_supported: bool = False
     backend_echoed_graph_commit_payload_supplied: bool = False
     backend_echoed_graph_commit_payload_consumed: bool = False
     backend_echoed_graph_native_execution_realized: bool = False

@@ -115,8 +115,10 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertEqual(payload.content["commit_execution_authority"], "graph_authoritative")
         self.assertEqual(payload.content["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(payload.content["commit_execution_implementation_mode"], "graph_primary_execution")
+        self.assertTrue(payload.content["request_graph_native_realization"])
         self.assertEqual(payload.content["requested_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertTrue(payload.content["backend_graph_primary_capable"])
+        self.assertTrue(payload.content["backend_graph_native_realization_supported"])
         self.assertTrue(payload.content["backend_graph_commit_payload_supplied"])
         self.assertTrue(payload.content["backend_graph_commit_payload_consumed"])
         self.assertTrue(payload.content["backend_graph_native_execution_realized"])
@@ -138,7 +140,9 @@ class ResultExecutorTest(unittest.TestCase):
             "graph_primary_execution",
         )
         self.assertEqual(payload.artifacts["backend_metadata"]["request_primary_plan_kind"], "graph_primary")
+        self.assertTrue(payload.artifacts["backend_metadata"]["request_graph_native_realization"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_primary_capable"])
+        self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_native_realization_supported"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_commit_payload_supplied"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_commit_payload_consumed"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_native_execution_realized"])
@@ -158,8 +162,10 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertIn("graph_native_artifact_input_received=True", summary.notes)
         self.assertIn("commit_execution_authority=graph_authoritative", summary.notes)
         self.assertIn("commit_execution_implementation_mode=graph_primary_execution", summary.notes)
+        self.assertIn("request_graph_native_realization=True", summary.notes)
         self.assertIn("request_primary_plan_kind=graph_primary", summary.notes)
         self.assertIn("backend_graph_primary_capable=True", summary.notes)
+        self.assertIn("backend_graph_native_realization_supported=True", summary.notes)
         self.assertIn("backend_graph_commit_payload_supplied=True", summary.notes)
         self.assertIn("backend_graph_commit_payload_consumed=True", summary.notes)
         self.assertIn("backend_graph_native_execution_realized=True", summary.notes)
@@ -191,7 +197,9 @@ class ResultExecutorTest(unittest.TestCase):
         )
 
         self.assertEqual(payload.content["requested_backend_execution_mode"], "graph_primary_backend_execution")
+        self.assertTrue(payload.content["request_graph_native_realization"])
         self.assertTrue(payload.content["backend_graph_primary_capable"])
+        self.assertTrue(payload.content["backend_graph_native_realization_supported"])
         self.assertTrue(payload.content["backend_graph_commit_payload_supplied"])
         self.assertTrue(payload.content["backend_graph_commit_payload_consumed"])
         self.assertFalse(payload.content["backend_graph_native_execution_realized"])
@@ -204,10 +212,12 @@ class ResultExecutorTest(unittest.TestCase):
             "schema_compatible_backend_execution",
         )
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_primary_capable"])
+        self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_native_realization_supported"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_commit_payload_supplied"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_commit_payload_consumed"])
         self.assertFalse(payload.artifacts["backend_metadata"]["backend_graph_native_execution_realized"])
         self.assertIn("realized_backend_execution_mode=schema_compatible_backend_execution", summary.notes)
+        self.assertIn("backend_graph_native_realization_supported=True", summary.notes)
         self.assertIn("backend_graph_native_execution_realized=False", summary.notes)
 
     def test_execute_committed_patch_distinguishes_backend_not_capable_from_not_realized(self):
@@ -231,7 +241,9 @@ class ResultExecutorTest(unittest.TestCase):
         )
 
         self.assertEqual(payload.content["requested_backend_execution_mode"], "graph_primary_backend_execution")
+        self.assertTrue(payload.content["request_graph_native_realization"])
         self.assertFalse(payload.content["backend_graph_primary_capable"])
+        self.assertFalse(payload.content["backend_graph_native_realization_supported"])
         self.assertTrue(payload.content["backend_graph_commit_payload_supplied"])
         self.assertTrue(payload.content["backend_graph_commit_payload_consumed"])
         self.assertFalse(payload.content["backend_graph_native_execution_realized"])
@@ -239,10 +251,12 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertEqual(payload.content["realized_backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(payload.content["execution_behavior_branch"], "schema_primary_execution_branch")
         self.assertFalse(payload.artifacts["backend_metadata"]["backend_graph_primary_capable"])
+        self.assertFalse(payload.artifacts["backend_metadata"]["backend_graph_native_realization_supported"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_commit_payload_supplied"])
         self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_commit_payload_consumed"])
         self.assertFalse(payload.artifacts["backend_metadata"]["backend_graph_native_execution_realized"])
         self.assertIn("backend_graph_primary_capable=False", summary.notes)
+        self.assertIn("backend_graph_native_realization_supported=False", summary.notes)
         self.assertIn("backend_graph_native_execution_realized=False", summary.notes)
 
 
