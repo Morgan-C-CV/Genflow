@@ -19,6 +19,7 @@ from app.agent.repair_hypothesis import RepairHypothesisBuilder
 from app.agent.schema_utils import parse_and_normalize_metadata, serialize_normalized_schema
 from app.agent.verifier import Verifier
 from app.agent.verifier_repair_recommendation import build_verifier_repair_recommendation
+from app.agent.workflow_graph_patch_builder import build_workflow_graph_patch
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
 
@@ -258,6 +259,7 @@ class AgentRuntimeService:
         session.patch_history.append(patch)
         session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
         session.current_schema_raw = serialize_normalized_schema(session.current_schema)
+        session.current_workflow_graph_patch = build_workflow_graph_patch(session)
         self._sync_workflow_state(session, execution_kind="commit_plan", preview=False)
         return self.memory_service.save_session(session)
 

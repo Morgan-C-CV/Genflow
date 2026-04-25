@@ -431,6 +431,12 @@ class RuntimeServiceTest(unittest.TestCase):
 
         decision = service.get_policy_decision(session.session_id)
         self.assertEqual(decision.next_action, "execute_patch")
+        self.assertEqual(session.current_workflow_graph_patch.patch_id, session.accepted_patch.patch_id)
+        self.assertTrue(session.current_workflow_graph_patch.node_patches)
+        self.assertEqual(
+            session.workflow_metadata["workflow_graph_patch"]["patch_id"],
+            session.accepted_patch.patch_id,
+        )
 
         session = service.execute_patch(session.session_id)
 
@@ -632,6 +638,8 @@ class RuntimeServiceTest(unittest.TestCase):
             pbo_patch_ranker.last_refinement_benchmark_set.benchmark_id,
             session.refinement_benchmark_set.benchmark_id,
         )
+        self.assertEqual(session.current_workflow_graph_patch.patch_id, "cp_p_002")
+        self.assertIn("render.model", [patch.node_id for patch in session.current_workflow_graph_patch.node_patches])
 
     def test_runtime_service_preview_probe_flow_updates_preview_state_only(self):
         memory = AgentMemoryService()
@@ -710,6 +718,9 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(len(session.patch_history), 1)
         self.assertIn("pbo_score", session.accepted_patch.metadata)
         self.assertIn("pbo_rationale", session.accepted_patch.metadata)
+        self.assertEqual(session.current_workflow_graph_patch.patch_id, "cp_p_002")
+        self.assertTrue(session.current_workflow_graph_patch.edge_patches)
+        self.assertTrue(session.current_workflow_graph_patch.region_patches)
         self.assertEqual(session.current_schema.model, "sdxl-base-patched")
         self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
         self.assertNotEqual(session.current_schema_raw.strip(), "")

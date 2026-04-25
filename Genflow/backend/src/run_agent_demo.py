@@ -489,6 +489,7 @@ def build_session_artifact_payload(session) -> dict:
             "preview_probe_results": session.preview_probe_results,
             "selected_probe": session.selected_probe,
             "accepted_patch": session.accepted_patch,
+            "current_workflow_graph_patch": session.current_workflow_graph_patch,
             "patch_history": session.patch_history,
             "previous_result_summary": session.previous_result_summary,
             "latest_verifier_result": session.latest_verifier_result,

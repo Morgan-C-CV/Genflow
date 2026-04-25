@@ -103,6 +103,15 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["latest_verifier_repair_recommendation"]["recommended_action"],
             payload["workflow_metadata"]["verifier_repair_recommendation"]["recommended_action"],
         )
+        self.assertIn("current_workflow_graph_patch", payload)
+        self.assertEqual(
+            payload["current_workflow_graph_patch"]["patch_id"],
+            payload["accepted_patch"]["patch_id"],
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["workflow_graph_patch"]["patch_id"],
+            payload["current_workflow_graph_patch"]["patch_id"],
+        )
 
 
 if __name__ == "__main__":

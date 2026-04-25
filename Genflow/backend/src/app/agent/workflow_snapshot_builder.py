@@ -104,6 +104,15 @@ def build_surrogate_workflow_snapshot(
             "priority": session.latest_verifier_repair_recommendation.priority,
             "supporting_signals": list(session.latest_verifier_repair_recommendation.supporting_signals),
         },
+        "workflow_graph_patch": {
+            "patch_id": session.current_workflow_graph_patch.patch_id,
+            "patch_kind": session.current_workflow_graph_patch.patch_kind,
+            "node_patch_count": len(session.current_workflow_graph_patch.node_patches),
+            "edge_patch_count": len(session.current_workflow_graph_patch.edge_patches),
+            "region_patch_count": len(session.current_workflow_graph_patch.region_patches),
+            "target_fields": list(session.current_workflow_graph_patch.metadata.get("target_fields", [])),
+            "target_axes": list(session.current_workflow_graph_patch.metadata.get("target_axes", [])),
+        },
     }
     surrogate_payload = {
         "schema": {
@@ -156,6 +165,37 @@ def build_surrogate_workflow_snapshot(
             "rationale": list(session.latest_verifier_repair_recommendation.rationale),
             "priority": session.latest_verifier_repair_recommendation.priority,
             "supporting_signals": list(session.latest_verifier_repair_recommendation.supporting_signals),
+        },
+        "workflow_graph_patch": {
+            "patch_id": session.current_workflow_graph_patch.patch_id,
+            "patch_kind": session.current_workflow_graph_patch.patch_kind,
+            "node_patches": [
+                {
+                    "node_id": patch.node_id,
+                    "operation": patch.operation,
+                    "target_fields": list(patch.target_fields),
+                    "target_axes": list(patch.target_axes),
+                }
+                for patch in session.current_workflow_graph_patch.node_patches
+            ],
+            "edge_patches": [
+                {
+                    "edge_id": patch.edge_id,
+                    "operation": patch.operation,
+                    "target_axes": list(patch.target_axes),
+                    "preserve_axes": list(patch.preserve_axes),
+                }
+                for patch in session.current_workflow_graph_patch.edge_patches
+            ],
+            "region_patches": [
+                {
+                    "region_id": patch.region_id,
+                    "operation": patch.operation,
+                    "target_axes": list(patch.target_axes),
+                    "preserve_axes": list(patch.preserve_axes),
+                }
+                for patch in session.current_workflow_graph_patch.region_patches
+            ],
         },
     }
     workflow_topology_hints = {
