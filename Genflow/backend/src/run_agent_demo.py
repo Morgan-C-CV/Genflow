@@ -492,6 +492,7 @@ def build_session_artifact_payload(session) -> dict:
             "top_schema_patch_candidate": session.top_schema_patch_candidate,
             "preferred_commit_source": session.preferred_commit_source,
             "current_workflow_graph_patch": session.current_workflow_graph_patch,
+            "selected_workflow_graph_patch": session.selected_workflow_graph_patch,
             "workflow_graph_patch_candidates": session.workflow_graph_patch_candidates,
             "top_workflow_graph_patch_candidate": session.top_workflow_graph_patch_candidate,
             "selected_graph_native_patch_candidate": session.selected_graph_native_patch_candidate,

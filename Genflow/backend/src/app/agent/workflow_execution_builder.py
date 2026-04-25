@@ -169,7 +169,11 @@ def build_workflow_preview_request_from_source(
 def build_workflow_commit_request(session: AgentSessionState) -> WorkflowCommitRequest:
     payload = build_workflow_execution_payload(session, execution_kind="commit", preview=False)
     graph_source = build_workflow_graph_source(session, execution_kind="commit", preview=False)
-    graph_patch = session.current_workflow_graph_patch
+    graph_patch = (
+        session.selected_workflow_graph_patch
+        if session.preferred_commit_source == "graph" and session.selected_workflow_graph_patch.patch_id
+        else session.current_workflow_graph_patch
+    )
     if not graph_patch.patch_id:
         graph_patch = build_workflow_graph_patch_from_committed_patch(
             committed_patch=session.accepted_patch,

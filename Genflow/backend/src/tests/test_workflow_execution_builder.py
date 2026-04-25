@@ -2,7 +2,11 @@ import unittest
 
 from app.agent.memory import AgentMemoryService
 from app.agent.runtime_models import CommittedPatch, PreviewProbe
-from app.agent.workflow_graph_patch_builder import build_workflow_graph_patch
+from app.agent.workflow_graph_patch_builder import (
+    build_workflow_graph_patch,
+    materialize_workflow_graph_patch_from_candidate,
+)
+from app.agent.workflow_graph_patch_candidate_builder import build_workflow_graph_patch_candidates
 from app.agent.workflow_execution_builder import (
     build_workflow_commit_request,
     build_workflow_commit_request_from_source,
@@ -152,6 +156,25 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
         self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
         self.assertTrue(request.graph_patch_spec["node_patches"])
+
+    def test_build_workflow_commit_request_prefers_selected_workflow_graph_patch_when_graph_preferred(self):
+        session = self._make_session()
+        graph_candidates = build_workflow_graph_patch_candidates(session)
+        session.top_workflow_graph_patch_candidate = graph_candidates[0]
+        session.selected_graph_native_patch_candidate = graph_candidates[0]
+        session.selected_workflow_graph_patch = materialize_workflow_graph_patch_from_candidate(
+            graph_candidates[0],
+            session=session,
+        )
+        session.preferred_commit_source = "graph"
+
+        request = build_workflow_commit_request(session)
+
+        self.assertEqual(request.graph_patch_spec["patch_id"], session.selected_workflow_graph_patch.patch_id)
+        self.assertEqual(
+            request.graph_patch_spec["metadata"]["candidate_id"],
+            session.selected_graph_native_patch_candidate.candidate_id,
+        )
 
     def test_build_workflow_commit_request_from_source_uses_typed_source(self):
         session = self._make_session()

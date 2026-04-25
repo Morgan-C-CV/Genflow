@@ -662,6 +662,11 @@ class RuntimeServiceTest(unittest.TestCase):
             session.selected_graph_native_patch_candidate.candidate_id,
             session.top_workflow_graph_patch_candidate.candidate_id,
         )
+        self.assertTrue(session.selected_workflow_graph_patch.patch_id)
+        self.assertEqual(
+            session.selected_workflow_graph_patch.metadata["candidate_id"],
+            session.selected_graph_native_patch_candidate.candidate_id,
+        )
         self.assertEqual(session.current_workflow_graph_patch.patch_id, "cp_p_002")
         self.assertIn("render.model", [patch.node_id for patch in session.current_workflow_graph_patch.node_patches])
 
@@ -747,6 +752,7 @@ class RuntimeServiceTest(unittest.TestCase):
             session.selected_graph_native_patch_candidate.candidate_id,
             session.top_workflow_graph_patch_candidate.candidate_id,
         )
+        self.assertTrue(session.selected_workflow_graph_patch.patch_id)
         self.assertIn("pbo_score", session.accepted_patch.metadata)
         self.assertIn("pbo_rationale", session.accepted_patch.metadata)
         self.assertEqual(session.current_workflow_graph_patch.patch_id, "cp_p_002")

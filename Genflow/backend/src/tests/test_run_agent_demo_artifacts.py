@@ -105,6 +105,7 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["workflow_metadata"]["verifier_repair_recommendation"]["recommended_action"],
         )
         self.assertIn("current_workflow_graph_patch", payload)
+        self.assertIn("selected_workflow_graph_patch", payload)
         self.assertIn("top_schema_patch_candidate", payload)
         self.assertIn("top_workflow_graph_patch_candidate", payload)
         self.assertIn("preferred_commit_source", payload)
@@ -149,8 +150,16 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["top_workflow_graph_patch_candidate"]["candidate_id"],
         )
         self.assertEqual(
+            payload["selected_workflow_graph_patch"]["metadata"]["candidate_id"],
+            payload["selected_graph_native_patch_candidate"]["candidate_id"],
+        )
+        self.assertEqual(
             payload["workflow_metadata"]["patch_winner_comparison"]["preferred_commit_source"],
             payload["preferred_commit_source"],
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["patch_winner_comparison"]["selected_workflow_graph_patch_id"],
+            payload["selected_workflow_graph_patch"]["patch_id"],
         )
 
 

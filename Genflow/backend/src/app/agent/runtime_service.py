@@ -21,7 +21,10 @@ from app.agent.schema_utils import parse_and_normalize_metadata, serialize_norma
 from app.agent.verifier import Verifier
 from app.agent.verifier_repair_recommendation import build_verifier_repair_recommendation
 from app.agent.workflow_graph_patch_candidate_builder import build_workflow_graph_patch_candidates
-from app.agent.workflow_graph_patch_builder import build_workflow_graph_patch
+from app.agent.workflow_graph_patch_builder import (
+    build_workflow_graph_patch,
+    materialize_workflow_graph_patch_from_candidate,
+)
 from app.agent.workflow_patch_commit_selector import select_commit_patch_winner
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
@@ -285,8 +288,20 @@ class AgentRuntimeService:
         )
         session.preferred_commit_source = commit_selection.preferred_commit_source
         session.selected_graph_native_patch_candidate = commit_selection.selected_graph_native_patch_candidate
+        session.selected_workflow_graph_patch = (
+            materialize_workflow_graph_patch_from_candidate(
+                commit_selection.selected_graph_native_patch_candidate,
+                session=session,
+            )
+            if session.preferred_commit_source == "graph"
+            else type(session.selected_workflow_graph_patch)()
+        )
         session.accepted_patch.metadata["commit_selection_rationale"] = list(commit_selection.rationale)
         session.accepted_patch.metadata["preferred_commit_source"] = session.preferred_commit_source
+        if session.selected_workflow_graph_patch.patch_id:
+            session.accepted_patch.metadata["selected_workflow_graph_patch_id"] = (
+                session.selected_workflow_graph_patch.patch_id
+            )
         session.patch_history.append(patch)
         session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
         session.current_schema_raw = serialize_normalized_schema(session.current_schema)

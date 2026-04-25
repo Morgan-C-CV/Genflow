@@ -93,6 +93,7 @@ class AgentSessionState:
     accepted_patch: CommittedPatch = field(default_factory=CommittedPatch)
     top_schema_patch_candidate: CommittedPatch = field(default_factory=CommittedPatch)
     current_workflow_graph_patch: WorkflowGraphPatch = field(default_factory=WorkflowGraphPatch)
+    selected_workflow_graph_patch: WorkflowGraphPatch = field(default_factory=WorkflowGraphPatch)
     workflow_graph_patch_candidates: List[WorkflowGraphPatchCandidate] = field(default_factory=list)
     top_workflow_graph_patch_candidate: WorkflowGraphPatchCandidate = field(default_factory=WorkflowGraphPatchCandidate)
     preferred_commit_source: str = "schema"

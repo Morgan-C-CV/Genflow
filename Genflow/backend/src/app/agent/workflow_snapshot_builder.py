@@ -113,6 +113,12 @@ def build_surrogate_workflow_snapshot(
             "target_fields": list(session.current_workflow_graph_patch.metadata.get("target_fields", [])),
             "target_axes": list(session.current_workflow_graph_patch.metadata.get("target_axes", [])),
         },
+        "selected_workflow_graph_patch": {
+            "patch_id": session.selected_workflow_graph_patch.patch_id,
+            "patch_kind": session.selected_workflow_graph_patch.patch_kind,
+            "candidate_id": str(session.selected_workflow_graph_patch.metadata.get("candidate_id", "")),
+            "target_axes": list(session.selected_workflow_graph_patch.metadata.get("target_axes", [])),
+        },
         "workflow_graph_patch_candidates": {
             "candidate_count": len(session.workflow_graph_patch_candidates),
             "candidate_ids": [candidate.candidate_id for candidate in session.workflow_graph_patch_candidates],
@@ -135,6 +141,7 @@ def build_surrogate_workflow_snapshot(
             "top_graph_patch_candidate_axes": list(session.top_workflow_graph_patch_candidate.target_axes),
             "preferred_commit_source": session.preferred_commit_source,
             "selected_graph_native_patch_candidate_id": session.selected_graph_native_patch_candidate.candidate_id,
+            "selected_workflow_graph_patch_id": session.selected_workflow_graph_patch.patch_id,
             "graph_native_aligned_winner": bool(
                 session.accepted_patch.metadata.get("graph_native_aligned_winner", False)
             ),
@@ -224,6 +231,38 @@ def build_surrogate_workflow_snapshot(
                     "preserve_axes": list(patch.preserve_axes),
                 }
                 for patch in session.current_workflow_graph_patch.region_patches
+            ],
+        },
+        "selected_workflow_graph_patch": {
+            "patch_id": session.selected_workflow_graph_patch.patch_id,
+            "patch_kind": session.selected_workflow_graph_patch.patch_kind,
+            "metadata": dict(session.selected_workflow_graph_patch.metadata),
+            "node_patches": [
+                {
+                    "node_id": patch.node_id,
+                    "operation": patch.operation,
+                    "target_fields": list(patch.target_fields),
+                    "target_axes": list(patch.target_axes),
+                }
+                for patch in session.selected_workflow_graph_patch.node_patches
+            ],
+            "edge_patches": [
+                {
+                    "edge_id": patch.edge_id,
+                    "operation": patch.operation,
+                    "target_axes": list(patch.target_axes),
+                    "preserve_axes": list(patch.preserve_axes),
+                }
+                for patch in session.selected_workflow_graph_patch.edge_patches
+            ],
+            "region_patches": [
+                {
+                    "region_id": patch.region_id,
+                    "operation": patch.operation,
+                    "target_axes": list(patch.target_axes),
+                    "preserve_axes": list(patch.preserve_axes),
+                }
+                for patch in session.selected_workflow_graph_patch.region_patches
             ],
         },
         "workflow_graph_patch_candidates": [

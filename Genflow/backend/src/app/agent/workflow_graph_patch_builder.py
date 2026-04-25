@@ -7,6 +7,7 @@ from app.agent.runtime_models import CommittedPatch, PreviewProbe
 from app.agent.workflow_graph_patch_models import (
     WorkflowEdgePatch,
     WorkflowGraphPatch,
+    WorkflowGraphPatchCandidate,
     WorkflowNodePatch,
     WorkflowRegionPatch,
 )
@@ -172,6 +173,64 @@ def build_workflow_graph_patch_from_preview_probe(
             "selected_probe_id": selected_probe.probe_id,
             "source_graph_id": graph_source.workflow_id,
             "session_id": session.session_id if session is not None else "",
+        },
+    )
+
+
+def materialize_workflow_graph_patch_from_candidate(
+    candidate: WorkflowGraphPatchCandidate,
+    session: AgentSessionState | None = None,
+) -> WorkflowGraphPatch:
+    if not candidate.candidate_id:
+        return WorkflowGraphPatch(workflow_id="")
+    patch_id = candidate.candidate_id.replace("gpc:", "wgp:", 1)
+    return WorkflowGraphPatch(
+        workflow_id=candidate.workflow_id,
+        patch_id=patch_id,
+        patch_kind="graph_candidate_selected_commit_artifact",
+        node_patches=[
+            WorkflowNodePatch(
+                node_id=patch.node_id,
+                operation=patch.operation,
+                target_fields=list(patch.target_fields),
+                target_axes=list(patch.target_axes),
+                changes=dict(patch.changes),
+                rationale=patch.rationale,
+                metadata=dict(patch.metadata),
+            )
+            for patch in candidate.node_patches
+        ],
+        edge_patches=[
+            WorkflowEdgePatch(
+                edge_id=patch.edge_id,
+                operation=patch.operation,
+                target_axes=list(patch.target_axes),
+                preserve_axes=list(patch.preserve_axes),
+                rationale=patch.rationale,
+                metadata=dict(patch.metadata),
+            )
+            for patch in candidate.edge_patches
+        ],
+        region_patches=[
+            WorkflowRegionPatch(
+                region_id=patch.region_id,
+                operation=patch.operation,
+                target_axes=list(patch.target_axes),
+                preserve_axes=list(patch.preserve_axes),
+                rationale=patch.rationale,
+                metadata=dict(patch.metadata),
+            )
+            for patch in candidate.region_patches
+        ],
+        metadata={
+            "candidate_id": candidate.candidate_id,
+            "candidate_kind": candidate.candidate_kind,
+            "target_axes": list(candidate.target_axes),
+            "preserve_axes": list(candidate.preserve_axes),
+            "candidate_rationale": candidate.candidate_rationale,
+            "selected_probe_id": session.selected_probe.probe_id if session is not None else "",
+            "pbo_score": candidate.metadata.get("pbo_score", 0.0),
+            "pbo_rationale": list(candidate.metadata.get("pbo_rationale", [])),
         },
     )
 
