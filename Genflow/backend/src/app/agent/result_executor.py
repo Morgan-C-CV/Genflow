@@ -112,10 +112,12 @@ class ResultExecutor(ExecutionAdapter):
         patch: CommittedPatch,
         graph_patch: WorkflowGraphPatch | None = None,
         commit_execution_mode: str = "",
+        commit_execution_authority: str = "",
     ) -> tuple[ResultPayload, ResultSummary]:
         changed_axes = list(patch.target_axes or patch.target_fields)
         graph_patch = graph_patch or WorkflowGraphPatch()
         effective_mode = commit_execution_mode or "schema_execution_fallback"
+        effective_authority = commit_execution_authority or "schema_authoritative"
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_committed_result",
@@ -126,6 +128,7 @@ class ResultExecutor(ExecutionAdapter):
                 "target_axes": changed_axes,
                 "rationale": patch.rationale,
                 "graph_patch_input_id": graph_patch.patch_id,
+                "commit_execution_authority": effective_authority,
             },
             artifacts={
                 "render_mode": "mock_commit",
@@ -134,6 +137,7 @@ class ResultExecutor(ExecutionAdapter):
                 "backend_metadata": {
                     "graph_patch_id": graph_patch.patch_id,
                     "commit_execution_mode": effective_mode,
+                    "commit_execution_authority": effective_authority,
                     "graph_native_artifact_input_received": bool(graph_patch.patch_id),
                 },
             },
@@ -143,7 +147,7 @@ class ResultExecutor(ExecutionAdapter):
                 f"Mock committed patch result for patch={patch.patch_id}, "
                 f"target_fields={','.join(patch.target_fields) or 'none'}, "
                 f"target_axes={','.join(changed_axes) or 'none'}, "
-                f"handoff_mode={effective_mode}."
+                f"handoff_mode={effective_mode}, authority={effective_authority}."
             ),
             changed_axes=changed_axes,
             preserved_axes=list(patch.preserve_axes),
@@ -151,9 +155,11 @@ class ResultExecutor(ExecutionAdapter):
                 patch.rationale,
                 f"change_keys={','.join(patch.changes.keys())}",
                 f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
+                f"commit_execution_authority={effective_authority}",
             ] if patch.rationale else [
                 f"change_keys={','.join(patch.changes.keys())}",
                 f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
+                f"commit_execution_authority={effective_authority}",
             ],
         )
         return payload, summary

@@ -48,3 +48,4 @@ class WorkflowCommitSource(WorkflowExecutionSource):
     accepted_patch: CommittedPatch = field(default_factory=CommittedPatch)
     selected_workflow_graph_patch: WorkflowGraphPatch = field(default_factory=WorkflowGraphPatch)
     commit_execution_mode: str = "schema_execution_fallback"
+    commit_execution_authority: str = "schema_authoritative"

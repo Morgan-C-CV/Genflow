@@ -298,9 +298,11 @@ class AgentRuntimeService:
             else type(session.selected_workflow_graph_patch)()
         )
         session.commit_execution_mode = self._determine_commit_execution_mode(session)
+        session.commit_execution_authority = self._determine_commit_execution_authority(session)
         session.accepted_patch.metadata["commit_selection_rationale"] = list(commit_selection.rationale)
         session.accepted_patch.metadata["preferred_commit_source"] = session.preferred_commit_source
         session.accepted_patch.metadata["commit_execution_mode"] = session.commit_execution_mode
+        session.accepted_patch.metadata["commit_execution_authority"] = session.commit_execution_authority
         session.accepted_patch.metadata["top_schema_patch_id"] = session.top_schema_patch_candidate.patch_id
         session.accepted_patch.metadata["top_graph_patch_candidate_id"] = (
             session.top_workflow_graph_patch_candidate.candidate_id
@@ -340,6 +342,7 @@ class AgentRuntimeService:
                 else type(session.selected_workflow_graph_patch)()
             ),
             commit_execution_mode=session.commit_execution_mode,
+            commit_execution_authority=session.commit_execution_authority,
         )
         session.current_result_id = payload.result_id
         session.current_result_payload = payload
@@ -348,6 +351,7 @@ class AgentRuntimeService:
         backend_metadata = dict(payload.artifacts.get("backend_metadata", {}))
         session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
             commit_execution_mode=session.commit_execution_mode,
+            commit_execution_authority=session.commit_execution_authority,
             preferred_commit_source=session.preferred_commit_source,
             request_graph_native_artifact_input_received=bool(
                 session.commit_execution_mode == "graph_native_execution_handoff"
@@ -361,6 +365,9 @@ class AgentRuntimeService:
             backend_graph_patch_id=str(backend_metadata.get("graph_patch_id", "")),
             backend_echoed_commit_source=str(backend_metadata.get("preferred_commit_source", "")),
             backend_echoed_commit_execution_mode=str(backend_metadata.get("commit_execution_mode", "")),
+            backend_echoed_commit_execution_authority=str(
+                backend_metadata.get("commit_execution_authority", "")
+            ),
             backend_echoed_graph_native_artifact_input_received=bool(
                 backend_metadata.get("graph_native_artifact_input_received", False)
             ),
@@ -488,6 +495,14 @@ class AgentRuntimeService:
         if session.preferred_commit_source == "graph" and graph_artifact_complete:
             return "graph_native_execution_handoff"
         return "schema_execution_fallback"
+
+    @staticmethod
+    def _determine_commit_execution_authority(session: AgentSessionState) -> str:
+        if session.commit_execution_mode == "graph_native_execution_handoff":
+            return "graph_supplemental"
+        if session.preferred_commit_source == "graph":
+            return "graph_supplemental"
+        return "schema_authoritative"
 
     def _sync_workflow_identity(self, session: AgentSessionState) -> None:
         workflow_id = session.workflow_id or f"workflow-{session.session_id}"

@@ -115,6 +115,7 @@ class LocalWorkflowFacade:
                 "backend": "local_workflow_facade",
                 "graph_patch_id": graph_patch_spec.get("patch_id", ""),
                 "commit_execution_mode": commit_source_payload.get("commit_execution_mode", ""),
+                "commit_execution_authority": commit_source_payload.get("commit_execution_authority", ""),
                 "preferred_commit_source": commit_source_payload.get("preferred_commit_source", ""),
                 "graph_native_artifact_input_received": bool(
                     commit_source_payload.get("selected_workflow_graph_patch_id", "")
@@ -129,6 +130,7 @@ class LocalWorkflowFacade:
                 f"commit_rationale={patch_spec.get('rationale', '')}",
                 f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
                 f"commit_execution_mode={commit_source_payload.get('commit_execution_mode', '')}",
+                f"commit_execution_authority={commit_source_payload.get('commit_execution_authority', '')}",
                 f"preferred_commit_source={commit_source_payload.get('preferred_commit_source', '')}",
                 "graph_native_artifact_input_received="
                 f"{bool(commit_source_payload.get('selected_workflow_graph_patch_id', ''))}",

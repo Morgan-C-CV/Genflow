@@ -86,6 +86,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                     "rationale": "style shift",
                     "commit_source_payload": {
                         "commit_execution_mode": "graph_native_execution_handoff",
+                        "commit_execution_authority": "graph_supplemental",
                         "preferred_commit_source": "graph",
                         "selected_workflow_graph_patch_id": "wgp_001",
                         "top_schema_patch_id": "cp_001",
@@ -106,11 +107,13 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(response.changed_axes, ["style"])
         self.assertEqual(response.backend_metadata["graph_patch_id"], "cp_001")
         self.assertEqual(response.backend_metadata["commit_execution_mode"], "graph_native_execution_handoff")
+        self.assertEqual(response.backend_metadata["commit_execution_authority"], "graph_supplemental")
         self.assertTrue(response.backend_metadata["graph_native_artifact_input_received"])
         self.assertEqual(response.backend_metadata["preferred_commit_source"], "graph")
         self.assertEqual(response.backend_metadata["selected_workflow_graph_patch_id"], "wgp_001")
         self.assertIn("graph_patch_id=cp_001", response.comparison_notes)
         self.assertIn("commit_execution_mode=graph_native_execution_handoff", response.comparison_notes)
+        self.assertIn("commit_execution_authority=graph_supplemental", response.comparison_notes)
         self.assertIn("graph_native_artifact_input_received=True", response.comparison_notes)
         self.assertIn("preferred_commit_source=graph", response.comparison_notes)
 

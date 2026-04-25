@@ -35,5 +35,6 @@ class ExecutionAdapter(Protocol):
         patch: CommittedPatch,
         graph_patch: WorkflowGraphPatch | None = None,
         commit_execution_mode: str = "",
+        commit_execution_authority: str = "",
     ) -> tuple[ResultPayload, ResultSummary]:
         ...

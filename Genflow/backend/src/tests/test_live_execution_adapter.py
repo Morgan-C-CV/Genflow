@@ -188,6 +188,10 @@ class LiveExecutionAdapterTest(unittest.TestCase):
             request.patch_spec["commit_source_payload"]["commit_execution_mode"],
             "schema_execution_fallback",
         )
+        self.assertEqual(
+            request.patch_spec["commit_source_payload"]["commit_execution_authority"],
+            "schema_authoritative",
+        )
         self.assertEqual(request.patch_spec["commit_source_payload"]["preferred_commit_source"], "schema")
         self.assertEqual(request.patch_spec["commit_source_payload"]["top_schema_patch_id"], "cp_001")
         self.assertEqual(payload.result_type, "live_committed_result")
@@ -217,6 +221,7 @@ class LiveExecutionAdapterTest(unittest.TestCase):
             patch,
             graph_patch=graph_patch,
             commit_execution_mode="graph_native_execution_handoff",
+            commit_execution_authority="graph_supplemental",
         )
 
         request = client.commit_requests[-1]
@@ -224,6 +229,10 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(
             request.patch_spec["commit_source_payload"]["commit_execution_mode"],
             "graph_native_execution_handoff",
+        )
+        self.assertEqual(
+            request.patch_spec["commit_source_payload"]["commit_execution_authority"],
+            "graph_supplemental",
         )
 
     def test_live_adapter_builds_typed_commit_execution_source(self):
@@ -246,12 +255,14 @@ class LiveExecutionAdapterTest(unittest.TestCase):
             patch,
             graph_patch=graph_patch,
             commit_execution_mode="graph_native_execution_handoff",
+            commit_execution_authority="graph_supplemental",
         )
 
         self.assertIsInstance(source, WorkflowCommitSource)
         self.assertEqual(source.accepted_patch.patch_id, "cp_001")
         self.assertEqual(source.selected_workflow_graph_patch.patch_id, "wgp_001")
         self.assertEqual(source.commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(source.commit_execution_authority, "graph_supplemental")
 
     def test_live_adapter_works_with_concrete_default_client(self):
         client = DefaultLiveBackendClient(

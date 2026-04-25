@@ -275,15 +275,25 @@ class CapturingExecutionAdapter(ResultExecutor):
         super().__init__(id_factory=id_factory)
         self.last_commit_graph_patch = None
         self.last_commit_execution_mode = ""
+        self.last_commit_execution_authority = ""
 
-    def execute_committed_patch(self, schema, patch, graph_patch=None, commit_execution_mode=""):
+    def execute_committed_patch(
+        self,
+        schema,
+        patch,
+        graph_patch=None,
+        commit_execution_mode="",
+        commit_execution_authority="",
+    ):
         self.last_commit_graph_patch = graph_patch
         self.last_commit_execution_mode = commit_execution_mode
+        self.last_commit_execution_authority = commit_execution_authority
         return super().execute_committed_patch(
             schema,
             patch,
             graph_patch=graph_patch,
             commit_execution_mode=commit_execution_mode,
+            commit_execution_authority=commit_execution_authority,
         )
 
 
@@ -778,9 +788,14 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertIn("graph_native_aligned_winner", session.accepted_patch.metadata)
         self.assertEqual(session.accepted_patch.patch_id, session.top_schema_patch_candidate.patch_id)
         self.assertEqual(session.commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(session.commit_execution_authority, "graph_supplemental")
         self.assertEqual(
             session.accepted_patch.metadata["commit_execution_mode"],
             "graph_native_execution_handoff",
+        )
+        self.assertEqual(
+            session.accepted_patch.metadata["commit_execution_authority"],
+            "graph_supplemental",
         )
         self.assertEqual(session.current_schema.model, "sdxl-base-patched")
         self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
@@ -793,14 +808,23 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertNotEqual(session.current_result_payload.result_id, old_result_id)
         self.assertEqual(session.current_result_payload.result_type, "mock_committed_result")
         self.assertEqual(executor.last_commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(executor.last_commit_execution_authority, "graph_supplemental")
         self.assertEqual(executor.last_commit_graph_patch.patch_id, session.selected_workflow_graph_patch.patch_id)
         self.assertEqual(
             session.latest_execution_source_evidence.commit_execution_mode,
             "graph_native_execution_handoff",
         )
+        self.assertEqual(
+            session.latest_execution_source_evidence.commit_execution_authority,
+            "graph_supplemental",
+        )
         self.assertEqual(session.latest_execution_source_evidence.preferred_commit_source, "graph")
         self.assertTrue(session.latest_execution_source_evidence.request_graph_native_artifact_input_received)
         self.assertTrue(session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received)
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_commit_execution_authority,
+            "graph_supplemental",
+        )
         self.assertEqual(
             session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
             session.selected_workflow_graph_patch.patch_id,
@@ -820,6 +844,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["commit_execution_mode"],
             "graph_native_execution_handoff",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["commit_execution_authority"],
+            "graph_supplemental",
         )
 
         session = service.verify_latest_result(session.session_id)

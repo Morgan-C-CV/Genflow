@@ -49,6 +49,7 @@ class ExecutionAdapterContractTest(unittest.TestCase):
             patch,
             graph_patch=graph_patch,
             commit_execution_mode="graph_native_execution_handoff",
+            commit_execution_authority="graph_supplemental",
         )
 
         self.assertEqual(initial_payload.result_type, "mock_initial_result")
@@ -58,3 +59,4 @@ class ExecutionAdapterContractTest(unittest.TestCase):
         self.assertEqual(committed_payload.result_type, "mock_committed_result")
         self.assertIn("style", committed_summary.changed_axes)
         self.assertEqual(committed_payload.content["graph_patch_input_id"], "wgp-1")
+        self.assertEqual(committed_payload.content["commit_execution_authority"], "graph_supplemental")

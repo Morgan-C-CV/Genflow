@@ -102,15 +102,22 @@ class ResultExecutorTest(unittest.TestCase):
             patch,
             graph_patch=graph_patch,
             commit_execution_mode="graph_native_execution_handoff",
+            commit_execution_authority="graph_supplemental",
         )
 
         self.assertEqual(payload.content["graph_patch_input_id"], "wgp_002")
+        self.assertEqual(payload.content["commit_execution_authority"], "graph_supplemental")
         self.assertTrue(payload.artifacts["backend_metadata"]["graph_native_artifact_input_received"])
         self.assertEqual(
             payload.artifacts["backend_metadata"]["commit_execution_mode"],
             "graph_native_execution_handoff",
         )
+        self.assertEqual(
+            payload.artifacts["backend_metadata"]["commit_execution_authority"],
+            "graph_supplemental",
+        )
         self.assertIn("graph_native_artifact_input_received=True", summary.notes)
+        self.assertIn("commit_execution_authority=graph_supplemental", summary.notes)
 
 
 if __name__ == "__main__":
