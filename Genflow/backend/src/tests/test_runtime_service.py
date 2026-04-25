@@ -794,6 +794,7 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.commit_execution_mode, "graph_native_execution_handoff")
         self.assertEqual(session.commit_execution_authority, "graph_authoritative")
         self.assertEqual(session.commit_execution_implementation_mode, "graph_primary_execution")
+        self.assertEqual(payload := session.workflow_metadata["patch_winner_comparison"]["commit_execution_implementation_mode"], "graph_primary_execution")
         self.assertEqual(
             session.workflow_metadata["patch_winner_comparison"]["request_primary_plan_kind"],
             "graph_primary",
@@ -837,6 +838,10 @@ class RuntimeServiceTest(unittest.TestCase):
             "graph_primary_execution",
         )
         self.assertEqual(
+            session.latest_execution_source_evidence.request_backend_execution_mode,
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
             session.latest_execution_source_evidence.execution_behavior_branch,
             "graph_primary_execution_branch",
         )
@@ -878,6 +883,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_commit_execution_implementation_mode"],
             "graph_primary_execution",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["backend_echoed_backend_execution_mode"],
+            "graph_primary_backend_execution",
         )
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_execution_behavior_branch"],
@@ -967,6 +976,10 @@ class RuntimeServiceTest(unittest.TestCase):
             session.latest_execution_source_evidence.commit_execution_implementation_mode,
             "schema_compatible_execution",
         )
+        self.assertEqual(
+            session.latest_execution_source_evidence.request_backend_execution_mode,
+            "schema_compatible_backend_execution",
+        )
         self.assertEqual(session.latest_execution_source_evidence.request_primary_plan_kind, "schema_primary")
         self.assertEqual(
             session.latest_execution_source_evidence.execution_behavior_branch,
@@ -983,6 +996,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_commit_execution_implementation_mode,
             "schema_compatible_execution",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_backend_execution_mode,
+            "schema_compatible_backend_execution",
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch,

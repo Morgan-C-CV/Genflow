@@ -150,6 +150,11 @@ class ResultExecutor(ExecutionAdapter):
                     "commit_execution_authority": effective_authority,
                     "request_primary_plan_kind": primary_plan_kind,
                     "commit_execution_implementation_mode": implementation_mode,
+                    "backend_execution_mode": (
+                        "graph_primary_backend_execution"
+                        if implementation_mode == "graph_primary_execution"
+                        else "schema_compatible_backend_execution"
+                    ),
                     "execution_behavior_branch": execution_behavior_branch,
                     "graph_primary_behavior_applied": primary_plan_kind == "graph_primary",
                     "graph_native_artifact_input_received": bool(graph_patch.patch_id),

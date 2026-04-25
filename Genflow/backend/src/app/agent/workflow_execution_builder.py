@@ -192,6 +192,9 @@ def build_workflow_commit_request(session: AgentSessionState) -> WorkflowCommitR
             patch=session.accepted_patch,
             graph_patch=graph_patch,
         ),
+        backend_execution_mode=_build_backend_execution_mode(
+            session.commit_execution_implementation_mode
+        ),
         commit_source_payload=_build_commit_source_payload(session),
         reference_info=_build_reference_info(session),
     )
@@ -211,6 +214,16 @@ def build_workflow_commit_request_from_source(
             graph_source=graph_source,
         )
     )
+    metadata = dict(source.accepted_patch.metadata)
+    effective_authority = str(
+        source.commit_execution_authority
+        or metadata.get("commit_execution_authority", "schema_authoritative")
+        or "schema_authoritative"
+    )
+    effective_implementation_mode = _resolve_commit_execution_implementation_mode(
+        source.commit_execution_implementation_mode,
+        effective_authority,
+    )
     return WorkflowCommitRequest(
         workflow_payload=payload,
         committed_patch_spec=_build_committed_patch_spec(
@@ -222,6 +235,9 @@ def build_workflow_commit_request_from_source(
             authority=source.commit_execution_authority,
             patch=source.accepted_patch,
             graph_patch=graph_patch,
+        ),
+        backend_execution_mode=_build_backend_execution_mode(
+            effective_implementation_mode
         ),
         commit_source_payload=_build_commit_source_payload_from_source(source, graph_patch),
         reference_info=_build_reference_info_from_source(source),
@@ -249,6 +265,7 @@ def _build_commit_source_payload(session: AgentSessionState) -> dict:
         "commit_execution_mode": session.commit_execution_mode,
         "commit_execution_authority": session.commit_execution_authority,
         "commit_execution_implementation_mode": session.commit_execution_implementation_mode,
+        "backend_execution_mode": _build_backend_execution_mode(session.commit_execution_implementation_mode),
         "request_primary_plan_kind": (
             "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
         ),
@@ -261,29 +278,29 @@ def _build_commit_source_payload(session: AgentSessionState) -> dict:
 
 def _build_commit_source_payload_from_source(source: WorkflowCommitSource, graph_patch) -> dict:
     metadata = dict(source.accepted_patch.metadata)
+    effective_authority = str(
+        source.commit_execution_authority
+        or metadata.get("commit_execution_authority", "schema_authoritative")
+        or "schema_authoritative"
+    )
+    effective_implementation_mode = _resolve_commit_execution_implementation_mode(
+        source.commit_execution_implementation_mode,
+        effective_authority,
+    )
     return {
         "commit_execution_mode": str(
             source.commit_execution_mode
             or metadata.get("commit_execution_mode", "schema_execution_fallback")
             or "schema_execution_fallback"
         ),
-        "commit_execution_authority": str(
-            source.commit_execution_authority
-            or metadata.get("commit_execution_authority", "schema_authoritative")
-            or "schema_authoritative"
-        ),
-        "commit_execution_implementation_mode": str(
-            source.commit_execution_implementation_mode
-            or metadata.get("commit_execution_implementation_mode", "schema_compatible_execution")
-            or "schema_compatible_execution"
+        "commit_execution_authority": effective_authority,
+        "commit_execution_implementation_mode": effective_implementation_mode,
+        "backend_execution_mode": _build_backend_execution_mode(
+            effective_implementation_mode
         ),
         "request_primary_plan_kind": (
             "graph_primary"
-            if (
-                source.commit_execution_authority
-                or metadata.get("commit_execution_authority", "schema_authoritative")
-            )
-            == "graph_authoritative"
+            if effective_authority == "graph_authoritative"
             else "schema_primary"
         ),
         "preferred_commit_source": str(metadata.get("preferred_commit_source", "schema") or "schema"),
@@ -293,6 +310,24 @@ def _build_commit_source_payload_from_source(source: WorkflowCommitSource, graph
         "top_schema_patch_id": str(metadata.get("top_schema_patch_id", source.accepted_patch.patch_id)),
         "top_graph_patch_candidate_id": str(metadata.get("top_graph_patch_candidate_id", "")),
     }
+
+
+def _build_backend_execution_mode(implementation_mode: str) -> str:
+    if implementation_mode == "graph_primary_execution":
+        return "graph_primary_backend_execution"
+    return "schema_compatible_backend_execution"
+
+
+def _resolve_commit_execution_implementation_mode(
+    implementation_mode: str,
+    authority: str,
+) -> str:
+    if authority == "graph_authoritative" and implementation_mode == "schema_compatible_execution":
+        return "graph_primary_execution"
+    return str(
+        implementation_mode
+        or ("graph_primary_execution" if authority == "graph_authoritative" else "schema_compatible_execution")
+    )
 
 
 def _build_committed_patch_spec(patch, authority: str) -> dict:

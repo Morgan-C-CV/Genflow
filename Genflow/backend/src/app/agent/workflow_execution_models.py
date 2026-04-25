@@ -44,5 +44,6 @@ class WorkflowCommitRequest:
     committed_patch_spec: Dict[str, Any] = field(default_factory=dict)
     graph_patch_spec: Dict[str, Any] = field(default_factory=dict)
     primary_commit_plan: Dict[str, Any] = field(default_factory=dict)
+    backend_execution_mode: str = ""
     commit_source_payload: Dict[str, Any] = field(default_factory=dict)
     reference_info: Dict[str, Any] = field(default_factory=dict)

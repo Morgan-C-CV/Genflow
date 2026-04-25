@@ -162,6 +162,9 @@ def build_surrogate_workflow_snapshot(
             "commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.commit_execution_implementation_mode
             ),
+            "request_backend_execution_mode": (
+                session.latest_execution_source_evidence.request_backend_execution_mode
+            ),
             "execution_behavior_branch": session.latest_execution_source_evidence.execution_behavior_branch,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
@@ -185,6 +188,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_implementation_mode
+            ),
+            "backend_echoed_backend_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_backend_execution_mode
             ),
             "backend_echoed_execution_behavior_branch": (
                 session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch
@@ -323,6 +329,9 @@ def build_surrogate_workflow_snapshot(
             "commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.commit_execution_implementation_mode
             ),
+            "request_backend_execution_mode": (
+                session.latest_execution_source_evidence.request_backend_execution_mode
+            ),
             "execution_behavior_branch": session.latest_execution_source_evidence.execution_behavior_branch,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
@@ -346,6 +355,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_implementation_mode
+            ),
+            "backend_echoed_backend_execution_mode": (
+                session.latest_execution_source_evidence.backend_echoed_backend_execution_mode
             ),
             "backend_echoed_execution_behavior_branch": (
                 session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch

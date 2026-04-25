@@ -160,10 +160,12 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.commit_source_payload["commit_execution_mode"], "schema_execution_fallback")
         self.assertEqual(request.commit_source_payload["commit_execution_authority"], "schema_authoritative")
         self.assertEqual(request.commit_source_payload["request_primary_plan_kind"], "schema_primary")
+        self.assertEqual(request.commit_source_payload["backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(request.commit_source_payload["preferred_commit_source"], "schema")
         self.assertEqual(request.commit_source_payload["top_schema_patch_id"], "cp_001")
         self.assertEqual(request.primary_commit_plan["plan_kind"], "schema_primary")
         self.assertEqual(request.committed_patch_spec["schema_patch_role"], "primary")
+        self.assertEqual(request.backend_execution_mode, "schema_compatible_backend_execution")
 
     def test_build_workflow_commit_request_prefers_selected_workflow_graph_patch_when_graph_preferred(self):
         session = self._make_session()
@@ -197,6 +199,10 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
             request.commit_source_payload["commit_execution_authority"],
             "schema_authoritative",
         )
+        self.assertEqual(
+            request.commit_source_payload["backend_execution_mode"],
+            "schema_compatible_backend_execution",
+        )
         self.assertEqual(request.primary_commit_plan["plan_kind"], "schema_primary")
         self.assertEqual(
             request.commit_source_payload["top_graph_patch_candidate_id"],
@@ -226,7 +232,9 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.commit_source_payload["commit_execution_mode"], "schema_execution_fallback")
         self.assertEqual(request.commit_source_payload["commit_execution_authority"], "schema_authoritative")
+        self.assertEqual(request.commit_source_payload["backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(request.primary_commit_plan["plan_kind"], "schema_primary")
+        self.assertEqual(request.backend_execution_mode, "schema_compatible_backend_execution")
 
     def test_build_workflow_commit_request_from_source_uses_graph_artifact_when_handoff_mode(self):
         session = self._make_session()
@@ -256,9 +264,11 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.commit_source_payload["commit_execution_mode"], "graph_native_execution_handoff")
         self.assertEqual(request.commit_source_payload["commit_execution_authority"], "graph_authoritative")
         self.assertEqual(request.commit_source_payload["request_primary_plan_kind"], "graph_primary")
+        self.assertEqual(request.commit_source_payload["backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(request.graph_patch_spec["patch_id"], selected_graph_patch.patch_id)
         self.assertEqual(request.primary_commit_plan["plan_kind"], "graph_primary")
         self.assertEqual(request.committed_patch_spec["schema_patch_role"], "compatibility_fallback")
+        self.assertEqual(request.backend_execution_mode, "graph_primary_backend_execution")
 
 
 if __name__ == "__main__":

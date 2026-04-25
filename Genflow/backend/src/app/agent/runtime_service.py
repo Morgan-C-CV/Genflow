@@ -365,6 +365,11 @@ class AgentRuntimeService:
                 "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
             ),
             commit_execution_implementation_mode=session.commit_execution_implementation_mode,
+            request_backend_execution_mode=(
+                "graph_primary_backend_execution"
+                if session.commit_execution_implementation_mode == "graph_primary_execution"
+                else "schema_compatible_backend_execution"
+            ),
             execution_behavior_branch=str(
                 backend_metadata.get(
                     "execution_behavior_branch",
@@ -392,6 +397,9 @@ class AgentRuntimeService:
             backend_echoed_primary_plan_kind=str(backend_metadata.get("request_primary_plan_kind", "")),
             backend_echoed_commit_execution_implementation_mode=str(
                 backend_metadata.get("commit_execution_implementation_mode", "")
+            ),
+            backend_echoed_backend_execution_mode=str(
+                backend_metadata.get("backend_execution_mode", "")
             ),
             backend_echoed_execution_behavior_branch=str(
                 backend_metadata.get("execution_behavior_branch", "")

@@ -192,8 +192,13 @@ class LiveExecutionAdapterTest(unittest.TestCase):
             request.patch_spec["commit_source_payload"]["commit_execution_authority"],
             "schema_authoritative",
         )
+        self.assertEqual(
+            request.patch_spec["commit_source_payload"]["backend_execution_mode"],
+            "schema_compatible_backend_execution",
+        )
         self.assertEqual(request.patch_spec["commit_source_payload"]["request_primary_plan_kind"], "schema_primary")
         self.assertEqual(request.patch_spec["primary_commit_plan"]["plan_kind"], "schema_primary")
+        self.assertEqual(request.patch_spec["backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(request.patch_spec["committed_patch_spec"]["schema_patch_role"] if "committed_patch_spec" in request.patch_spec else request.patch_spec["schema_patch_role"], "primary")
         self.assertEqual(request.patch_spec["commit_source_payload"]["preferred_commit_source"], "schema")
         self.assertEqual(request.patch_spec["commit_source_payload"]["top_schema_patch_id"], "cp_001")
@@ -237,8 +242,13 @@ class LiveExecutionAdapterTest(unittest.TestCase):
             request.patch_spec["commit_source_payload"]["commit_execution_authority"],
             "graph_authoritative",
         )
+        self.assertEqual(
+            request.patch_spec["commit_source_payload"]["backend_execution_mode"],
+            "graph_primary_backend_execution",
+        )
         self.assertEqual(request.patch_spec["commit_source_payload"]["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(request.patch_spec["primary_commit_plan"]["plan_kind"], "graph_primary")
+        self.assertEqual(request.patch_spec["backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(request.patch_spec["schema_patch_role"], "compatibility_fallback")
 
     def test_live_adapter_builds_typed_commit_execution_source(self):

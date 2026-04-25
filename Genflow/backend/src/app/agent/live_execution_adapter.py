@@ -117,6 +117,7 @@ class LiveExecutionAdapter(ExecutionAdapter):
                 **dict(workflow_request.committed_patch_spec),
                 "graph_patch_spec": dict(workflow_request.graph_patch_spec),
                 "primary_commit_plan": dict(workflow_request.primary_commit_plan),
+                "backend_execution_mode": workflow_request.backend_execution_mode,
                 "commit_source_payload": dict(workflow_request.commit_source_payload),
             },
         )
@@ -211,7 +212,8 @@ class LiveExecutionAdapter(ExecutionAdapter):
             commit_execution_mode=commit_execution_mode or "schema_execution_fallback",
             commit_execution_authority=commit_execution_authority or "schema_authoritative",
             commit_execution_implementation_mode=(
-                commit_execution_implementation_mode or "schema_compatible_execution"
+                commit_execution_implementation_mode
+                or ("graph_primary_execution" if commit_execution_authority == "graph_authoritative" else "schema_compatible_execution")
             ),
         )
 

@@ -88,6 +88,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                         "commit_execution_mode": "graph_native_execution_handoff",
                         "commit_execution_authority": "graph_authoritative",
                         "commit_execution_implementation_mode": "graph_primary_execution",
+                        "backend_execution_mode": "graph_primary_backend_execution",
                         "request_primary_plan_kind": "graph_primary",
                         "preferred_commit_source": "graph",
                         "selected_workflow_graph_patch_id": "wgp_001",
@@ -98,6 +99,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                         "plan_kind": "graph_primary",
                         "graph_patch_id": "wgp_001",
                     },
+                    "backend_execution_mode": "graph_primary_backend_execution",
                     "graph_patch_spec": {
                         "patch_id": "cp_001",
                         "node_patches": [{"node_id": "render.model"}],
@@ -115,6 +117,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.output_payload["commit_execution_implementation_mode"],
             "graph_primary_execution",
         )
+        self.assertEqual(response.output_payload["backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(response.output_payload["execution_behavior_branch"], "graph_primary_execution_branch")
         self.assertEqual(response.output_payload["graph_driven_node_count"], 1)
         self.assertEqual(response.changed_axes, ["style"])
@@ -124,6 +127,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(
             response.backend_metadata["commit_execution_implementation_mode"],
             "graph_primary_execution",
+        )
+        self.assertEqual(
+            response.backend_metadata["backend_execution_mode"],
+            "graph_primary_backend_execution",
         )
         self.assertEqual(response.backend_metadata["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(response.backend_metadata["execution_behavior_branch"], "graph_primary_execution_branch")
@@ -135,6 +142,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertIn("graph_patch_id=cp_001", response.comparison_notes)
         self.assertIn("request_primary_plan_kind=graph_primary", response.comparison_notes)
         self.assertIn("commit_execution_implementation_mode=graph_primary_execution", response.comparison_notes)
+        self.assertIn("backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
         self.assertIn("execution_behavior_branch=graph_primary_execution_branch", response.comparison_notes)
         self.assertIn("commit_execution_mode=graph_native_execution_handoff", response.comparison_notes)
         self.assertIn("commit_execution_authority=graph_authoritative", response.comparison_notes)
