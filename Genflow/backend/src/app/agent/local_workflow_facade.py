@@ -58,6 +58,8 @@ class LocalWorkflowFacade:
     @staticmethod
     def _run_preview(request: PreviewExecutionRequest) -> ExecutionResponse:
         preview_spec = dict(request.preview_spec)
+        graph_patch_spec = dict(preview_spec.get("graph_patch_spec", {}))
+        LocalWorkflowFacade._validate_graph_patch_spec(graph_patch_spec, "preview")
         probe_id = str(preview_spec.get("probe_id", "preview"))
         target_axes = list(preview_spec.get("target_axes", []))
         preserve_axes = list(preview_spec.get("preserve_axes", []))
@@ -73,13 +75,22 @@ class LocalWorkflowFacade:
             changed_axes=target_axes,
             preserved_axes=preserve_axes,
             backend_artifacts={"artifact_uri": f"memory://local-workflow/preview/{probe_id}"},
-            backend_metadata={"result_type": "live_preview_result", "backend": "local_workflow_facade"},
-            comparison_notes=[f"preview_source={preview_spec.get('source_kind', '')}"],
+            backend_metadata={
+                "result_type": "live_preview_result",
+                "backend": "local_workflow_facade",
+                "graph_patch_id": graph_patch_spec.get("patch_id", ""),
+            },
+            comparison_notes=[
+                f"preview_source={preview_spec.get('source_kind', '')}",
+                f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
+            ],
         )
 
     @staticmethod
     def _run_commit(request: CommitExecutionRequest) -> ExecutionResponse:
         patch_spec = dict(request.patch_spec)
+        graph_patch_spec = dict(patch_spec.get("graph_patch_spec", {}))
+        LocalWorkflowFacade._validate_graph_patch_spec(graph_patch_spec, "commit")
         patch_id = str(patch_spec.get("patch_id", "commit"))
         target_axes = list(patch_spec.get("target_axes", []))
         preserve_axes = list(patch_spec.get("preserve_axes", []))
@@ -95,6 +106,22 @@ class LocalWorkflowFacade:
             changed_axes=target_axes,
             preserved_axes=preserve_axes,
             backend_artifacts={"artifact_uri": f"memory://local-workflow/commit/{patch_id}"},
-            backend_metadata={"result_type": "live_committed_result", "backend": "local_workflow_facade"},
-            comparison_notes=[f"commit_rationale={patch_spec.get('rationale', '')}"],
+            backend_metadata={
+                "result_type": "live_committed_result",
+                "backend": "local_workflow_facade",
+                "graph_patch_id": graph_patch_spec.get("patch_id", ""),
+            },
+            comparison_notes=[
+                f"commit_rationale={patch_spec.get('rationale', '')}",
+                f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
+            ],
         )
+
+    @staticmethod
+    def _validate_graph_patch_spec(graph_patch_spec: dict, execution_kind: str) -> None:
+        if not isinstance(graph_patch_spec, dict):
+            raise ValueError(f"{execution_kind} request must include graph_patch_spec.")
+        if not graph_patch_spec.get("patch_id"):
+            raise ValueError(f"{execution_kind} request graph_patch_spec must include patch_id.")
+        if not isinstance(graph_patch_spec.get("node_patches"), list):
+            raise ValueError(f"{execution_kind} request graph_patch_spec must include node_patches.")

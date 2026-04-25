@@ -2,6 +2,7 @@ import unittest
 
 from app.agent.memory import AgentMemoryService
 from app.agent.runtime_models import CommittedPatch, PreviewProbe
+from app.agent.workflow_graph_patch_builder import build_workflow_graph_patch
 from app.agent.workflow_execution_builder import (
     build_workflow_commit_request,
     build_workflow_commit_request_from_source,
@@ -49,6 +50,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
             changes={"style": ["cinematic"], "model": "sdxl-base-patched"},
             rationale="commit style shift",
         )
+        session.current_workflow_graph_patch = build_workflow_graph_patch(session)
         return session
 
     def test_build_workflow_execution_payload_produces_workflow_native_shape(self):
@@ -111,6 +113,8 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertTrue(request.workflow_payload.preview)
         self.assertEqual(request.preview_patch_spec["probe_id"], "p_001")
         self.assertEqual(request.preview_patch_spec["target_axes"], ["style"])
+        self.assertEqual(request.graph_patch_spec["patch_kind"], "graph_preview_projection")
+        self.assertTrue(request.graph_patch_spec["node_patches"])
         self.assertEqual(request.reference_info["reference_ids"], [101, 202])
 
     def test_build_workflow_preview_request_from_source_uses_typed_source(self):
@@ -134,6 +138,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
 
         self.assertEqual(request.workflow_payload.execution_kind, "preview")
         self.assertEqual(request.preview_patch_spec["probe_id"], "p_001")
+        self.assertEqual(request.graph_patch_spec["patch_kind"], "graph_preview_projection")
         self.assertEqual(request.reference_info["reference_ids"], [101, 202])
 
     def test_build_workflow_commit_request_uses_committed_patch(self):
@@ -145,6 +150,8 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertFalse(request.workflow_payload.preview)
         self.assertEqual(request.committed_patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
+        self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
+        self.assertTrue(request.graph_patch_spec["node_patches"])
 
     def test_build_workflow_commit_request_from_source_uses_typed_source(self):
         session = self._make_session()
@@ -166,6 +173,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.workflow_payload.execution_kind, "commit")
         self.assertEqual(request.committed_patch_spec["patch_id"], "cp_001")
         self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
+        self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
 
 
 if __name__ == "__main__":

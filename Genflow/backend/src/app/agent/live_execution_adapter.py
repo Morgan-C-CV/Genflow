@@ -71,7 +71,10 @@ class LiveExecutionAdapter(ExecutionAdapter):
             schema_snapshot=self._build_schema_snapshot(schema),
             workflow_payload=asdict(workflow_request.workflow_payload),
             reference_info=dict(workflow_request.reference_info),
-            preview_spec=dict(workflow_request.preview_patch_spec),
+            preview_spec={
+                **dict(workflow_request.preview_patch_spec),
+                "graph_patch_spec": dict(workflow_request.graph_patch_spec),
+            },
         )
         response = client.run_preview(request)
         payload, summary = self._map_result_response(
@@ -98,7 +101,10 @@ class LiveExecutionAdapter(ExecutionAdapter):
             schema_snapshot=self._build_schema_snapshot(schema),
             workflow_payload=asdict(workflow_request.workflow_payload),
             reference_info=dict(workflow_request.reference_info),
-            patch_spec=dict(workflow_request.committed_patch_spec),
+            patch_spec={
+                **dict(workflow_request.committed_patch_spec),
+                "graph_patch_spec": dict(workflow_request.graph_patch_spec),
+            },
         )
         response = client.run_commit(request)
         return self._map_result_response(response, default_result_type="live_committed_result")

@@ -9,6 +9,10 @@ from app.agent.workflow_execution_models import (
     WorkflowExecutionPayload,
     WorkflowPreviewRequest,
 )
+from app.agent.workflow_graph_patch_builder import (
+    build_workflow_graph_patch_from_committed_patch,
+    build_workflow_graph_patch_from_preview_probe,
+)
 from app.agent.workflow_execution_source_models import (
     WorkflowCommitSource,
     WorkflowExecutionSource,
@@ -117,6 +121,12 @@ def build_workflow_execution_payload_from_graph_source(
 
 def build_workflow_preview_request(session: AgentSessionState) -> WorkflowPreviewRequest:
     payload = build_workflow_execution_payload(session, execution_kind="preview", preview=True)
+    graph_source = build_workflow_graph_source(session, execution_kind="preview", preview=True)
+    graph_patch = build_workflow_graph_patch_from_preview_probe(
+        session.selected_probe,
+        graph_source=graph_source,
+        session=session,
+    )
     return WorkflowPreviewRequest(
         workflow_payload=payload,
         preview_patch_spec={
@@ -127,6 +137,7 @@ def build_workflow_preview_request(session: AgentSessionState) -> WorkflowPrevie
             "source_kind": session.selected_probe.source_kind,
             "preview_execution_spec": dict(session.selected_probe.preview_execution_spec),
         },
+        graph_patch_spec=_serialize_graph_patch(graph_patch),
         reference_info=_build_reference_info(session),
     )
 
@@ -135,6 +146,11 @@ def build_workflow_preview_request_from_source(
     source: WorkflowPreviewSource,
 ) -> WorkflowPreviewRequest:
     payload = build_workflow_execution_payload_from_source(source)
+    graph_source = build_workflow_graph_source_from_execution_source(source)
+    graph_patch = build_workflow_graph_patch_from_preview_probe(
+        source.selected_probe,
+        graph_source=graph_source,
+    )
     return WorkflowPreviewRequest(
         workflow_payload=payload,
         preview_patch_spec={
@@ -145,12 +161,21 @@ def build_workflow_preview_request_from_source(
             "source_kind": source.selected_probe.source_kind,
             "preview_execution_spec": dict(source.selected_probe.preview_execution_spec),
         },
+        graph_patch_spec=_serialize_graph_patch(graph_patch),
         reference_info=_build_reference_info_from_source(source),
     )
 
 
 def build_workflow_commit_request(session: AgentSessionState) -> WorkflowCommitRequest:
     payload = build_workflow_execution_payload(session, execution_kind="commit", preview=False)
+    graph_source = build_workflow_graph_source(session, execution_kind="commit", preview=False)
+    graph_patch = session.current_workflow_graph_patch
+    if not graph_patch.patch_id:
+        graph_patch = build_workflow_graph_patch_from_committed_patch(
+            committed_patch=session.accepted_patch,
+            graph_source=graph_source,
+            session=session,
+        )
     return WorkflowCommitRequest(
         workflow_payload=payload,
         committed_patch_spec={
@@ -161,6 +186,7 @@ def build_workflow_commit_request(session: AgentSessionState) -> WorkflowCommitR
             "changes": dict(session.accepted_patch.changes),
             "rationale": session.accepted_patch.rationale,
         },
+        graph_patch_spec=_serialize_graph_patch(graph_patch),
         reference_info=_build_reference_info(session),
     )
 
@@ -169,6 +195,11 @@ def build_workflow_commit_request_from_source(
     source: WorkflowCommitSource,
 ) -> WorkflowCommitRequest:
     payload = build_workflow_execution_payload_from_source(source)
+    graph_source = build_workflow_graph_source_from_execution_source(source)
+    graph_patch = build_workflow_graph_patch_from_committed_patch(
+        committed_patch=source.accepted_patch,
+        graph_source=graph_source,
+    )
     return WorkflowCommitRequest(
         workflow_payload=payload,
         committed_patch_spec={
@@ -179,6 +210,7 @@ def build_workflow_commit_request_from_source(
             "changes": dict(source.accepted_patch.changes),
             "rationale": source.accepted_patch.rationale,
         },
+        graph_patch_spec=_serialize_graph_patch(graph_patch),
         reference_info=_build_reference_info_from_source(source),
     )
 
@@ -196,4 +228,47 @@ def _build_reference_info_from_source(source: WorkflowExecutionSource) -> dict:
         "selected_gallery_index": source.selected_gallery_index,
         "reference_ids": list(source.selected_reference_ids),
         "reference_count": len(source.selected_reference_ids),
+    }
+
+
+def _serialize_graph_patch(graph_patch) -> dict:
+    return {
+        "workflow_id": graph_patch.workflow_id,
+        "patch_id": graph_patch.patch_id,
+        "patch_kind": graph_patch.patch_kind,
+        "node_patches": [
+            {
+                "node_id": patch.node_id,
+                "operation": patch.operation,
+                "target_fields": list(patch.target_fields),
+                "target_axes": list(patch.target_axes),
+                "changes": dict(patch.changes),
+                "rationale": patch.rationale,
+                "metadata": dict(patch.metadata),
+            }
+            for patch in graph_patch.node_patches
+        ],
+        "edge_patches": [
+            {
+                "edge_id": patch.edge_id,
+                "operation": patch.operation,
+                "target_axes": list(patch.target_axes),
+                "preserve_axes": list(patch.preserve_axes),
+                "rationale": patch.rationale,
+                "metadata": dict(patch.metadata),
+            }
+            for patch in graph_patch.edge_patches
+        ],
+        "region_patches": [
+            {
+                "region_id": patch.region_id,
+                "operation": patch.operation,
+                "target_axes": list(patch.target_axes),
+                "preserve_axes": list(patch.preserve_axes),
+                "rationale": patch.rationale,
+                "metadata": dict(patch.metadata),
+            }
+            for patch in graph_patch.region_patches
+        ],
+        "metadata": dict(graph_patch.metadata),
     }

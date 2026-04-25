@@ -3,7 +3,7 @@ from __future__ import annotations
 """Build graph-native patch intent from committed schema-level repair decisions."""
 
 from app.agent.memory import AgentSessionState
-from app.agent.runtime_models import CommittedPatch
+from app.agent.runtime_models import CommittedPatch, PreviewProbe
 from app.agent.workflow_graph_patch_models import (
     WorkflowEdgePatch,
     WorkflowGraphPatch,
@@ -102,6 +102,76 @@ def build_workflow_graph_patch_from_committed_patch(
             "target_fields": list(committed_patch.target_fields),
             "selected_probe_id": session.selected_probe.probe_id if session is not None else "",
             "source_graph_id": graph_source.workflow_id,
+        },
+    )
+
+
+def build_workflow_graph_patch_from_preview_probe(
+    selected_probe: PreviewProbe,
+    graph_source: WorkflowGraphSource,
+    session: AgentSessionState | None = None,
+) -> WorkflowGraphPatch:
+    if not selected_probe.probe_id:
+        return WorkflowGraphPatch(workflow_id=graph_source.workflow_id)
+
+    node_patches = [
+        WorkflowNodePatch(
+            node_id="render.model",
+            operation="preview_node_adjustment",
+            target_fields=["style_direction"],
+            target_axes=list(selected_probe.target_axes),
+            changes={
+                "target_axes": list(selected_probe.target_axes),
+                "preserve_axes": list(selected_probe.preserve_axes),
+                "source_kind": selected_probe.source_kind,
+            },
+            rationale=selected_probe.summary,
+            metadata={
+                "probe_id": selected_probe.probe_id,
+                "preview_execution_spec": dict(selected_probe.preview_execution_spec),
+            },
+        )
+    ]
+    edge_patches = [
+        WorkflowEdgePatch(
+            edge_id=edge.edge_id,
+            operation="preview_flow_adjustment",
+            target_axes=list(selected_probe.target_axes),
+            preserve_axes=list(selected_probe.preserve_axes),
+            rationale=f"Preview graph intent for probe {selected_probe.probe_id}.",
+            metadata={"probe_id": selected_probe.probe_id, "edge_type": edge.edge_type},
+        )
+        for edge in graph_source.edges
+        if edge.target_node_id == "render.model" or edge.source_node_id == "render.model"
+    ]
+    region_patches = [
+        WorkflowRegionPatch(
+            region_id=region.region_id,
+            operation="preview_region_adjustment",
+            target_axes=list(selected_probe.target_axes),
+            preserve_axes=list(selected_probe.preserve_axes),
+            rationale=f"Preview region intent for probe {selected_probe.probe_id}.",
+            metadata={"probe_id": selected_probe.probe_id, "region_type": region.region_type},
+        )
+        for region in graph_source.regions
+        if region.region_type in {"initial_region", "repair_region"}
+    ]
+    return WorkflowGraphPatch(
+        workflow_id=graph_source.workflow_id,
+        patch_id=f"preview:{selected_probe.probe_id}",
+        patch_kind="graph_preview_projection",
+        node_patches=node_patches,
+        edge_patches=edge_patches,
+        region_patches=region_patches,
+        metadata={
+            "probe_id": selected_probe.probe_id,
+            "workflow_kind": graph_source.workflow_kind,
+            "workflow_version": graph_source.workflow_version,
+            "target_axes": list(selected_probe.target_axes),
+            "preserve_axes": list(selected_probe.preserve_axes),
+            "selected_probe_id": selected_probe.probe_id,
+            "source_graph_id": graph_source.workflow_id,
+            "session_id": session.session_id if session is not None else "",
         },
     )
 

@@ -49,6 +49,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                     "target_axes": ["style"],
                     "preserve_axes": ["composition"],
                     "source_kind": "schema_variation",
+                    "graph_patch_spec": {
+                        "patch_id": "preview:p_001",
+                        "node_patches": [{"node_id": "render.model"}],
+                    },
                 },
             ),
         )
@@ -57,6 +61,8 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(response.response_id, "local-preview-p_001")
         self.assertEqual(response.changed_axes, ["style"])
         self.assertEqual(response.preserved_axes, ["composition"])
+        self.assertEqual(response.backend_metadata["graph_patch_id"], "preview:p_001")
+        self.assertIn("graph_patch_id=preview:p_001", response.comparison_notes)
 
     def test_commit_path_returns_deterministic_commit_response(self):
         facade = LocalWorkflowFacade()
@@ -78,6 +84,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                     "target_axes": ["style"],
                     "preserve_axes": ["composition"],
                     "rationale": "style shift",
+                    "graph_patch_spec": {
+                        "patch_id": "cp_001",
+                        "node_patches": [{"node_id": "render.model"}],
+                    },
                 },
             ),
         )
@@ -86,6 +96,31 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(response.response_id, "local-commit-cp_001")
         self.assertEqual(response.output_payload["patch_id"], "cp_001")
         self.assertEqual(response.changed_axes, ["style"])
+        self.assertEqual(response.backend_metadata["graph_patch_id"], "cp_001")
+        self.assertIn("graph_patch_id=cp_001", response.comparison_notes)
+
+    def test_facade_rejects_preview_without_graph_patch_spec(self):
+        facade = LocalWorkflowFacade()
+
+        with self.assertRaisesRegex(ValueError, "preview request graph_patch_spec must include patch_id."):
+            facade.run(
+                "preview",
+                PreviewExecutionRequest(
+                    execution_kind="preview",
+                    workflow_payload={
+                        "workflow_id": "workflow-1",
+                        "workflow_kind": "workflow_native_surrogate",
+                        "nodes": [{"node_id": "probe.p_001"}],
+                        "edges": [{"edge_id": "probe.p_001->result.output"}],
+                        "execution_config": {"execution_kind": "preview", "preview": True},
+                    },
+                    preview_spec={
+                        "probe_id": "p_001",
+                        "target_axes": ["style"],
+                        "preserve_axes": ["composition"],
+                    },
+                ),
+            )
 
     def test_facade_rejects_missing_workflow_native_payload_shape(self):
         facade = LocalWorkflowFacade()

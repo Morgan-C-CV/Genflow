@@ -34,6 +34,7 @@ class WorkflowExecutionPayload:
 class WorkflowPreviewRequest:
     workflow_payload: WorkflowExecutionPayload = field(default_factory=WorkflowExecutionPayload)
     preview_patch_spec: Dict[str, Any] = field(default_factory=dict)
+    graph_patch_spec: Dict[str, Any] = field(default_factory=dict)
     reference_info: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -41,4 +42,5 @@ class WorkflowPreviewRequest:
 class WorkflowCommitRequest:
     workflow_payload: WorkflowExecutionPayload = field(default_factory=WorkflowExecutionPayload)
     committed_patch_spec: Dict[str, Any] = field(default_factory=dict)
+    graph_patch_spec: Dict[str, Any] = field(default_factory=dict)
     reference_info: Dict[str, Any] = field(default_factory=dict)
