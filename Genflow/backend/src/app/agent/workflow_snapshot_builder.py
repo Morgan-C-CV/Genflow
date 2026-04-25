@@ -158,6 +158,7 @@ def build_surrogate_workflow_snapshot(
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,
             "request_primary_plan_kind": session.latest_execution_source_evidence.request_primary_plan_kind,
+            "execution_behavior_branch": session.latest_execution_source_evidence.execution_behavior_branch,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.request_graph_native_artifact_input_received
@@ -177,6 +178,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_primary_plan_kind": (
                 session.latest_execution_source_evidence.backend_echoed_primary_plan_kind
+            ),
+            "backend_echoed_execution_behavior_branch": (
+                session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch
             ),
             "backend_echoed_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received
@@ -308,6 +312,7 @@ def build_surrogate_workflow_snapshot(
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,
             "request_primary_plan_kind": session.latest_execution_source_evidence.request_primary_plan_kind,
+            "execution_behavior_branch": session.latest_execution_source_evidence.execution_behavior_branch,
             "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
             "request_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.request_graph_native_artifact_input_received
@@ -327,6 +332,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_primary_plan_kind": (
                 session.latest_execution_source_evidence.backend_echoed_primary_plan_kind
+            ),
+            "backend_echoed_execution_behavior_branch": (
+                session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch
             ),
             "backend_echoed_graph_native_artifact_input_received": (
                 session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received

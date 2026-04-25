@@ -96,6 +96,12 @@ class LocalWorkflowFacade:
         patch_id = str(patch_spec.get("patch_id", "commit"))
         target_axes = list(patch_spec.get("target_axes", []))
         preserve_axes = list(patch_spec.get("preserve_axes", []))
+        primary_plan_kind = str(primary_commit_plan.get("plan_kind", "schema_primary"))
+        execution_behavior_branch = (
+            "graph_primary_execution_branch"
+            if primary_plan_kind == "graph_primary"
+            else "schema_primary_execution_branch"
+        )
         return ExecutionResponse(
             response_id=f"local-commit-{patch_id}",
             execution_kind="commit",
@@ -106,9 +112,17 @@ class LocalWorkflowFacade:
                 "graph_native_artifact_input_received": bool(
                     commit_source_payload.get("selected_workflow_graph_patch_id", "")
                 ),
-                "request_primary_plan_kind": primary_commit_plan.get("plan_kind", ""),
+                "request_primary_plan_kind": primary_plan_kind,
+                "execution_behavior_branch": execution_behavior_branch,
+                "graph_driven_node_count": len(graph_patch_spec.get("node_patches", []))
+                if primary_plan_kind == "graph_primary"
+                else 0,
             },
-            summary_text=f"Local workflow facade committed patch={patch_id}.",
+            summary_text=(
+                f"Local workflow facade ran graph-primary execution branch for patch={patch_id}."
+                if primary_plan_kind == "graph_primary"
+                else f"Local workflow facade ran schema-primary execution branch for patch={patch_id}."
+            ),
             changed_axes=target_axes,
             preserved_axes=preserve_axes,
             backend_artifacts={"artifact_uri": f"memory://local-workflow/commit/{patch_id}"},
@@ -118,7 +132,9 @@ class LocalWorkflowFacade:
                 "graph_patch_id": graph_patch_spec.get("patch_id", ""),
                 "commit_execution_mode": commit_source_payload.get("commit_execution_mode", ""),
                 "commit_execution_authority": commit_source_payload.get("commit_execution_authority", ""),
-                "request_primary_plan_kind": primary_commit_plan.get("plan_kind", ""),
+                "request_primary_plan_kind": primary_plan_kind,
+                "execution_behavior_branch": execution_behavior_branch,
+                "graph_primary_behavior_applied": primary_plan_kind == "graph_primary",
                 "preferred_commit_source": commit_source_payload.get("preferred_commit_source", ""),
                 "graph_native_artifact_input_received": bool(
                     commit_source_payload.get("selected_workflow_graph_patch_id", "")
@@ -132,7 +148,8 @@ class LocalWorkflowFacade:
             comparison_notes=[
                 f"commit_rationale={patch_spec.get('rationale', '')}",
                 f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
-                f"request_primary_plan_kind={primary_commit_plan.get('plan_kind', '')}",
+                f"request_primary_plan_kind={primary_plan_kind}",
+                f"execution_behavior_branch={execution_behavior_branch}",
                 f"commit_execution_mode={commit_source_payload.get('commit_execution_mode', '')}",
                 f"commit_execution_authority={commit_source_payload.get('commit_execution_authority', '')}",
                 f"preferred_commit_source={commit_source_payload.get('preferred_commit_source', '')}",

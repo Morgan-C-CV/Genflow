@@ -108,6 +108,8 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertEqual(payload.content["graph_patch_input_id"], "wgp_002")
         self.assertEqual(payload.content["commit_execution_authority"], "graph_authoritative")
         self.assertEqual(payload.content["request_primary_plan_kind"], "graph_primary")
+        self.assertEqual(payload.content["execution_behavior_branch"], "graph_primary_execution_branch")
+        self.assertEqual(payload.content["graph_driven_node_count"], 1)
         self.assertTrue(payload.artifacts["backend_metadata"]["graph_native_artifact_input_received"])
         self.assertEqual(
             payload.artifacts["backend_metadata"]["commit_execution_mode"],
@@ -118,9 +120,16 @@ class ResultExecutorTest(unittest.TestCase):
             "graph_authoritative",
         )
         self.assertEqual(payload.artifacts["backend_metadata"]["request_primary_plan_kind"], "graph_primary")
+        self.assertEqual(
+            payload.artifacts["backend_metadata"]["execution_behavior_branch"],
+            "graph_primary_execution_branch",
+        )
+        self.assertTrue(payload.artifacts["backend_metadata"]["graph_primary_behavior_applied"])
         self.assertIn("graph_native_artifact_input_received=True", summary.notes)
         self.assertIn("commit_execution_authority=graph_authoritative", summary.notes)
         self.assertIn("request_primary_plan_kind=graph_primary", summary.notes)
+        self.assertIn("execution_behavior_branch=graph_primary_execution_branch", summary.notes)
+        self.assertIn("Mock graph-primary execution branch", summary.summary_text)
 
 
 if __name__ == "__main__":

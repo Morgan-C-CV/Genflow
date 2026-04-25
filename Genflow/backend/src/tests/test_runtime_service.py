@@ -826,6 +826,10 @@ class RuntimeServiceTest(unittest.TestCase):
             session.latest_execution_source_evidence.request_primary_plan_kind,
             "graph_primary",
         )
+        self.assertEqual(
+            session.latest_execution_source_evidence.execution_behavior_branch,
+            "graph_primary_execution_branch",
+        )
         self.assertEqual(session.latest_execution_source_evidence.preferred_commit_source, "graph")
         self.assertTrue(session.latest_execution_source_evidence.request_graph_native_artifact_input_received)
         self.assertTrue(session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received)
@@ -860,6 +864,15 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_primary_plan_kind"],
             "graph_primary",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["backend_echoed_execution_behavior_branch"],
+            "graph_primary_execution_branch",
+        )
+        self.assertIn("graph-primary execution branch", session.current_result_summary.summary_text)
+        self.assertEqual(
+            session.current_result_payload.content["execution_behavior_branch"],
+            "graph_primary_execution_branch",
         )
 
         session = service.verify_latest_result(session.session_id)
@@ -933,12 +946,20 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertEqual(session.latest_execution_source_evidence.request_primary_plan_kind, "schema_primary")
         self.assertEqual(
+            session.latest_execution_source_evidence.execution_behavior_branch,
+            "schema_primary_execution_branch",
+        )
+        self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_commit_execution_authority,
             "graph_supplemental",
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_primary_plan_kind,
             "schema_primary",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_execution_behavior_branch,
+            "schema_primary_execution_branch",
         )
 
     def test_runtime_service_passes_benchmark_comparison_summary_to_verifier(self):

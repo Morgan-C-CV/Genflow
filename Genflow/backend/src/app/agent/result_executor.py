@@ -118,6 +118,10 @@ class ResultExecutor(ExecutionAdapter):
         graph_patch = graph_patch or WorkflowGraphPatch()
         effective_mode = commit_execution_mode or "schema_execution_fallback"
         effective_authority = commit_execution_authority or "schema_authoritative"
+        primary_plan_kind = "graph_primary" if effective_authority == "graph_authoritative" else "schema_primary"
+        execution_behavior_branch = (
+            "graph_primary_execution_branch" if primary_plan_kind == "graph_primary" else "schema_primary_execution_branch"
+        )
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_committed_result",
@@ -129,9 +133,9 @@ class ResultExecutor(ExecutionAdapter):
                 "rationale": patch.rationale,
                 "graph_patch_input_id": graph_patch.patch_id,
                 "commit_execution_authority": effective_authority,
-                "request_primary_plan_kind": (
-                    "graph_primary" if effective_authority == "graph_authoritative" else "schema_primary"
-                ),
+                "request_primary_plan_kind": primary_plan_kind,
+                "execution_behavior_branch": execution_behavior_branch,
+                "graph_driven_node_count": len(graph_patch.node_patches) if primary_plan_kind == "graph_primary" else 0,
             },
             artifacts={
                 "render_mode": "mock_commit",
@@ -141,20 +145,24 @@ class ResultExecutor(ExecutionAdapter):
                     "graph_patch_id": graph_patch.patch_id,
                     "commit_execution_mode": effective_mode,
                     "commit_execution_authority": effective_authority,
-                    "request_primary_plan_kind": (
-                        "graph_primary" if effective_authority == "graph_authoritative" else "schema_primary"
-                    ),
+                    "request_primary_plan_kind": primary_plan_kind,
+                    "execution_behavior_branch": execution_behavior_branch,
+                    "graph_primary_behavior_applied": primary_plan_kind == "graph_primary",
                     "graph_native_artifact_input_received": bool(graph_patch.patch_id),
                 },
             },
         )
         summary = ResultSummary(
             summary_text=(
-                f"Mock committed patch result for patch={patch.patch_id}, "
-                f"target_fields={','.join(patch.target_fields) or 'none'}, "
-                f"target_axes={','.join(changed_axes) or 'none'}, "
-                f"handoff_mode={effective_mode}, authority={effective_authority}, "
-                f"primary_plan={'graph_primary' if effective_authority == 'graph_authoritative' else 'schema_primary'}."
+                (
+                    f"Mock graph-primary execution branch for patch={patch.patch_id}, "
+                    f"graph_patch={graph_patch.patch_id or 'none'}, "
+                    f"graph_nodes={len(graph_patch.node_patches)}."
+                    if primary_plan_kind == "graph_primary"
+                    else f"Mock schema-primary execution branch for patch={patch.patch_id}, "
+                    f"target_fields={','.join(patch.target_fields) or 'none'}, "
+                    f"target_axes={','.join(changed_axes) or 'none'}."
+                )
             ),
             changed_axes=changed_axes,
             preserved_axes=list(patch.preserve_axes),
@@ -163,14 +171,14 @@ class ResultExecutor(ExecutionAdapter):
                 f"change_keys={','.join(patch.changes.keys())}",
                 f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
                 f"commit_execution_authority={effective_authority}",
-                "request_primary_plan_kind="
-                f"{'graph_primary' if effective_authority == 'graph_authoritative' else 'schema_primary'}",
+                f"request_primary_plan_kind={primary_plan_kind}",
+                f"execution_behavior_branch={execution_behavior_branch}",
             ] if patch.rationale else [
                 f"change_keys={','.join(patch.changes.keys())}",
                 f"graph_native_artifact_input_received={bool(graph_patch.patch_id)}",
                 f"commit_execution_authority={effective_authority}",
-                "request_primary_plan_kind="
-                f"{'graph_primary' if effective_authority == 'graph_authoritative' else 'schema_primary'}",
+                f"request_primary_plan_kind={primary_plan_kind}",
+                f"execution_behavior_branch={execution_behavior_branch}",
             ],
         )
         return payload, summary

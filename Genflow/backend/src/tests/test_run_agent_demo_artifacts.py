@@ -184,6 +184,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             "graph_primary",
         )
         self.assertEqual(
+            payload["latest_execution_source_evidence"]["execution_behavior_branch"],
+            "graph_primary_execution_branch",
+        )
+        self.assertEqual(
             payload["latest_execution_source_evidence"]["preferred_commit_source"],
             payload["preferred_commit_source"],
         )
@@ -202,6 +206,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_primary_plan_kind"],
             "graph_primary",
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_execution_behavior_branch"],
+            "graph_primary_execution_branch",
         )
 
 
