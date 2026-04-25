@@ -122,6 +122,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.output_payload["requested_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
+        self.assertTrue(response.output_payload["backend_graph_primary_capable"])
         self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -149,6 +150,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.backend_metadata["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
+        self.assertTrue(response.backend_metadata["backend_graph_primary_capable"])
         self.assertEqual(
             response.backend_metadata["realized_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -163,6 +165,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertIn("graph_patch_id=cp_001", response.comparison_notes)
         self.assertIn("request_primary_plan_kind=graph_primary", response.comparison_notes)
         self.assertIn("commit_execution_implementation_mode=graph_primary_execution", response.comparison_notes)
+        self.assertIn("backend_graph_primary_capable=True", response.comparison_notes)
         self.assertIn("requested_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
         self.assertIn("accepted_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
         self.assertIn("realized_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
@@ -221,6 +224,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.output_payload["requested_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
+        self.assertTrue(response.output_payload["backend_graph_primary_capable"])
         self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -242,6 +246,7 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.backend_metadata["realized_backend_execution_mode"],
             "schema_compatible_backend_execution",
         )
+        self.assertTrue(response.backend_metadata["backend_graph_primary_capable"])
         self.assertFalse(response.backend_metadata["graph_primary_behavior_applied"])
         self.assertIn(
             "accepted_backend_execution_mode=graph_primary_backend_execution",
@@ -251,6 +256,66 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "realized_backend_execution_mode=schema_compatible_backend_execution",
             response.comparison_notes,
         )
+
+    def test_commit_path_distinguishes_backend_not_capable_from_downgraded_realization(self):
+        facade = LocalWorkflowFacade()
+
+        response = facade.run(
+            "commit",
+            CommitExecutionRequest(
+                execution_kind="commit",
+                workflow_payload={
+                    "workflow_id": "workflow-1",
+                    "workflow_kind": "workflow_native_surrogate",
+                    "nodes": [{"node_id": "patch.cp_003"}],
+                    "edges": [{"edge_id": "patch.cp_003->result.output"}],
+                    "execution_config": {"execution_kind": "commit"},
+                },
+                patch_spec={
+                    "patch_id": "cp_003",
+                    "target_fields": ["style"],
+                    "target_axes": ["style"],
+                    "preserve_axes": ["composition"],
+                    "rationale": "style shift",
+                    "commit_source_payload": {
+                        "commit_execution_mode": "graph_native_execution_handoff",
+                        "commit_execution_authority": "graph_authoritative",
+                        "commit_execution_implementation_mode": "graph_primary_execution",
+                        "backend_execution_mode": "graph_primary_backend_execution",
+                        "request_primary_plan_kind": "graph_primary",
+                        "preferred_commit_source": "graph",
+                        "selected_workflow_graph_patch_id": "wgp_003",
+                        "top_schema_patch_id": "cp_003",
+                        "top_graph_patch_candidate_id": "wgc_003",
+                    },
+                    "primary_commit_plan": {
+                        "plan_kind": "graph_primary",
+                        "graph_patch_id": "wgp_003",
+                    },
+                    "backend_execution_mode": "graph_primary_backend_execution",
+                    "graph_patch_spec": {
+                        "patch_id": "cp_003",
+                        "node_patches": [],
+                    },
+                },
+            ),
+        )
+
+        self.assertFalse(response.output_payload["backend_graph_primary_capable"])
+        self.assertEqual(
+            response.output_payload["requested_backend_execution_mode"],
+            "graph_primary_backend_execution",
+        )
+        self.assertEqual(
+            response.output_payload["accepted_backend_execution_mode"],
+            "schema_compatible_backend_execution",
+        )
+        self.assertEqual(
+            response.output_payload["realized_backend_execution_mode"],
+            "schema_compatible_backend_execution",
+        )
+        self.assertFalse(response.backend_metadata["backend_graph_primary_capable"])
+        self.assertIn("backend_graph_primary_capable=False", response.comparison_notes)
 
     def test_facade_rejects_preview_without_graph_patch_spec(self):
         facade = LocalWorkflowFacade()

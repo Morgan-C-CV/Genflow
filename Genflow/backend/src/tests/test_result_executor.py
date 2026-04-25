@@ -116,6 +116,7 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertEqual(payload.content["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(payload.content["commit_execution_implementation_mode"], "graph_primary_execution")
         self.assertEqual(payload.content["requested_backend_execution_mode"], "graph_primary_backend_execution")
+        self.assertTrue(payload.content["backend_graph_primary_capable"])
         self.assertEqual(payload.content["accepted_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(payload.content["realized_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(payload.content["execution_behavior_branch"], "graph_primary_execution_branch")
@@ -134,6 +135,7 @@ class ResultExecutorTest(unittest.TestCase):
             "graph_primary_execution",
         )
         self.assertEqual(payload.artifacts["backend_metadata"]["request_primary_plan_kind"], "graph_primary")
+        self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_primary_capable"])
         self.assertEqual(
             payload.artifacts["backend_metadata"]["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -151,6 +153,7 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertIn("commit_execution_authority=graph_authoritative", summary.notes)
         self.assertIn("commit_execution_implementation_mode=graph_primary_execution", summary.notes)
         self.assertIn("request_primary_plan_kind=graph_primary", summary.notes)
+        self.assertIn("backend_graph_primary_capable=True", summary.notes)
         self.assertIn("requested_backend_execution_mode=graph_primary_backend_execution", summary.notes)
         self.assertIn("accepted_backend_execution_mode=graph_primary_backend_execution", summary.notes)
         self.assertIn("realized_backend_execution_mode=graph_primary_backend_execution", summary.notes)
@@ -179,6 +182,7 @@ class ResultExecutorTest(unittest.TestCase):
         )
 
         self.assertEqual(payload.content["requested_backend_execution_mode"], "graph_primary_backend_execution")
+        self.assertTrue(payload.content["backend_graph_primary_capable"])
         self.assertEqual(payload.content["accepted_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(payload.content["realized_backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(payload.content["execution_behavior_branch"], "schema_primary_execution_branch")
@@ -187,7 +191,36 @@ class ResultExecutorTest(unittest.TestCase):
             payload.artifacts["backend_metadata"]["realized_backend_execution_mode"],
             "schema_compatible_backend_execution",
         )
+        self.assertTrue(payload.artifacts["backend_metadata"]["backend_graph_primary_capable"])
         self.assertIn("realized_backend_execution_mode=schema_compatible_backend_execution", summary.notes)
+
+    def test_execute_committed_patch_distinguishes_backend_not_capable_from_not_realized(self):
+        executor = ResultExecutor(id_factory=lambda: "commit-4")
+        schema = NormalizedSchema(prompt="portrait", model="sdxl-base")
+        from app.agent.runtime_models import CommittedPatch
+
+        patch = CommittedPatch(patch_id="cp_p_004", target_fields=["style"], target_axes=["style"])
+        graph_patch = WorkflowGraphPatch(
+            workflow_id="workflow-1",
+            patch_id="wgp_004",
+        )
+
+        payload, summary = executor.execute_committed_patch(
+            schema,
+            patch,
+            graph_patch=graph_patch,
+            commit_execution_mode="graph_native_execution_handoff",
+            commit_execution_authority="graph_authoritative",
+            commit_execution_implementation_mode="graph_primary_execution",
+        )
+
+        self.assertEqual(payload.content["requested_backend_execution_mode"], "graph_primary_backend_execution")
+        self.assertFalse(payload.content["backend_graph_primary_capable"])
+        self.assertEqual(payload.content["accepted_backend_execution_mode"], "schema_compatible_backend_execution")
+        self.assertEqual(payload.content["realized_backend_execution_mode"], "schema_compatible_backend_execution")
+        self.assertEqual(payload.content["execution_behavior_branch"], "schema_primary_execution_branch")
+        self.assertFalse(payload.artifacts["backend_metadata"]["backend_graph_primary_capable"])
+        self.assertIn("backend_graph_primary_capable=False", summary.notes)
 
 
 if __name__ == "__main__":

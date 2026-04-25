@@ -126,14 +126,22 @@ class ResultExecutor(ExecutionAdapter):
             if implementation_mode == "graph_primary_execution"
             else "schema_compatible_backend_execution"
         )
-        accepted_backend_execution_mode = requested_backend_execution_mode
-        realized_backend_execution_mode = (
+        backend_graph_primary_capable = bool(graph_patch.patch_id and graph_patch.node_patches)
+        accepted_backend_execution_mode = (
             "schema_compatible_backend_execution"
             if (
                 requested_backend_execution_mode == "graph_primary_backend_execution"
-                and not (graph_patch.edge_patches or graph_patch.region_patches)
+                and not backend_graph_primary_capable
             )
             else requested_backend_execution_mode
+        )
+        realized_backend_execution_mode = (
+            "schema_compatible_backend_execution"
+            if (
+                accepted_backend_execution_mode == "graph_primary_backend_execution"
+                and not (graph_patch.edge_patches or graph_patch.region_patches)
+            )
+            else accepted_backend_execution_mode
         )
         execution_behavior_branch = (
             "graph_primary_execution_branch"
@@ -154,6 +162,7 @@ class ResultExecutor(ExecutionAdapter):
                 "request_primary_plan_kind": primary_plan_kind,
                 "commit_execution_implementation_mode": implementation_mode,
                 "requested_backend_execution_mode": requested_backend_execution_mode,
+                "backend_graph_primary_capable": backend_graph_primary_capable,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
                 "execution_behavior_branch": execution_behavior_branch,
@@ -173,6 +182,7 @@ class ResultExecutor(ExecutionAdapter):
                     "commit_execution_authority": effective_authority,
                     "request_primary_plan_kind": primary_plan_kind,
                     "commit_execution_implementation_mode": implementation_mode,
+                    "backend_graph_primary_capable": backend_graph_primary_capable,
                     "backend_execution_mode": accepted_backend_execution_mode,
                     "accepted_backend_execution_mode": accepted_backend_execution_mode,
                     "realized_backend_execution_mode": realized_backend_execution_mode,
@@ -207,6 +217,7 @@ class ResultExecutor(ExecutionAdapter):
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
+                f"backend_graph_primary_capable={backend_graph_primary_capable}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",
@@ -217,6 +228,7 @@ class ResultExecutor(ExecutionAdapter):
                 f"commit_execution_authority={effective_authority}",
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
+                f"backend_graph_primary_capable={backend_graph_primary_capable}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",

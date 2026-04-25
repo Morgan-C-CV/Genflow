@@ -370,6 +370,9 @@ class AgentRuntimeService:
                 if session.commit_execution_implementation_mode == "graph_primary_execution"
                 else "schema_compatible_backend_execution"
             ),
+            backend_graph_primary_capable=bool(
+                backend_metadata.get("backend_graph_primary_capable", False)
+            ),
             backend_accepted_execution_mode=str(
                 backend_metadata.get("accepted_backend_execution_mode", backend_metadata.get("backend_execution_mode", ""))
             ),
@@ -406,6 +409,9 @@ class AgentRuntimeService:
             backend_echoed_primary_plan_kind=str(backend_metadata.get("request_primary_plan_kind", "")),
             backend_echoed_commit_execution_implementation_mode=str(
                 backend_metadata.get("commit_execution_implementation_mode", "")
+            ),
+            backend_echoed_graph_primary_capable=bool(
+                backend_metadata.get("backend_graph_primary_capable", False)
             ),
             backend_echoed_backend_execution_mode=str(
                 backend_metadata.get("backend_execution_mode", "")

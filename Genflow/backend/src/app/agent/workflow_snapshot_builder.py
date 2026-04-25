@@ -165,6 +165,9 @@ def build_surrogate_workflow_snapshot(
             "request_backend_execution_mode": (
                 session.latest_execution_source_evidence.request_backend_execution_mode
             ),
+            "backend_graph_primary_capable": (
+                session.latest_execution_source_evidence.backend_graph_primary_capable
+            ),
             "backend_accepted_execution_mode": (
                 session.latest_execution_source_evidence.backend_accepted_execution_mode
             ),
@@ -194,6 +197,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_implementation_mode
+            ),
+            "backend_echoed_graph_primary_capable": (
+                session.latest_execution_source_evidence.backend_echoed_graph_primary_capable
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode
@@ -344,6 +350,9 @@ def build_surrogate_workflow_snapshot(
             "request_backend_execution_mode": (
                 session.latest_execution_source_evidence.request_backend_execution_mode
             ),
+            "backend_graph_primary_capable": (
+                session.latest_execution_source_evidence.backend_graph_primary_capable
+            ),
             "backend_accepted_execution_mode": (
                 session.latest_execution_source_evidence.backend_accepted_execution_mode
             ),
@@ -373,6 +382,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_commit_execution_implementation_mode": (
                 session.latest_execution_source_evidence.backend_echoed_commit_execution_implementation_mode
+            ),
+            "backend_echoed_graph_primary_capable": (
+                session.latest_execution_source_evidence.backend_echoed_graph_primary_capable
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode

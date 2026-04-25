@@ -161,6 +161,7 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(payload["commit_execution_authority"], "graph_authoritative")
         self.assertEqual(payload["commit_execution_implementation_mode"], "graph_primary_execution")
         self.assertEqual(payload["request_backend_execution_mode"], "graph_primary_backend_execution")
+        self.assertTrue(payload["backend_graph_primary_capable"])
         self.assertEqual(payload["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(
             payload["workflow_metadata"]["patch_winner_comparison"]["selected_workflow_graph_patch_id"],
@@ -188,6 +189,9 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["latest_execution_source_evidence"]["request_backend_execution_mode"],
             "graph_primary_backend_execution",
+        )
+        self.assertTrue(
+            payload["latest_execution_source_evidence"]["backend_graph_primary_capable"],
         )
         self.assertEqual(
             payload["latest_execution_source_evidence"]["backend_accepted_execution_mode"],
@@ -224,6 +228,9 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_commit_execution_implementation_mode"],
             "graph_primary_execution",
+        )
+        self.assertTrue(
+            payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_graph_primary_capable"],
         )
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_backend_execution_mode"],

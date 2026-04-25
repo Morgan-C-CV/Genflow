@@ -499,6 +499,9 @@ def build_session_artifact_payload(session) -> dict:
                 if session.commit_execution_implementation_mode == "graph_primary_execution"
                 else "schema_compatible_backend_execution"
             ),
+            "backend_graph_primary_capable": (
+                session.latest_execution_source_evidence.backend_graph_primary_capable
+            ),
             "backend_accepted_execution_mode": session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "backend_realized_execution_mode": session.latest_execution_source_evidence.backend_realized_execution_mode,
             "request_primary_plan_kind": (
