@@ -498,8 +498,33 @@ class AgentRuntimeService:
 
     @staticmethod
     def _determine_commit_execution_authority(session: AgentSessionState) -> str:
-        if session.commit_execution_mode == "graph_native_execution_handoff":
-            return "graph_supplemental"
+        if session.commit_execution_mode != "graph_native_execution_handoff":
+            if session.preferred_commit_source == "graph":
+                return "graph_supplemental"
+            return "schema_authoritative"
+
+        graph_patch = session.selected_workflow_graph_patch
+        selected_candidate = session.selected_graph_native_patch_candidate
+        graph_patch_candidate_id = str(graph_patch.metadata.get("candidate_id", ""))
+        aligned_flag = bool(session.accepted_patch.metadata.get("graph_native_aligned_winner", False))
+        aligned_candidate_id = str(session.accepted_patch.metadata.get("aligned_graph_candidate_id", ""))
+        preserve_constraints = set(session.preserve_constraints)
+        graph_preserve_axes = set(graph_patch.metadata.get("preserve_axes", []))
+        graph_integrity_complete = bool(
+            graph_patch.patch_id
+            and graph_patch.node_patches
+            and (graph_patch.edge_patches or graph_patch.region_patches)
+        )
+        preserve_compatible = preserve_constraints.issubset(graph_preserve_axes)
+        aligned_graph_patch = bool(
+            aligned_flag
+            and aligned_candidate_id
+            and aligned_candidate_id == selected_candidate.candidate_id
+            and graph_patch_candidate_id == selected_candidate.candidate_id
+        )
+
+        if graph_integrity_complete and preserve_compatible and aligned_graph_patch:
+            return "graph_authoritative"
         if session.preferred_commit_source == "graph":
             return "graph_supplemental"
         return "schema_authoritative"

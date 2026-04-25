@@ -788,14 +788,14 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertIn("graph_native_aligned_winner", session.accepted_patch.metadata)
         self.assertEqual(session.accepted_patch.patch_id, session.top_schema_patch_candidate.patch_id)
         self.assertEqual(session.commit_execution_mode, "graph_native_execution_handoff")
-        self.assertEqual(session.commit_execution_authority, "graph_supplemental")
+        self.assertEqual(session.commit_execution_authority, "graph_authoritative")
         self.assertEqual(
             session.accepted_patch.metadata["commit_execution_mode"],
             "graph_native_execution_handoff",
         )
         self.assertEqual(
             session.accepted_patch.metadata["commit_execution_authority"],
-            "graph_supplemental",
+            "graph_authoritative",
         )
         self.assertEqual(session.current_schema.model, "sdxl-base-patched")
         self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
@@ -808,7 +808,7 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertNotEqual(session.current_result_payload.result_id, old_result_id)
         self.assertEqual(session.current_result_payload.result_type, "mock_committed_result")
         self.assertEqual(executor.last_commit_execution_mode, "graph_native_execution_handoff")
-        self.assertEqual(executor.last_commit_execution_authority, "graph_supplemental")
+        self.assertEqual(executor.last_commit_execution_authority, "graph_authoritative")
         self.assertEqual(executor.last_commit_graph_patch.patch_id, session.selected_workflow_graph_patch.patch_id)
         self.assertEqual(
             session.latest_execution_source_evidence.commit_execution_mode,
@@ -816,14 +816,14 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertEqual(
             session.latest_execution_source_evidence.commit_execution_authority,
-            "graph_supplemental",
+            "graph_authoritative",
         )
         self.assertEqual(session.latest_execution_source_evidence.preferred_commit_source, "graph")
         self.assertTrue(session.latest_execution_source_evidence.request_graph_native_artifact_input_received)
         self.assertTrue(session.latest_execution_source_evidence.backend_echoed_graph_native_artifact_input_received)
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_commit_execution_authority,
-            "graph_supplemental",
+            "graph_authoritative",
         )
         self.assertEqual(
             session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
@@ -847,7 +847,7 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["commit_execution_authority"],
-            "graph_supplemental",
+            "graph_authoritative",
         )
 
         session = service.verify_latest_result(session.session_id)
@@ -871,6 +871,57 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["verifier_repair_recommendation"]["recommended_action"],
             session.latest_verifier_repair_recommendation.recommended_action,
+        )
+
+    def test_runtime_service_keeps_graph_supplemental_when_authority_gate_fails(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        ids = iter(["initial-rt-gate-1", "preview-rt-gate-1", "commit-rt-gate-1"])
+        executor = CapturingExecutionAdapter(id_factory=lambda: next(ids))
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            verifier=FakeVerifier(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_selected_probe(session.session_id)
+        session = service.commit_patch(session.session_id)
+
+        session.selected_workflow_graph_patch.edge_patches = []
+        session.selected_workflow_graph_patch.region_patches = []
+        session.commit_execution_authority = service._determine_commit_execution_authority(session)
+        session.accepted_patch.metadata["commit_execution_authority"] = session.commit_execution_authority
+        memory.save_session(session)
+
+        self.assertEqual(session.commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(session.commit_execution_authority, "graph_supplemental")
+
+        session = service.execute_patch(session.session_id)
+
+        self.assertEqual(executor.last_commit_execution_mode, "graph_native_execution_handoff")
+        self.assertEqual(executor.last_commit_execution_authority, "graph_supplemental")
+        self.assertEqual(
+            session.latest_execution_source_evidence.commit_execution_authority,
+            "graph_supplemental",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_commit_execution_authority,
+            "graph_supplemental",
         )
 
     def test_runtime_service_passes_benchmark_comparison_summary_to_verifier(self):
