@@ -657,6 +657,11 @@ class RuntimeServiceTest(unittest.TestCase):
             session.top_workflow_graph_patch_candidate.candidate_id,
             session.workflow_graph_patch_candidates[0].candidate_id,
         )
+        self.assertEqual(session.preferred_commit_source, "graph")
+        self.assertEqual(
+            session.selected_graph_native_patch_candidate.candidate_id,
+            session.top_workflow_graph_patch_candidate.candidate_id,
+        )
         self.assertEqual(session.current_workflow_graph_patch.patch_id, "cp_p_002")
         self.assertIn("render.model", [patch.node_id for patch in session.current_workflow_graph_patch.node_patches])
 
@@ -737,12 +742,18 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(len(session.patch_history), 1)
         self.assertEqual(session.top_schema_patch_candidate.patch_id, "cp_p_002")
         self.assertTrue(session.top_workflow_graph_patch_candidate.candidate_id)
+        self.assertEqual(session.preferred_commit_source, "graph")
+        self.assertEqual(
+            session.selected_graph_native_patch_candidate.candidate_id,
+            session.top_workflow_graph_patch_candidate.candidate_id,
+        )
         self.assertIn("pbo_score", session.accepted_patch.metadata)
         self.assertIn("pbo_rationale", session.accepted_patch.metadata)
         self.assertEqual(session.current_workflow_graph_patch.patch_id, "cp_p_002")
         self.assertTrue(session.current_workflow_graph_patch.edge_patches)
         self.assertTrue(session.current_workflow_graph_patch.region_patches)
         self.assertIn("graph_native_aligned_winner", session.accepted_patch.metadata)
+        self.assertEqual(session.accepted_patch.patch_id, session.top_schema_patch_candidate.patch_id)
         self.assertEqual(session.current_schema.model, "sdxl-base-patched")
         self.assertEqual(session.current_schema.style, ["cinematic", "vivid"])
         self.assertNotEqual(session.current_schema_raw.strip(), "")

@@ -22,6 +22,7 @@ from app.agent.verifier import Verifier
 from app.agent.verifier_repair_recommendation import build_verifier_repair_recommendation
 from app.agent.workflow_graph_patch_candidate_builder import build_workflow_graph_patch_candidates
 from app.agent.workflow_graph_patch_builder import build_workflow_graph_patch
+from app.agent.workflow_patch_commit_selector import select_commit_patch_winner
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
 
@@ -276,6 +277,16 @@ class AgentRuntimeService:
         )
         patch = ranked_patch_candidates[0]
         session.accepted_patch = patch
+        self._annotate_patch_winner_alignment(session)
+        commit_selection = select_commit_patch_winner(
+            schema_patch_winner=session.top_schema_patch_candidate,
+            graph_patch_winner=session.top_workflow_graph_patch_candidate,
+            session=session,
+        )
+        session.preferred_commit_source = commit_selection.preferred_commit_source
+        session.selected_graph_native_patch_candidate = commit_selection.selected_graph_native_patch_candidate
+        session.accepted_patch.metadata["commit_selection_rationale"] = list(commit_selection.rationale)
+        session.accepted_patch.metadata["preferred_commit_source"] = session.preferred_commit_source
         session.patch_history.append(patch)
         session.current_schema = self._apply_patch_to_schema(session.current_schema, patch)
         session.current_schema_raw = serialize_normalized_schema(session.current_schema)
@@ -290,7 +301,6 @@ class AgentRuntimeService:
                 else type(session.top_workflow_graph_patch_candidate)()
             )
         session.current_workflow_graph_patch = build_workflow_graph_patch(session)
-        self._annotate_patch_winner_alignment(session)
         self._sync_workflow_state(session, execution_kind="commit_plan", preview=False)
         return self.memory_service.save_session(session)
 

@@ -133,6 +133,8 @@ def build_surrogate_workflow_snapshot(
             "top_schema_patch_axes": list(session.top_schema_patch_candidate.target_axes),
             "top_graph_patch_candidate_id": session.top_workflow_graph_patch_candidate.candidate_id,
             "top_graph_patch_candidate_axes": list(session.top_workflow_graph_patch_candidate.target_axes),
+            "preferred_commit_source": session.preferred_commit_source,
+            "selected_graph_native_patch_candidate_id": session.selected_graph_native_patch_candidate.candidate_id,
             "graph_native_aligned_winner": bool(
                 session.accepted_patch.metadata.get("graph_native_aligned_winner", False)
             ),
@@ -253,6 +255,14 @@ def build_surrogate_workflow_snapshot(
                 "target_axes": list(session.top_workflow_graph_patch_candidate.target_axes),
                 "preserve_axes": list(session.top_workflow_graph_patch_candidate.preserve_axes),
                 "metadata": dict(session.top_workflow_graph_patch_candidate.metadata),
+            },
+            "preferred_commit_source": session.preferred_commit_source,
+            "selected_graph_native_patch_candidate": {
+                "candidate_id": session.selected_graph_native_patch_candidate.candidate_id,
+                "candidate_kind": session.selected_graph_native_patch_candidate.candidate_kind,
+                "target_axes": list(session.selected_graph_native_patch_candidate.target_axes),
+                "preserve_axes": list(session.selected_graph_native_patch_candidate.preserve_axes),
+                "metadata": dict(session.selected_graph_native_patch_candidate.metadata),
             },
             "graph_native_aligned_winner": bool(
                 session.accepted_patch.metadata.get("graph_native_aligned_winner", False)
