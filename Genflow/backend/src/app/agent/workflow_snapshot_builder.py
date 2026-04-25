@@ -149,6 +149,17 @@ def build_surrogate_workflow_snapshot(
                 session.accepted_patch.metadata.get("aligned_graph_candidate_id", "")
             ),
         },
+        "execution_source_evidence": {
+            "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
+            "selected_workflow_graph_patch_id": session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
+            "top_schema_patch_id": session.latest_execution_source_evidence.top_schema_patch_id,
+            "top_graph_patch_candidate_id": session.latest_execution_source_evidence.top_graph_patch_candidate_id,
+            "request_patch_id": session.latest_execution_source_evidence.request_patch_id,
+            "response_patch_id": session.latest_execution_source_evidence.response_patch_id,
+            "backend_graph_patch_id": session.latest_execution_source_evidence.backend_graph_patch_id,
+            "backend_echoed_commit_source": session.latest_execution_source_evidence.backend_echoed_commit_source,
+            "comparison_notes": list(session.latest_execution_source_evidence.comparison_notes),
+        },
     }
     surrogate_payload = {
         "schema": {
@@ -264,6 +275,17 @@ def build_surrogate_workflow_snapshot(
                 }
                 for patch in session.selected_workflow_graph_patch.region_patches
             ],
+        },
+        "execution_source_evidence": {
+            "preferred_commit_source": session.latest_execution_source_evidence.preferred_commit_source,
+            "selected_workflow_graph_patch_id": session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
+            "top_schema_patch_id": session.latest_execution_source_evidence.top_schema_patch_id,
+            "top_graph_patch_candidate_id": session.latest_execution_source_evidence.top_graph_patch_candidate_id,
+            "request_patch_id": session.latest_execution_source_evidence.request_patch_id,
+            "response_patch_id": session.latest_execution_source_evidence.response_patch_id,
+            "backend_graph_patch_id": session.latest_execution_source_evidence.backend_graph_patch_id,
+            "backend_echoed_commit_source": session.latest_execution_source_evidence.backend_echoed_commit_source,
+            "comparison_notes": list(session.latest_execution_source_evidence.comparison_notes),
         },
         "workflow_graph_patch_candidates": [
             {

@@ -90,6 +90,7 @@ class LocalWorkflowFacade:
     def _run_commit(request: CommitExecutionRequest) -> ExecutionResponse:
         patch_spec = dict(request.patch_spec)
         graph_patch_spec = dict(patch_spec.get("graph_patch_spec", {}))
+        commit_source_payload = dict(patch_spec.get("commit_source_payload", {}))
         LocalWorkflowFacade._validate_graph_patch_spec(graph_patch_spec, "commit")
         patch_id = str(patch_spec.get("patch_id", "commit"))
         target_axes = list(patch_spec.get("target_axes", []))
@@ -110,10 +111,18 @@ class LocalWorkflowFacade:
                 "result_type": "live_committed_result",
                 "backend": "local_workflow_facade",
                 "graph_patch_id": graph_patch_spec.get("patch_id", ""),
+                "preferred_commit_source": commit_source_payload.get("preferred_commit_source", ""),
+                "selected_workflow_graph_patch_id": commit_source_payload.get(
+                    "selected_workflow_graph_patch_id", ""
+                ),
+                "top_schema_patch_id": commit_source_payload.get("top_schema_patch_id", ""),
+                "top_graph_patch_candidate_id": commit_source_payload.get("top_graph_patch_candidate_id", ""),
             },
             comparison_notes=[
                 f"commit_rationale={patch_spec.get('rationale', '')}",
                 f"graph_patch_id={graph_patch_spec.get('patch_id', '')}",
+                f"preferred_commit_source={commit_source_payload.get('preferred_commit_source', '')}",
+                f"selected_workflow_graph_patch_id={commit_source_payload.get('selected_workflow_graph_patch_id', '')}",
             ],
         )
 

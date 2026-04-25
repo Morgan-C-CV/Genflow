@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.agent.runtime_models import (
     CommittedPatch,
+    ExecutionSourceEvidenceSummary,
     NormalizedSchema,
     ParsedFeedbackEvidence,
     PreviewProbe,
@@ -99,6 +100,9 @@ class AgentSessionState:
     preferred_commit_source: str = "schema"
     selected_graph_native_patch_candidate: WorkflowGraphPatchCandidate = field(
         default_factory=WorkflowGraphPatchCandidate
+    )
+    latest_execution_source_evidence: ExecutionSourceEvidenceSummary = field(
+        default_factory=ExecutionSourceEvidenceSummary
     )
     current_uncertainty_estimate: float = 0.0
     latest_verifier_result: VerifierResult = field(default_factory=VerifierResult)

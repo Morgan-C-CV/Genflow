@@ -496,6 +496,7 @@ def build_session_artifact_payload(session) -> dict:
             "workflow_graph_patch_candidates": session.workflow_graph_patch_candidates,
             "top_workflow_graph_patch_candidate": session.top_workflow_graph_patch_candidate,
             "selected_graph_native_patch_candidate": session.selected_graph_native_patch_candidate,
+            "latest_execution_source_evidence": session.latest_execution_source_evidence,
             "patch_history": session.patch_history,
             "previous_result_summary": session.previous_result_summary,
             "latest_verifier_result": session.latest_verifier_result,

@@ -161,6 +161,15 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["workflow_metadata"]["patch_winner_comparison"]["selected_workflow_graph_patch_id"],
             payload["selected_workflow_graph_patch"]["patch_id"],
         )
+        self.assertIn("latest_execution_source_evidence", payload)
+        self.assertEqual(
+            payload["latest_execution_source_evidence"]["preferred_commit_source"],
+            payload["preferred_commit_source"],
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["execution_source_evidence"]["selected_workflow_graph_patch_id"],
+            payload["selected_workflow_graph_patch"]["patch_id"],
+        )
 
 
 if __name__ == "__main__":

@@ -191,6 +191,7 @@ def build_workflow_commit_request(session: AgentSessionState) -> WorkflowCommitR
             "rationale": session.accepted_patch.rationale,
         },
         graph_patch_spec=_serialize_graph_patch(graph_patch),
+        commit_source_payload=_build_commit_source_payload(session),
         reference_info=_build_reference_info(session),
     )
 
@@ -215,6 +216,7 @@ def build_workflow_commit_request_from_source(
             "rationale": source.accepted_patch.rationale,
         },
         graph_patch_spec=_serialize_graph_patch(graph_patch),
+        commit_source_payload=_build_commit_source_payload_from_source(source, graph_patch),
         reference_info=_build_reference_info_from_source(source),
     )
 
@@ -232,6 +234,27 @@ def _build_reference_info_from_source(source: WorkflowExecutionSource) -> dict:
         "selected_gallery_index": source.selected_gallery_index,
         "reference_ids": list(source.selected_reference_ids),
         "reference_count": len(source.selected_reference_ids),
+    }
+
+
+def _build_commit_source_payload(session: AgentSessionState) -> dict:
+    return {
+        "preferred_commit_source": session.preferred_commit_source,
+        "selected_workflow_graph_patch_id": session.selected_workflow_graph_patch.patch_id,
+        "top_schema_patch_id": session.top_schema_patch_candidate.patch_id,
+        "top_graph_patch_candidate_id": session.top_workflow_graph_patch_candidate.candidate_id,
+    }
+
+
+def _build_commit_source_payload_from_source(source: WorkflowCommitSource, graph_patch) -> dict:
+    metadata = dict(source.accepted_patch.metadata)
+    return {
+        "preferred_commit_source": str(metadata.get("preferred_commit_source", "schema") or "schema"),
+        "selected_workflow_graph_patch_id": str(
+            metadata.get("selected_workflow_graph_patch_id", graph_patch.patch_id)
+        ),
+        "top_schema_patch_id": str(metadata.get("top_schema_patch_id", source.accepted_patch.patch_id)),
+        "top_graph_patch_candidate_id": str(metadata.get("top_graph_patch_candidate_id", "")),
     }
 
 

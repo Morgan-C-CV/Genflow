@@ -104,6 +104,7 @@ class LiveExecutionAdapter(ExecutionAdapter):
             patch_spec={
                 **dict(workflow_request.committed_patch_spec),
                 "graph_patch_spec": dict(workflow_request.graph_patch_spec),
+                "commit_source_payload": dict(workflow_request.commit_source_payload),
             },
         )
         response = client.run_commit(request)

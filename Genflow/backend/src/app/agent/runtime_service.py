@@ -26,6 +26,7 @@ from app.agent.workflow_graph_patch_builder import (
     materialize_workflow_graph_patch_from_candidate,
 )
 from app.agent.workflow_patch_commit_selector import select_commit_patch_winner
+from app.agent.runtime_models import ExecutionSourceEvidenceSummary
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
 
@@ -298,6 +299,10 @@ class AgentRuntimeService:
         )
         session.accepted_patch.metadata["commit_selection_rationale"] = list(commit_selection.rationale)
         session.accepted_patch.metadata["preferred_commit_source"] = session.preferred_commit_source
+        session.accepted_patch.metadata["top_schema_patch_id"] = session.top_schema_patch_candidate.patch_id
+        session.accepted_patch.metadata["top_graph_patch_candidate_id"] = (
+            session.top_workflow_graph_patch_candidate.candidate_id
+        )
         if session.selected_workflow_graph_patch.patch_id:
             session.accepted_patch.metadata["selected_workflow_graph_patch_id"] = (
                 session.selected_workflow_graph_patch.patch_id
@@ -332,6 +337,18 @@ class AgentRuntimeService:
         session.current_result_payload = payload
         session.current_result_summary = summary
         session.accepted_results.append(payload)
+        backend_metadata = dict(payload.artifacts.get("backend_metadata", {}))
+        session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
+            preferred_commit_source=session.preferred_commit_source,
+            selected_workflow_graph_patch_id=session.selected_workflow_graph_patch.patch_id,
+            top_schema_patch_id=session.top_schema_patch_candidate.patch_id,
+            top_graph_patch_candidate_id=session.top_workflow_graph_patch_candidate.candidate_id,
+            request_patch_id=session.accepted_patch.patch_id,
+            response_patch_id=str(payload.content.get("patch_id", "")),
+            backend_graph_patch_id=str(backend_metadata.get("graph_patch_id", "")),
+            backend_echoed_commit_source=str(backend_metadata.get("preferred_commit_source", "")),
+            comparison_notes=list(summary.notes),
+        )
         self._sync_workflow_state(session, execution_kind="commit", preview=False)
         return self.memory_service.save_session(session)
 

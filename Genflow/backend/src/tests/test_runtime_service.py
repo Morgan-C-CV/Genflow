@@ -770,6 +770,23 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(session.previous_result_summary.summary_text, old_summary)
         self.assertNotEqual(session.current_result_payload.result_id, old_result_id)
         self.assertEqual(session.current_result_payload.result_type, "mock_committed_result")
+        self.assertEqual(session.latest_execution_source_evidence.preferred_commit_source, "graph")
+        self.assertEqual(
+            session.latest_execution_source_evidence.selected_workflow_graph_patch_id,
+            session.selected_workflow_graph_patch.patch_id,
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.top_schema_patch_id,
+            session.top_schema_patch_candidate.patch_id,
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.top_graph_patch_candidate_id,
+            session.top_workflow_graph_patch_candidate.candidate_id,
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["preferred_commit_source"],
+            "graph",
+        )
 
         session = service.verify_latest_result(session.session_id)
         self.assertTrue(session.latest_verifier_result.summary)

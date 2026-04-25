@@ -102,3 +102,16 @@ class VerifierSignalSummary:
     total_score: float = 0.0
     notes: List[str] = field(default_factory=list)
     regression_notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ExecutionSourceEvidenceSummary:
+    preferred_commit_source: str = ""
+    selected_workflow_graph_patch_id: str = ""
+    top_schema_patch_id: str = ""
+    top_graph_patch_candidate_id: str = ""
+    request_patch_id: str = ""
+    response_patch_id: str = ""
+    backend_graph_patch_id: str = ""
+    backend_echoed_commit_source: str = ""
+    comparison_notes: List[str] = field(default_factory=list)

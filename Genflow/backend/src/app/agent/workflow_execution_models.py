@@ -43,4 +43,5 @@ class WorkflowCommitRequest:
     workflow_payload: WorkflowExecutionPayload = field(default_factory=WorkflowExecutionPayload)
     committed_patch_spec: Dict[str, Any] = field(default_factory=dict)
     graph_patch_spec: Dict[str, Any] = field(default_factory=dict)
+    commit_source_payload: Dict[str, Any] = field(default_factory=dict)
     reference_info: Dict[str, Any] = field(default_factory=dict)

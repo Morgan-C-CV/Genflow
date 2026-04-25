@@ -147,6 +147,7 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
 
     def test_build_workflow_commit_request_uses_committed_patch(self):
         session = self._make_session()
+        session.top_schema_patch_candidate = session.accepted_patch
 
         request = build_workflow_commit_request(session)
 
@@ -156,10 +157,13 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(request.committed_patch_spec["changes"]["model"], "sdxl-base-patched")
         self.assertEqual(request.graph_patch_spec["patch_id"], "cp_001")
         self.assertTrue(request.graph_patch_spec["node_patches"])
+        self.assertEqual(request.commit_source_payload["preferred_commit_source"], "schema")
+        self.assertEqual(request.commit_source_payload["top_schema_patch_id"], "cp_001")
 
     def test_build_workflow_commit_request_prefers_selected_workflow_graph_patch_when_graph_preferred(self):
         session = self._make_session()
         graph_candidates = build_workflow_graph_patch_candidates(session)
+        session.top_schema_patch_candidate = session.accepted_patch
         session.top_workflow_graph_patch_candidate = graph_candidates[0]
         session.selected_graph_native_patch_candidate = graph_candidates[0]
         session.selected_workflow_graph_patch = materialize_workflow_graph_patch_from_candidate(
@@ -174,6 +178,15 @@ class WorkflowExecutionBuilderTest(unittest.TestCase):
         self.assertEqual(
             request.graph_patch_spec["metadata"]["candidate_id"],
             session.selected_graph_native_patch_candidate.candidate_id,
+        )
+        self.assertEqual(request.commit_source_payload["preferred_commit_source"], "graph")
+        self.assertEqual(
+            request.commit_source_payload["selected_workflow_graph_patch_id"],
+            session.selected_workflow_graph_patch.patch_id,
+        )
+        self.assertEqual(
+            request.commit_source_payload["top_graph_patch_candidate_id"],
+            session.top_workflow_graph_patch_candidate.candidate_id,
         )
 
     def test_build_workflow_commit_request_from_source_uses_typed_source(self):

@@ -84,6 +84,12 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                     "target_axes": ["style"],
                     "preserve_axes": ["composition"],
                     "rationale": "style shift",
+                    "commit_source_payload": {
+                        "preferred_commit_source": "graph",
+                        "selected_workflow_graph_patch_id": "wgp_001",
+                        "top_schema_patch_id": "cp_001",
+                        "top_graph_patch_candidate_id": "wgc_001",
+                    },
                     "graph_patch_spec": {
                         "patch_id": "cp_001",
                         "node_patches": [{"node_id": "render.model"}],
@@ -97,7 +103,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertEqual(response.output_payload["patch_id"], "cp_001")
         self.assertEqual(response.changed_axes, ["style"])
         self.assertEqual(response.backend_metadata["graph_patch_id"], "cp_001")
+        self.assertEqual(response.backend_metadata["preferred_commit_source"], "graph")
+        self.assertEqual(response.backend_metadata["selected_workflow_graph_patch_id"], "wgp_001")
         self.assertIn("graph_patch_id=cp_001", response.comparison_notes)
+        self.assertIn("preferred_commit_source=graph", response.comparison_notes)
 
     def test_facade_rejects_preview_without_graph_patch_spec(self):
         facade = LocalWorkflowFacade()
