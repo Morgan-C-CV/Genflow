@@ -187,6 +187,11 @@ def build_workflow_commit_request(session: AgentSessionState) -> WorkflowCommitR
             authority=session.commit_execution_authority,
         ),
         graph_patch_spec=_serialize_graph_patch(graph_patch),
+        backend_graph_commit_payload=_build_backend_graph_commit_payload(
+            graph_patch=graph_patch,
+            patch=session.accepted_patch,
+            authority=session.commit_execution_authority,
+        ),
         primary_commit_plan=_build_primary_commit_plan(
             authority=session.commit_execution_authority,
             patch=session.accepted_patch,
@@ -231,6 +236,11 @@ def build_workflow_commit_request_from_source(
             authority=source.commit_execution_authority,
         ),
         graph_patch_spec=_serialize_graph_patch(graph_patch),
+        backend_graph_commit_payload=_build_backend_graph_commit_payload(
+            graph_patch=graph_patch,
+            patch=source.accepted_patch,
+            authority=effective_authority,
+        ),
         primary_commit_plan=_build_primary_commit_plan(
             authority=source.commit_execution_authority,
             patch=source.accepted_patch,
@@ -365,6 +375,36 @@ def _build_primary_commit_plan(authority: str, patch, graph_patch) -> dict:
         "preserve_axes": list(patch.preserve_axes),
         "graph_patch_id": graph_patch.patch_id,
         "graph_patch_role": "supplemental" if graph_patch.patch_id else "absent",
+    }
+
+
+def _build_backend_graph_commit_payload(graph_patch, patch, authority: str) -> dict:
+    payload_id = graph_patch.patch_id or f"backend-graph:{patch.patch_id or 'unknown'}"
+    graph_patch_spec = _serialize_graph_patch(graph_patch)
+    return {
+        "payload_id": payload_id,
+        "payload_kind": "graph_native_backend_commit_payload",
+        "primary_executable_object": (
+            "graph_native_commit_object"
+            if authority == "graph_authoritative"
+            else "graph_supplemental_commit_object"
+        ),
+        "graph_patch_id": graph_patch.patch_id,
+        "graph_patch_kind": graph_patch.patch_kind,
+        "schema_fallback_patch_id": patch.patch_id,
+        "target_axes": list(graph_patch.metadata.get("target_axes", patch.target_axes)),
+        "preserve_axes": list(graph_patch.metadata.get("preserve_axes", patch.preserve_axes)),
+        "node_patches": list(graph_patch_spec.get("node_patches", [])),
+        "edge_patches": list(graph_patch_spec.get("edge_patches", [])),
+        "region_patches": list(graph_patch_spec.get("region_patches", [])),
+        "metadata": {
+            **dict(graph_patch.metadata),
+            "authority": authority,
+            "schema_fallback_patch_id": patch.patch_id,
+            "schema_patch_role": (
+                "compatibility_fallback" if authority == "graph_authoritative" else "primary"
+            ),
+        },
     }
 
 

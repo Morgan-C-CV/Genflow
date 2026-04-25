@@ -183,6 +183,11 @@ class LiveExecutionAdapterTest(unittest.TestCase):
         self.assertEqual(request.patch_spec["changes"]["model"], "sdxl-base-patched")
         self.assertEqual(request.patch_spec["graph_patch_spec"]["patch_id"], "cp_001")
         self.assertTrue(request.patch_spec["graph_patch_spec"]["node_patches"])
+        self.assertIn("backend_graph_commit_payload", request.patch_spec)
+        self.assertEqual(
+            request.patch_spec["backend_graph_commit_payload"]["schema_fallback_patch_id"],
+            "cp_001",
+        )
         self.assertIn("commit_source_payload", request.patch_spec)
         self.assertEqual(
             request.patch_spec["commit_source_payload"]["commit_execution_mode"],
@@ -234,6 +239,14 @@ class LiveExecutionAdapterTest(unittest.TestCase):
 
         request = client.commit_requests[-1]
         self.assertEqual(request.patch_spec["graph_patch_spec"]["patch_id"], "wgp_002")
+        self.assertEqual(
+            request.patch_spec["backend_graph_commit_payload"]["graph_patch_id"],
+            "wgp_002",
+        )
+        self.assertEqual(
+            request.patch_spec["backend_graph_commit_payload"]["primary_executable_object"],
+            "graph_native_commit_object",
+        )
         self.assertEqual(
             request.patch_spec["commit_source_payload"]["commit_execution_mode"],
             "graph_native_execution_handoff",

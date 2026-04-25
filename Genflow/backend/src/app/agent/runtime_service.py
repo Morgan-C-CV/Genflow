@@ -358,6 +358,14 @@ class AgentRuntimeService:
         session.current_result_summary = summary
         session.accepted_results.append(payload)
         backend_metadata = dict(payload.artifacts.get("backend_metadata", {}))
+        request_graph_commit_payload_supplied = bool(
+            session.commit_execution_mode == "graph_native_execution_handoff"
+            and session.selected_workflow_graph_patch.patch_id
+        )
+        request_graph_commit_payload_consumed = bool(
+            request_graph_commit_payload_supplied
+            and session.commit_execution_authority == "graph_authoritative"
+        )
         session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
             commit_execution_mode=session.commit_execution_mode,
             commit_execution_authority=session.commit_execution_authority,
@@ -373,6 +381,8 @@ class AgentRuntimeService:
             backend_graph_primary_capable=bool(
                 backend_metadata.get("backend_graph_primary_capable", False)
             ),
+            backend_graph_commit_payload_supplied=request_graph_commit_payload_supplied,
+            backend_graph_commit_payload_consumed=request_graph_commit_payload_consumed,
             backend_accepted_execution_mode=str(
                 backend_metadata.get("accepted_backend_execution_mode", backend_metadata.get("backend_execution_mode", ""))
             ),
@@ -412,6 +422,12 @@ class AgentRuntimeService:
             ),
             backend_echoed_graph_primary_capable=bool(
                 backend_metadata.get("backend_graph_primary_capable", False)
+            ),
+            backend_echoed_graph_commit_payload_supplied=bool(
+                backend_metadata.get("backend_graph_commit_payload_supplied", False)
+            ),
+            backend_echoed_graph_commit_payload_consumed=bool(
+                backend_metadata.get("backend_graph_commit_payload_consumed", False)
             ),
             backend_echoed_backend_execution_mode=str(
                 backend_metadata.get("backend_execution_mode", "")

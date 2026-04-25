@@ -99,6 +99,16 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                         "plan_kind": "graph_primary",
                         "graph_patch_id": "wgp_001",
                     },
+                    "backend_graph_commit_payload": {
+                        "payload_id": "wgp_001",
+                        "payload_kind": "graph_native_backend_commit_payload",
+                        "primary_executable_object": "graph_native_commit_object",
+                        "graph_patch_id": "cp_001",
+                        "schema_fallback_patch_id": "cp_001",
+                        "node_patches": [{"node_id": "render.model"}],
+                        "edge_patches": [{"edge_id": "render.model->result.output"}],
+                        "region_patches": [],
+                    },
                     "backend_execution_mode": "graph_primary_backend_execution",
                     "graph_patch_spec": {
                         "patch_id": "cp_001",
@@ -123,6 +133,8 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "graph_primary_backend_execution",
         )
         self.assertTrue(response.output_payload["backend_graph_primary_capable"])
+        self.assertTrue(response.output_payload["backend_graph_commit_payload_supplied"])
+        self.assertTrue(response.output_payload["backend_graph_commit_payload_consumed"])
         self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -151,6 +163,9 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "graph_primary_backend_execution",
         )
         self.assertTrue(response.backend_metadata["backend_graph_primary_capable"])
+        self.assertTrue(response.backend_metadata["backend_graph_commit_payload_supplied"])
+        self.assertTrue(response.backend_metadata["backend_graph_commit_payload_consumed"])
+        self.assertEqual(response.backend_metadata["backend_graph_commit_payload_id"], "wgp_001")
         self.assertEqual(
             response.backend_metadata["realized_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -166,6 +181,8 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertIn("request_primary_plan_kind=graph_primary", response.comparison_notes)
         self.assertIn("commit_execution_implementation_mode=graph_primary_execution", response.comparison_notes)
         self.assertIn("backend_graph_primary_capable=True", response.comparison_notes)
+        self.assertIn("backend_graph_commit_payload_supplied=True", response.comparison_notes)
+        self.assertIn("backend_graph_commit_payload_consumed=True", response.comparison_notes)
         self.assertIn("requested_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
         self.assertIn("accepted_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
         self.assertIn("realized_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
@@ -211,6 +228,16 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                         "plan_kind": "graph_primary",
                         "graph_patch_id": "wgp_002",
                     },
+                    "backend_graph_commit_payload": {
+                        "payload_id": "wgp_002",
+                        "payload_kind": "graph_native_backend_commit_payload",
+                        "primary_executable_object": "graph_native_commit_object",
+                        "graph_patch_id": "cp_002",
+                        "schema_fallback_patch_id": "cp_002",
+                        "node_patches": [{"node_id": "render.model"}],
+                        "edge_patches": [],
+                        "region_patches": [],
+                    },
                     "backend_execution_mode": "graph_primary_backend_execution",
                     "graph_patch_spec": {
                         "patch_id": "cp_002",
@@ -225,6 +252,8 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "graph_primary_backend_execution",
         )
         self.assertTrue(response.output_payload["backend_graph_primary_capable"])
+        self.assertTrue(response.output_payload["backend_graph_commit_payload_supplied"])
+        self.assertTrue(response.output_payload["backend_graph_commit_payload_consumed"])
         self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -247,6 +276,8 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "schema_compatible_backend_execution",
         )
         self.assertTrue(response.backend_metadata["backend_graph_primary_capable"])
+        self.assertTrue(response.backend_metadata["backend_graph_commit_payload_supplied"])
+        self.assertTrue(response.backend_metadata["backend_graph_commit_payload_consumed"])
         self.assertFalse(response.backend_metadata["graph_primary_behavior_applied"])
         self.assertIn(
             "accepted_backend_execution_mode=graph_primary_backend_execution",
@@ -292,6 +323,16 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
                         "plan_kind": "graph_primary",
                         "graph_patch_id": "wgp_003",
                     },
+                    "backend_graph_commit_payload": {
+                        "payload_id": "wgp_003",
+                        "payload_kind": "graph_native_backend_commit_payload",
+                        "primary_executable_object": "graph_native_commit_object",
+                        "graph_patch_id": "cp_003",
+                        "schema_fallback_patch_id": "cp_003",
+                        "node_patches": [],
+                        "edge_patches": [],
+                        "region_patches": [],
+                    },
                     "backend_execution_mode": "graph_primary_backend_execution",
                     "graph_patch_spec": {
                         "patch_id": "cp_003",
@@ -302,6 +343,8 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         )
 
         self.assertFalse(response.output_payload["backend_graph_primary_capable"])
+        self.assertTrue(response.output_payload["backend_graph_commit_payload_supplied"])
+        self.assertTrue(response.output_payload["backend_graph_commit_payload_consumed"])
         self.assertEqual(
             response.output_payload["requested_backend_execution_mode"],
             "graph_primary_backend_execution",
@@ -315,6 +358,8 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "schema_compatible_backend_execution",
         )
         self.assertFalse(response.backend_metadata["backend_graph_primary_capable"])
+        self.assertTrue(response.backend_metadata["backend_graph_commit_payload_supplied"])
+        self.assertTrue(response.backend_metadata["backend_graph_commit_payload_consumed"])
         self.assertIn("backend_graph_primary_capable=False", response.comparison_notes)
 
     def test_facade_rejects_preview_without_graph_patch_spec(self):

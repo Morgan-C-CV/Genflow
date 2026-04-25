@@ -121,6 +121,7 @@ class ResultExecutor(ExecutionAdapter):
         effective_authority = commit_execution_authority or "schema_authoritative"
         implementation_mode = commit_execution_implementation_mode or "schema_compatible_execution"
         primary_plan_kind = "graph_primary" if effective_authority == "graph_authoritative" else "schema_primary"
+        backend_graph_commit_payload_supplied = bool(graph_patch.patch_id)
         requested_backend_execution_mode = (
             "graph_primary_backend_execution"
             if implementation_mode == "graph_primary_execution"
@@ -148,6 +149,9 @@ class ResultExecutor(ExecutionAdapter):
             if realized_backend_execution_mode == "graph_primary_backend_execution"
             else "schema_primary_execution_branch"
         )
+        backend_graph_commit_payload_consumed = (
+            backend_graph_commit_payload_supplied and primary_plan_kind == "graph_primary"
+        )
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_committed_result",
@@ -163,6 +167,8 @@ class ResultExecutor(ExecutionAdapter):
                 "commit_execution_implementation_mode": implementation_mode,
                 "requested_backend_execution_mode": requested_backend_execution_mode,
                 "backend_graph_primary_capable": backend_graph_primary_capable,
+                "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
+                "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
                 "execution_behavior_branch": execution_behavior_branch,
@@ -183,6 +189,8 @@ class ResultExecutor(ExecutionAdapter):
                     "request_primary_plan_kind": primary_plan_kind,
                     "commit_execution_implementation_mode": implementation_mode,
                     "backend_graph_primary_capable": backend_graph_primary_capable,
+                    "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
+                    "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                     "backend_execution_mode": accepted_backend_execution_mode,
                     "accepted_backend_execution_mode": accepted_backend_execution_mode,
                     "realized_backend_execution_mode": realized_backend_execution_mode,
@@ -218,6 +226,8 @@ class ResultExecutor(ExecutionAdapter):
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
                 f"backend_graph_primary_capable={backend_graph_primary_capable}",
+                f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
+                f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",
@@ -229,6 +239,8 @@ class ResultExecutor(ExecutionAdapter):
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
                 f"backend_graph_primary_capable={backend_graph_primary_capable}",
+                f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
+                f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",

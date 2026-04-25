@@ -90,10 +90,12 @@ class LocalWorkflowFacade:
     def _run_commit(request: CommitExecutionRequest) -> ExecutionResponse:
         patch_spec = dict(request.patch_spec)
         graph_patch_spec = dict(patch_spec.get("graph_patch_spec", {}))
+        backend_graph_commit_payload = dict(patch_spec.get("backend_graph_commit_payload", {}))
         primary_commit_plan = dict(patch_spec.get("primary_commit_plan", {}))
         backend_execution_mode = str(patch_spec.get("backend_execution_mode", ""))
         commit_source_payload = dict(patch_spec.get("commit_source_payload", {}))
         LocalWorkflowFacade._validate_graph_patch_spec(graph_patch_spec, "commit")
+        LocalWorkflowFacade._validate_backend_graph_commit_payload(backend_graph_commit_payload)
         patch_id = str(patch_spec.get("patch_id", "commit"))
         target_axes = list(patch_spec.get("target_axes", []))
         preserve_axes = list(patch_spec.get("preserve_axes", []))
@@ -104,6 +106,10 @@ class LocalWorkflowFacade:
         requested_backend_execution_mode = backend_execution_mode
         backend_graph_primary_capable = bool(
             graph_patch_spec.get("patch_id") and graph_patch_spec.get("node_patches")
+        )
+        backend_graph_commit_payload_supplied = bool(
+            backend_graph_commit_payload.get("payload_id")
+            and isinstance(backend_graph_commit_payload.get("node_patches"), list)
         )
         accepted_backend_execution_mode = (
             "schema_compatible_backend_execution"
@@ -129,6 +135,10 @@ class LocalWorkflowFacade:
             if realized_backend_execution_mode == "graph_primary_backend_execution"
             else "schema_primary_execution_branch"
         )
+        backend_graph_commit_payload_consumed = (
+            backend_graph_commit_payload_supplied
+            and primary_plan_kind == "graph_primary"
+        )
         return ExecutionResponse(
             response_id=f"local-commit-{patch_id}",
             execution_kind="commit",
@@ -143,6 +153,8 @@ class LocalWorkflowFacade:
                 "commit_execution_implementation_mode": implementation_mode,
                 "requested_backend_execution_mode": requested_backend_execution_mode,
                 "backend_graph_primary_capable": backend_graph_primary_capable,
+                "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
+                "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
                 "backend_execution_mode": accepted_backend_execution_mode,
@@ -168,6 +180,12 @@ class LocalWorkflowFacade:
                 "request_primary_plan_kind": primary_plan_kind,
                 "commit_execution_implementation_mode": implementation_mode,
                 "backend_graph_primary_capable": backend_graph_primary_capable,
+                "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
+                "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
+                "backend_graph_commit_payload_id": backend_graph_commit_payload.get("payload_id", ""),
+                "backend_graph_commit_primary_object": backend_graph_commit_payload.get(
+                    "primary_executable_object", ""
+                ),
                 "backend_execution_mode": accepted_backend_execution_mode,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
@@ -191,6 +209,8 @@ class LocalWorkflowFacade:
                 f"request_primary_plan_kind={primary_plan_kind}",
                 f"commit_execution_implementation_mode={implementation_mode}",
                 f"backend_graph_primary_capable={backend_graph_primary_capable}",
+                f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
+                f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",
@@ -202,6 +222,7 @@ class LocalWorkflowFacade:
                 "graph_native_artifact_input_received="
                 f"{bool(commit_source_payload.get('selected_workflow_graph_patch_id', ''))}",
                 f"selected_workflow_graph_patch_id={commit_source_payload.get('selected_workflow_graph_patch_id', '')}",
+                f"backend_graph_commit_payload_id={backend_graph_commit_payload.get('payload_id', '')}",
             ],
         )
 
@@ -213,3 +234,12 @@ class LocalWorkflowFacade:
             raise ValueError(f"{execution_kind} request graph_patch_spec must include patch_id.")
         if not isinstance(graph_patch_spec.get("node_patches"), list):
             raise ValueError(f"{execution_kind} request graph_patch_spec must include node_patches.")
+
+    @staticmethod
+    def _validate_backend_graph_commit_payload(backend_graph_commit_payload: dict) -> None:
+        if not isinstance(backend_graph_commit_payload, dict):
+            raise ValueError("commit request must include backend_graph_commit_payload.")
+        if not backend_graph_commit_payload.get("payload_id"):
+            raise ValueError("commit request backend_graph_commit_payload must include payload_id.")
+        if not isinstance(backend_graph_commit_payload.get("node_patches"), list):
+            raise ValueError("commit request backend_graph_commit_payload must include node_patches.")
