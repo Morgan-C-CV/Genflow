@@ -850,6 +850,9 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertTrue(
             session.latest_execution_source_evidence.backend_graph_commit_payload_consumed,
         )
+        self.assertTrue(
+            session.latest_execution_source_evidence.backend_graph_native_execution_realized,
+        )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "graph_primary_backend_execution",
@@ -909,6 +912,9 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertTrue(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_graph_commit_payload_consumed"],
+        )
+        self.assertTrue(
+            session.workflow_metadata["execution_source_evidence"]["backend_echoed_graph_native_execution_realized"],
         )
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_backend_execution_mode"],
@@ -1023,6 +1029,9 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertFalse(
             session.latest_execution_source_evidence.backend_graph_commit_payload_consumed,
         )
+        self.assertFalse(
+            session.latest_execution_source_evidence.backend_graph_native_execution_realized,
+        )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "schema_compatible_backend_execution",
@@ -1056,6 +1065,9 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertFalse(
             session.latest_execution_source_evidence.backend_echoed_graph_commit_payload_consumed,
+        )
+        self.assertFalse(
+            session.latest_execution_source_evidence.backend_echoed_graph_native_execution_realized,
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_backend_execution_mode,
@@ -1133,6 +1145,9 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertTrue(
             session.latest_execution_source_evidence.backend_graph_commit_payload_consumed,
         )
+        self.assertFalse(
+            session.latest_execution_source_evidence.backend_graph_native_execution_realized,
+        )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "graph_primary_backend_execution",
@@ -1153,6 +1168,9 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertTrue(
             session.latest_execution_source_evidence.backend_echoed_graph_commit_payload_consumed,
+        )
+        self.assertFalse(
+            session.latest_execution_source_evidence.backend_echoed_graph_native_execution_realized,
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_realized_backend_execution_mode,
@@ -1224,6 +1242,9 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertTrue(
             session.latest_execution_source_evidence.backend_graph_commit_payload_consumed,
         )
+        self.assertFalse(
+            session.latest_execution_source_evidence.backend_graph_native_execution_realized,
+        )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "schema_compatible_backend_execution",
@@ -1240,6 +1261,9 @@ class RuntimeServiceTest(unittest.TestCase):
         )
         self.assertTrue(
             session.latest_execution_source_evidence.backend_echoed_graph_commit_payload_consumed,
+        )
+        self.assertFalse(
+            session.latest_execution_source_evidence.backend_echoed_graph_native_execution_realized,
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_accepted_backend_execution_mode,

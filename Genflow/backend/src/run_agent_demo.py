@@ -508,6 +508,9 @@ def build_session_artifact_payload(session) -> dict:
             "backend_graph_commit_payload_consumed": (
                 session.latest_execution_source_evidence.backend_graph_commit_payload_consumed
             ),
+            "backend_graph_native_execution_realized": (
+                session.latest_execution_source_evidence.backend_graph_native_execution_realized
+            ),
             "backend_accepted_execution_mode": session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "backend_realized_execution_mode": session.latest_execution_source_evidence.backend_realized_execution_mode,
             "request_primary_plan_kind": (

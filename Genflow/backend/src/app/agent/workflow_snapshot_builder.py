@@ -174,6 +174,9 @@ def build_surrogate_workflow_snapshot(
             "backend_graph_commit_payload_consumed": (
                 session.latest_execution_source_evidence.backend_graph_commit_payload_consumed
             ),
+            "backend_graph_native_execution_realized": (
+                session.latest_execution_source_evidence.backend_graph_native_execution_realized
+            ),
             "backend_accepted_execution_mode": (
                 session.latest_execution_source_evidence.backend_accepted_execution_mode
             ),
@@ -212,6 +215,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_graph_commit_payload_consumed": (
                 session.latest_execution_source_evidence.backend_echoed_graph_commit_payload_consumed
+            ),
+            "backend_echoed_graph_native_execution_realized": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_execution_realized
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode
@@ -371,6 +377,9 @@ def build_surrogate_workflow_snapshot(
             "backend_graph_commit_payload_consumed": (
                 session.latest_execution_source_evidence.backend_graph_commit_payload_consumed
             ),
+            "backend_graph_native_execution_realized": (
+                session.latest_execution_source_evidence.backend_graph_native_execution_realized
+            ),
             "backend_accepted_execution_mode": (
                 session.latest_execution_source_evidence.backend_accepted_execution_mode
             ),
@@ -409,6 +418,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_graph_commit_payload_consumed": (
                 session.latest_execution_source_evidence.backend_echoed_graph_commit_payload_consumed
+            ),
+            "backend_echoed_graph_native_execution_realized": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_execution_realized
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode

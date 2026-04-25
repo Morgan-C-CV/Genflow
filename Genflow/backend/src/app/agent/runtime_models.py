@@ -114,6 +114,7 @@ class ExecutionSourceEvidenceSummary:
     backend_graph_primary_capable: bool = False
     backend_graph_commit_payload_supplied: bool = False
     backend_graph_commit_payload_consumed: bool = False
+    backend_graph_native_execution_realized: bool = False
     backend_accepted_execution_mode: str = ""
     backend_realized_execution_mode: str = ""
     execution_behavior_branch: str = ""
@@ -133,6 +134,7 @@ class ExecutionSourceEvidenceSummary:
     backend_echoed_graph_primary_capable: bool = False
     backend_echoed_graph_commit_payload_supplied: bool = False
     backend_echoed_graph_commit_payload_consumed: bool = False
+    backend_echoed_graph_native_execution_realized: bool = False
     backend_echoed_backend_execution_mode: str = ""
     backend_echoed_accepted_backend_execution_mode: str = ""
     backend_echoed_realized_backend_execution_mode: str = ""

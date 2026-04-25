@@ -139,6 +139,9 @@ class LocalWorkflowFacade:
             backend_graph_commit_payload_supplied
             and primary_plan_kind == "graph_primary"
         )
+        backend_graph_native_execution_realized = (
+            realized_backend_execution_mode == "graph_primary_backend_execution"
+        )
         return ExecutionResponse(
             response_id=f"local-commit-{patch_id}",
             execution_kind="commit",
@@ -155,6 +158,7 @@ class LocalWorkflowFacade:
                 "backend_graph_primary_capable": backend_graph_primary_capable,
                 "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
                 "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
+                "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
                 "backend_execution_mode": accepted_backend_execution_mode,
@@ -182,6 +186,7 @@ class LocalWorkflowFacade:
                 "backend_graph_primary_capable": backend_graph_primary_capable,
                 "backend_graph_commit_payload_supplied": backend_graph_commit_payload_supplied,
                 "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
+                "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
                 "backend_graph_commit_payload_id": backend_graph_commit_payload.get("payload_id", ""),
                 "backend_graph_commit_primary_object": backend_graph_commit_payload.get(
                     "primary_executable_object", ""
@@ -211,6 +216,7 @@ class LocalWorkflowFacade:
                 f"backend_graph_primary_capable={backend_graph_primary_capable}",
                 f"backend_graph_commit_payload_supplied={backend_graph_commit_payload_supplied}",
                 f"backend_graph_commit_payload_consumed={backend_graph_commit_payload_consumed}",
+                f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",

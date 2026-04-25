@@ -366,6 +366,10 @@ class AgentRuntimeService:
             request_graph_commit_payload_supplied
             and session.commit_execution_authority == "graph_authoritative"
         )
+        backend_graph_native_execution_realized = bool(
+            backend_metadata.get("backend_graph_native_execution_realized", False)
+            or backend_metadata.get("realized_backend_execution_mode", "") == "graph_primary_backend_execution"
+        )
         session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
             commit_execution_mode=session.commit_execution_mode,
             commit_execution_authority=session.commit_execution_authority,
@@ -383,6 +387,7 @@ class AgentRuntimeService:
             ),
             backend_graph_commit_payload_supplied=request_graph_commit_payload_supplied,
             backend_graph_commit_payload_consumed=request_graph_commit_payload_consumed,
+            backend_graph_native_execution_realized=backend_graph_native_execution_realized,
             backend_accepted_execution_mode=str(
                 backend_metadata.get("accepted_backend_execution_mode", backend_metadata.get("backend_execution_mode", ""))
             ),
@@ -428,6 +433,9 @@ class AgentRuntimeService:
             ),
             backend_echoed_graph_commit_payload_consumed=bool(
                 backend_metadata.get("backend_graph_commit_payload_consumed", False)
+            ),
+            backend_echoed_graph_native_execution_realized=bool(
+                backend_metadata.get("backend_graph_native_execution_realized", False)
             ),
             backend_echoed_backend_execution_mode=str(
                 backend_metadata.get("backend_execution_mode", "")
