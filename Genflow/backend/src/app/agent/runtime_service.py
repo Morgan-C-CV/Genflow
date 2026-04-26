@@ -379,6 +379,9 @@ class AgentRuntimeService:
         backend_graph_native_realization_reason = str(
             backend_metadata.get("backend_graph_native_realization_reason", "")
         )
+        backend_graph_native_remediation_hint = str(
+            backend_metadata.get("backend_graph_native_remediation_hint", "")
+        )
         session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
             commit_execution_mode=session.commit_execution_mode,
             commit_execution_authority=session.commit_execution_authority,
@@ -400,6 +403,7 @@ class AgentRuntimeService:
             backend_graph_commit_payload_consumed=request_graph_commit_payload_consumed,
             backend_graph_native_execution_realized=backend_graph_native_execution_realized,
             backend_graph_native_realization_reason=backend_graph_native_realization_reason,
+            backend_graph_native_remediation_hint=backend_graph_native_remediation_hint,
             backend_accepted_execution_mode=str(
                 backend_metadata.get("accepted_backend_execution_mode", backend_metadata.get("backend_execution_mode", ""))
             ),
@@ -454,6 +458,9 @@ class AgentRuntimeService:
             ),
             backend_echoed_graph_native_realization_reason=str(
                 backend_metadata.get("backend_graph_native_realization_reason", "")
+            ),
+            backend_echoed_graph_native_remediation_hint=str(
+                backend_metadata.get("backend_graph_native_remediation_hint", "")
             ),
             backend_echoed_backend_execution_mode=str(
                 backend_metadata.get("backend_execution_mode", "")

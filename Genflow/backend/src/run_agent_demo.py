@@ -520,6 +520,9 @@ def build_session_artifact_payload(session) -> dict:
             "backend_graph_native_realization_reason": (
                 session.latest_execution_source_evidence.backend_graph_native_realization_reason
             ),
+            "backend_graph_native_remediation_hint": (
+                session.latest_execution_source_evidence.backend_graph_native_remediation_hint
+            ),
             "backend_accepted_execution_mode": session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "backend_realized_execution_mode": session.latest_execution_source_evidence.backend_realized_execution_mode,
             "request_primary_plan_kind": (

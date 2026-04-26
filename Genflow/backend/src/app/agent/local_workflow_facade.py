@@ -162,6 +162,9 @@ class LocalWorkflowFacade:
                 )
             )
         )
+        backend_graph_native_remediation_hint = _map_realization_reason_to_hint(
+            backend_graph_native_realization_reason
+        )
         return ExecutionResponse(
             response_id=f"local-commit-{patch_id}",
             execution_kind="commit",
@@ -184,6 +187,7 @@ class LocalWorkflowFacade:
                 "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                 "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
                 "backend_graph_native_realization_reason": backend_graph_native_realization_reason,
+                "backend_graph_native_remediation_hint": backend_graph_native_remediation_hint,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
                 "backend_execution_mode": accepted_backend_execution_mode,
@@ -217,6 +221,7 @@ class LocalWorkflowFacade:
                 "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                 "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
                 "backend_graph_native_realization_reason": backend_graph_native_realization_reason,
+                "backend_graph_native_remediation_hint": backend_graph_native_remediation_hint,
                 "backend_graph_commit_payload_id": backend_graph_commit_payload.get("payload_id", ""),
                 "backend_graph_commit_primary_object": backend_graph_commit_payload.get(
                     "primary_executable_object", ""
@@ -252,6 +257,8 @@ class LocalWorkflowFacade:
                 f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",
                 "backend_graph_native_realization_reason="
                 f"{backend_graph_native_realization_reason}",
+                "backend_graph_native_remediation_hint="
+                f"{backend_graph_native_remediation_hint}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",
@@ -284,3 +291,15 @@ class LocalWorkflowFacade:
             raise ValueError("commit request backend_graph_commit_payload must include payload_id.")
         if not isinstance(backend_graph_commit_payload.get("node_patches"), list):
             raise ValueError("commit request backend_graph_commit_payload must include node_patches.")
+
+
+def _map_realization_reason_to_hint(reason: str) -> str:
+    if reason == "insufficient_graph_payload_completeness":
+        return "enrich_graph_payload"
+    if reason == "preserve_safety_downgrade":
+        return "restore_preserve_alignment"
+    if reason == "unsupported_backend_capability":
+        return "fallback_schema_execution"
+    if reason == "graph_native_realization_achieved":
+        return "retry_graph_native_execution"
+    return ""

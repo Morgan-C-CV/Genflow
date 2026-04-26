@@ -864,6 +864,10 @@ class RuntimeServiceTest(unittest.TestCase):
             "graph_native_realization_achieved",
         )
         self.assertEqual(
+            session.latest_execution_source_evidence.backend_graph_native_remediation_hint,
+            "retry_graph_native_execution",
+        )
+        self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "graph_primary_backend_execution",
         )
@@ -932,6 +936,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_graph_native_realization_reason"],
             "graph_native_realization_achieved",
+        )
+        self.assertEqual(
+            session.workflow_metadata["execution_source_evidence"]["backend_echoed_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
         )
         self.assertEqual(
             session.workflow_metadata["execution_source_evidence"]["backend_echoed_backend_execution_mode"],
@@ -1060,6 +1068,10 @@ class RuntimeServiceTest(unittest.TestCase):
             "preserve_safety_downgrade",
         )
         self.assertEqual(
+            session.latest_execution_source_evidence.backend_graph_native_remediation_hint,
+            "restore_preserve_alignment",
+        )
+        self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "schema_compatible_backend_execution",
         )
@@ -1102,6 +1114,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_graph_native_realization_reason,
             "preserve_safety_downgrade",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_graph_native_remediation_hint,
+            "restore_preserve_alignment",
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_backend_execution_mode,
@@ -1193,6 +1209,10 @@ class RuntimeServiceTest(unittest.TestCase):
             "insufficient_graph_payload_completeness",
         )
         self.assertEqual(
+            session.latest_execution_source_evidence.backend_graph_native_remediation_hint,
+            "enrich_graph_payload",
+        )
+        self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "graph_primary_backend_execution",
         )
@@ -1222,6 +1242,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_graph_native_realization_reason,
             "insufficient_graph_payload_completeness",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_graph_native_remediation_hint,
+            "enrich_graph_payload",
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_realized_backend_execution_mode,
@@ -1307,6 +1331,10 @@ class RuntimeServiceTest(unittest.TestCase):
             "unsupported_backend_capability",
         )
         self.assertEqual(
+            session.latest_execution_source_evidence.backend_graph_native_remediation_hint,
+            "fallback_schema_execution",
+        )
+        self.assertEqual(
             session.latest_execution_source_evidence.backend_accepted_execution_mode,
             "schema_compatible_backend_execution",
         )
@@ -1332,6 +1360,10 @@ class RuntimeServiceTest(unittest.TestCase):
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_graph_native_realization_reason,
             "unsupported_backend_capability",
+        )
+        self.assertEqual(
+            session.latest_execution_source_evidence.backend_echoed_graph_native_remediation_hint,
+            "fallback_schema_execution",
         )
         self.assertEqual(
             session.latest_execution_source_evidence.backend_echoed_accepted_backend_execution_mode,

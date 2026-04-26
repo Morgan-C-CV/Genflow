@@ -171,6 +171,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["backend_graph_native_realization_reason"],
             "graph_native_realization_achieved",
         )
+        self.assertEqual(
+            payload["backend_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
+        )
         self.assertEqual(payload["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(
             payload["workflow_metadata"]["patch_winner_comparison"]["selected_workflow_graph_patch_id"],
@@ -220,6 +224,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["latest_execution_source_evidence"]["backend_graph_native_realization_reason"],
             "graph_native_realization_achieved",
+        )
+        self.assertEqual(
+            payload["latest_execution_source_evidence"]["backend_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
         )
         self.assertEqual(
             payload["latest_execution_source_evidence"]["backend_accepted_execution_mode"],
@@ -275,6 +283,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_graph_native_realization_reason"],
             "graph_native_realization_achieved",
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
         )
         self.assertEqual(
             payload["workflow_metadata"]["execution_source_evidence"]["backend_echoed_backend_execution_mode"],

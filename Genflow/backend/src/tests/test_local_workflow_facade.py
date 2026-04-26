@@ -143,6 +143,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "graph_native_realization_achieved",
         )
         self.assertEqual(
+            response.output_payload["backend_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
+        )
+        self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
@@ -179,6 +183,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.backend_metadata["backend_graph_native_realization_reason"],
             "graph_native_realization_achieved",
         )
+        self.assertEqual(
+            response.backend_metadata["backend_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
+        )
         self.assertEqual(response.backend_metadata["backend_graph_commit_payload_id"], "wgp_001")
         self.assertEqual(
             response.backend_metadata["realized_backend_execution_mode"],
@@ -202,6 +210,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertIn("backend_graph_native_execution_realized=True", response.comparison_notes)
         self.assertIn(
             "backend_graph_native_realization_reason=graph_native_realization_achieved",
+            response.comparison_notes,
+        )
+        self.assertIn(
+            "backend_graph_native_remediation_hint=retry_graph_native_execution",
             response.comparison_notes,
         )
         self.assertIn("requested_backend_execution_mode=graph_primary_backend_execution", response.comparison_notes)
@@ -283,6 +295,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "insufficient_graph_payload_completeness",
         )
         self.assertEqual(
+            response.output_payload["backend_graph_native_remediation_hint"],
+            "enrich_graph_payload",
+        )
+        self.assertEqual(
             response.output_payload["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
@@ -312,6 +328,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.backend_metadata["backend_graph_native_realization_reason"],
             "insufficient_graph_payload_completeness",
         )
+        self.assertEqual(
+            response.backend_metadata["backend_graph_native_remediation_hint"],
+            "enrich_graph_payload",
+        )
         self.assertFalse(response.backend_metadata["graph_primary_behavior_applied"])
         self.assertIn(
             "accepted_backend_execution_mode=graph_primary_backend_execution",
@@ -325,6 +345,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
         self.assertIn("backend_graph_native_execution_realized=False", response.comparison_notes)
         self.assertIn(
             "backend_graph_native_realization_reason=insufficient_graph_payload_completeness",
+            response.comparison_notes,
+        )
+        self.assertIn(
+            "backend_graph_native_remediation_hint=enrich_graph_payload",
             response.comparison_notes,
         )
 
@@ -393,6 +417,10 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             "unsupported_backend_capability",
         )
         self.assertEqual(
+            response.output_payload["backend_graph_native_remediation_hint"],
+            "fallback_schema_execution",
+        )
+        self.assertEqual(
             response.output_payload["requested_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
@@ -413,11 +441,19 @@ class LocalWorkflowFacadeTest(unittest.TestCase):
             response.backend_metadata["backend_graph_native_realization_reason"],
             "unsupported_backend_capability",
         )
+        self.assertEqual(
+            response.backend_metadata["backend_graph_native_remediation_hint"],
+            "fallback_schema_execution",
+        )
         self.assertIn("backend_graph_primary_capable=False", response.comparison_notes)
         self.assertIn("backend_graph_native_realization_supported=False", response.comparison_notes)
         self.assertIn("backend_graph_native_execution_realized=False", response.comparison_notes)
         self.assertIn(
             "backend_graph_native_realization_reason=unsupported_backend_capability",
+            response.comparison_notes,
+        )
+        self.assertIn(
+            "backend_graph_native_remediation_hint=fallback_schema_execution",
             response.comparison_notes,
         )
 

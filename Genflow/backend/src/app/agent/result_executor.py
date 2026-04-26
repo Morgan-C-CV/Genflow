@@ -62,7 +62,6 @@ class ResultExecutor(ExecutionAdapter):
             ],
         )
         return payload, summary
-
     def execute_preview_probe(
         self,
         schema: NormalizedSchema,
@@ -175,6 +174,9 @@ class ResultExecutor(ExecutionAdapter):
                 )
             )
         )
+        backend_graph_native_remediation_hint = _map_realization_reason_to_hint(
+            backend_graph_native_realization_reason
+        )
         payload = ResultPayload(
             result_id=self._id_factory(),
             result_type="mock_committed_result",
@@ -198,6 +200,7 @@ class ResultExecutor(ExecutionAdapter):
                 "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                 "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
                 "backend_graph_native_realization_reason": backend_graph_native_realization_reason,
+                "backend_graph_native_remediation_hint": backend_graph_native_remediation_hint,
                 "accepted_backend_execution_mode": accepted_backend_execution_mode,
                 "realized_backend_execution_mode": realized_backend_execution_mode,
                 "execution_behavior_branch": execution_behavior_branch,
@@ -226,6 +229,7 @@ class ResultExecutor(ExecutionAdapter):
                     "backend_graph_commit_payload_consumed": backend_graph_commit_payload_consumed,
                     "backend_graph_native_execution_realized": backend_graph_native_execution_realized,
                     "backend_graph_native_realization_reason": backend_graph_native_realization_reason,
+                    "backend_graph_native_remediation_hint": backend_graph_native_remediation_hint,
                     "backend_execution_mode": accepted_backend_execution_mode,
                     "accepted_backend_execution_mode": accepted_backend_execution_mode,
                     "realized_backend_execution_mode": realized_backend_execution_mode,
@@ -269,6 +273,8 @@ class ResultExecutor(ExecutionAdapter):
                 f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",
                 "backend_graph_native_realization_reason="
                 f"{backend_graph_native_realization_reason}",
+                "backend_graph_native_remediation_hint="
+                f"{backend_graph_native_remediation_hint}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",
@@ -288,6 +294,8 @@ class ResultExecutor(ExecutionAdapter):
                 f"backend_graph_native_execution_realized={backend_graph_native_execution_realized}",
                 "backend_graph_native_realization_reason="
                 f"{backend_graph_native_realization_reason}",
+                "backend_graph_native_remediation_hint="
+                f"{backend_graph_native_remediation_hint}",
                 f"requested_backend_execution_mode={requested_backend_execution_mode}",
                 f"accepted_backend_execution_mode={accepted_backend_execution_mode}",
                 f"realized_backend_execution_mode={realized_backend_execution_mode}",
@@ -295,3 +303,15 @@ class ResultExecutor(ExecutionAdapter):
             ],
         )
         return payload, summary
+
+
+def _map_realization_reason_to_hint(reason: str) -> str:
+    if reason == "insufficient_graph_payload_completeness":
+        return "enrich_graph_payload"
+    if reason == "preserve_safety_downgrade":
+        return "restore_preserve_alignment"
+    if reason == "unsupported_backend_capability":
+        return "fallback_schema_execution"
+    if reason == "graph_native_realization_achieved":
+        return "retry_graph_native_execution"
+    return ""

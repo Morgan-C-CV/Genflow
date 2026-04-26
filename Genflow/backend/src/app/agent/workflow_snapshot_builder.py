@@ -186,6 +186,9 @@ def build_surrogate_workflow_snapshot(
             "backend_graph_native_realization_reason": (
                 session.latest_execution_source_evidence.backend_graph_native_realization_reason
             ),
+            "backend_graph_native_remediation_hint": (
+                session.latest_execution_source_evidence.backend_graph_native_remediation_hint
+            ),
             "backend_accepted_execution_mode": (
                 session.latest_execution_source_evidence.backend_accepted_execution_mode
             ),
@@ -233,6 +236,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_graph_native_realization_reason": (
                 session.latest_execution_source_evidence.backend_echoed_graph_native_realization_reason
+            ),
+            "backend_echoed_graph_native_remediation_hint": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_remediation_hint
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode
@@ -404,6 +410,9 @@ def build_surrogate_workflow_snapshot(
             "backend_graph_native_realization_reason": (
                 session.latest_execution_source_evidence.backend_graph_native_realization_reason
             ),
+            "backend_graph_native_remediation_hint": (
+                session.latest_execution_source_evidence.backend_graph_native_remediation_hint
+            ),
             "backend_accepted_execution_mode": (
                 session.latest_execution_source_evidence.backend_accepted_execution_mode
             ),
@@ -451,6 +460,9 @@ def build_surrogate_workflow_snapshot(
             ),
             "backend_echoed_graph_native_realization_reason": (
                 session.latest_execution_source_evidence.backend_echoed_graph_native_realization_reason
+            ),
+            "backend_echoed_graph_native_remediation_hint": (
+                session.latest_execution_source_evidence.backend_echoed_graph_native_remediation_hint
             ),
             "backend_echoed_backend_execution_mode": (
                 session.latest_execution_source_evidence.backend_echoed_backend_execution_mode

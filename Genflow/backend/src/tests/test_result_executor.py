@@ -126,6 +126,10 @@ class ResultExecutorTest(unittest.TestCase):
             payload.content["backend_graph_native_realization_reason"],
             "graph_native_realization_achieved",
         )
+        self.assertEqual(
+            payload.content["backend_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
+        )
         self.assertEqual(payload.content["accepted_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(payload.content["realized_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(payload.content["execution_behavior_branch"], "graph_primary_execution_branch")
@@ -155,6 +159,10 @@ class ResultExecutorTest(unittest.TestCase):
             "graph_native_realization_achieved",
         )
         self.assertEqual(
+            payload.artifacts["backend_metadata"]["backend_graph_native_remediation_hint"],
+            "retry_graph_native_execution",
+        )
+        self.assertEqual(
             payload.artifacts["backend_metadata"]["accepted_backend_execution_mode"],
             "graph_primary_backend_execution",
         )
@@ -178,6 +186,7 @@ class ResultExecutorTest(unittest.TestCase):
         self.assertIn("backend_graph_commit_payload_consumed=True", summary.notes)
         self.assertIn("backend_graph_native_execution_realized=True", summary.notes)
         self.assertIn("backend_graph_native_realization_reason=graph_native_realization_achieved", summary.notes)
+        self.assertIn("backend_graph_native_remediation_hint=retry_graph_native_execution", summary.notes)
         self.assertIn("requested_backend_execution_mode=graph_primary_backend_execution", summary.notes)
         self.assertIn("accepted_backend_execution_mode=graph_primary_backend_execution", summary.notes)
         self.assertIn("realized_backend_execution_mode=graph_primary_backend_execution", summary.notes)
@@ -216,6 +225,10 @@ class ResultExecutorTest(unittest.TestCase):
             payload.content["backend_graph_native_realization_reason"],
             "insufficient_graph_payload_completeness",
         )
+        self.assertEqual(
+            payload.content["backend_graph_native_remediation_hint"],
+            "enrich_graph_payload",
+        )
         self.assertEqual(payload.content["accepted_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertEqual(payload.content["realized_backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(payload.content["execution_behavior_branch"], "schema_primary_execution_branch")
@@ -233,6 +246,10 @@ class ResultExecutorTest(unittest.TestCase):
             payload.artifacts["backend_metadata"]["backend_graph_native_realization_reason"],
             "insufficient_graph_payload_completeness",
         )
+        self.assertEqual(
+            payload.artifacts["backend_metadata"]["backend_graph_native_remediation_hint"],
+            "enrich_graph_payload",
+        )
         self.assertIn("realized_backend_execution_mode=schema_compatible_backend_execution", summary.notes)
         self.assertIn("backend_graph_native_realization_supported=True", summary.notes)
         self.assertIn("backend_graph_native_execution_realized=False", summary.notes)
@@ -240,6 +257,7 @@ class ResultExecutorTest(unittest.TestCase):
             "backend_graph_native_realization_reason=insufficient_graph_payload_completeness",
             summary.notes,
         )
+        self.assertIn("backend_graph_native_remediation_hint=enrich_graph_payload", summary.notes)
 
     def test_execute_committed_patch_distinguishes_backend_not_capable_from_not_realized(self):
         executor = ResultExecutor(id_factory=lambda: "commit-4")
@@ -272,6 +290,10 @@ class ResultExecutorTest(unittest.TestCase):
             payload.content["backend_graph_native_realization_reason"],
             "unsupported_backend_capability",
         )
+        self.assertEqual(
+            payload.content["backend_graph_native_remediation_hint"],
+            "fallback_schema_execution",
+        )
         self.assertEqual(payload.content["accepted_backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(payload.content["realized_backend_execution_mode"], "schema_compatible_backend_execution")
         self.assertEqual(payload.content["execution_behavior_branch"], "schema_primary_execution_branch")
@@ -284,6 +306,10 @@ class ResultExecutorTest(unittest.TestCase):
             payload.artifacts["backend_metadata"]["backend_graph_native_realization_reason"],
             "unsupported_backend_capability",
         )
+        self.assertEqual(
+            payload.artifacts["backend_metadata"]["backend_graph_native_remediation_hint"],
+            "fallback_schema_execution",
+        )
         self.assertIn("backend_graph_primary_capable=False", summary.notes)
         self.assertIn("backend_graph_native_realization_supported=False", summary.notes)
         self.assertIn("backend_graph_native_execution_realized=False", summary.notes)
@@ -291,6 +317,7 @@ class ResultExecutorTest(unittest.TestCase):
             "backend_graph_native_realization_reason=unsupported_backend_capability",
             summary.notes,
         )
+        self.assertIn("backend_graph_native_remediation_hint=fallback_schema_execution", summary.notes)
 
 
 if __name__ == "__main__":
