@@ -511,7 +511,14 @@ class AgentRuntimeService:
 
     def get_policy_decision(self, session_id: str) -> PolicyDecision:
         session = self.memory_service.get_session(session_id)
-        return decide_next_action(session)
+        decision = decide_next_action(session)
+        session.workflow_metadata["latest_policy_decision"] = {
+            "next_action": decision.next_action,
+            "continue_loop": decision.continue_loop,
+            "rationale": list(decision.rationale),
+        }
+        self.memory_service.save_session(session)
+        return decision
 
     def run_next_policy_step(self, session_id: str) -> PolicyStepResult:
         decision = self.get_policy_decision(session_id)

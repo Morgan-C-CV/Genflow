@@ -473,6 +473,60 @@ class RuntimeServiceTest(unittest.TestCase):
 
         decision = service.get_policy_decision(session.session_id)
         self.assertEqual(decision.next_action, "verify_latest_result")
+        self.assertEqual(
+            session.workflow_metadata["latest_policy_decision"]["next_action"],
+            "verify_latest_result",
+        )
+
+    def test_runtime_service_policy_uses_execution_remediation_hint_for_follow_up(self):
+        memory = AgentMemoryService()
+        orchestration = FakeOrchestrationService(memory)
+        search = FakeSearchService()
+        ids = iter(["initial-rt-policy-hint", "preview-rt-policy-hint", "commit-rt-policy-hint"])
+        executor = ResultExecutor(id_factory=lambda: next(ids))
+        service = AgentRuntimeService(
+            memory_service=memory,
+            orchestration_service=orchestration,
+            search_service=search,
+            execution_adapter=executor,
+            feedback_parser=FakeFeedbackParser(),
+            hypothesis_builder=FakeHypothesisBuilder(),
+            probe_generator=FakeProbeGenerator(),
+            patch_planner=FakePatchPlanner(),
+            verifier=FakeVerifier(),
+        )
+
+        session = service.start_episode("make a portrait")
+        session = service.generate_initial_candidates(session.session_id)
+        session = service.select_initial_reference(session.session_id, 7)
+        session = service.generate_initial_schema(session.session_id)
+        session = service.produce_initial_result(session.session_id)
+        session = service.submit_feedback(session.session_id, "Keep the composition, but improve style.")
+        session = service.build_repair_hypotheses(session.session_id)
+        session = service.generate_local_probes(session.session_id)
+        session = service.preview_selected_probe(session.session_id)
+        session = service.commit_patch(session.session_id)
+        session.selected_workflow_graph_patch.edge_patches = []
+        session.selected_workflow_graph_patch.region_patches = []
+        session.commit_execution_mode = "graph_native_execution_handoff"
+        session.commit_execution_authority = "graph_authoritative"
+        session.commit_execution_implementation_mode = "graph_primary_execution"
+        session.accepted_patch.metadata["commit_execution_mode"] = session.commit_execution_mode
+        session.accepted_patch.metadata["commit_execution_authority"] = session.commit_execution_authority
+        session.accepted_patch.metadata["commit_execution_implementation_mode"] = (
+            session.commit_execution_implementation_mode
+        )
+        memory.save_session(session)
+
+        session = service.execute_patch(session.session_id)
+        decision = service.get_policy_decision(session.session_id)
+
+        self.assertEqual(decision.next_action, "generate_probes")
+        self.assertIn("backend_graph_native_remediation_hint=enrich_graph_payload", decision.rationale)
+        self.assertEqual(
+            session.workflow_metadata["latest_policy_decision"]["next_action"],
+            "generate_probes",
+        )
 
     def test_runtime_service_passes_refinement_benchmark_context_to_probe_generator(self):
         memory = AgentMemoryService()

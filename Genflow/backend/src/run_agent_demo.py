@@ -467,6 +467,7 @@ def build_session_artifact_payload(session) -> dict:
             "protected_scopes": session.protected_scopes,
             "last_execution_config": session.last_execution_config,
             "workflow_metadata": session.workflow_metadata,
+            "latest_policy_decision": session.workflow_metadata.get("latest_policy_decision", {}),
             "workflow_graph_placeholder": session.workflow_graph_placeholder,
             "workflow_topology_hints": session.workflow_topology_hints,
             "workflow_topology_entry_node_ids": session.workflow_topology_entry_node_ids,

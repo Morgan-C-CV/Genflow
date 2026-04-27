@@ -48,6 +48,9 @@ def decide_next_action(session: "AgentSessionState") -> PolicyDecision:
         return PolicyDecision(next_action="execute_patch", rationale=rationale, continue_loop=True)
 
     if session.accepted_patch.patch_id and _has_executed_accepted_patch(session) and not session.latest_verifier_result.summary:
+        remediation_decision = _decide_from_backend_remediation_hint(session)
+        if remediation_decision is not None:
+            return remediation_decision
         rationale.append(f"accepted_patch_needs_verification={session.accepted_patch.patch_id}")
         return PolicyDecision(next_action="verify_latest_result", rationale=rationale, continue_loop=True)
 
@@ -93,6 +96,38 @@ def _decide_post_verifier_action(session: "AgentSessionState") -> PolicyDecision
         return recommendation_decision
 
     return _decide_from_verifier_signals(session)
+
+
+def _decide_from_backend_remediation_hint(session: "AgentSessionState") -> PolicyDecision | None:
+    hint = session.latest_execution_source_evidence.backend_graph_native_remediation_hint
+    if not hint:
+        return None
+
+    rationale = [f"backend_graph_native_remediation_hint={hint}"]
+    reason = session.latest_execution_source_evidence.backend_graph_native_realization_reason
+    if reason:
+        rationale.append(f"backend_graph_native_realization_reason={reason}")
+
+    if hint == "retry_graph_native_execution":
+        if session.latest_execution_source_evidence.backend_graph_native_execution_realized:
+            rationale.append("graph_native_realization_already_achieved")
+            return PolicyDecision(
+                next_action="verify_latest_result",
+                rationale=rationale,
+                continue_loop=True,
+            )
+        return PolicyDecision(next_action="execute_patch", rationale=rationale, continue_loop=True)
+
+    if hint == "enrich_graph_payload":
+        return PolicyDecision(next_action="generate_probes", rationale=rationale, continue_loop=True)
+
+    if hint == "restore_preserve_alignment":
+        return PolicyDecision(next_action="build_hypotheses", rationale=rationale, continue_loop=True)
+
+    if hint == "fallback_schema_execution":
+        return PolicyDecision(next_action="verify_latest_result", rationale=rationale, continue_loop=True)
+
+    return None
 
 
 def _decide_from_verifier_recommendation(session: "AgentSessionState") -> PolicyDecision | None:

@@ -155,6 +155,7 @@ def build_surrogate_workflow_snapshot(
                 session.accepted_patch.metadata.get("aligned_graph_candidate_id", "")
             ),
         },
+        "latest_policy_decision": dict(session.workflow_metadata.get("latest_policy_decision", {})),
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,
@@ -379,6 +380,7 @@ def build_surrogate_workflow_snapshot(
         "request_primary_plan_kind": (
             "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
         ),
+        "latest_policy_decision": dict(session.workflow_metadata.get("latest_policy_decision", {})),
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,

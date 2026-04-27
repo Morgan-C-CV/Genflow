@@ -2,7 +2,13 @@ import unittest
 
 from app.agent.memory import AgentMemoryService
 from app.agent.orchestration_policy import decide_next_action
-from app.agent.runtime_models import PreviewProbe, ResultSummary, VerifierResult, VerifierSignalSummary
+from app.agent.runtime_models import (
+    ExecutionSourceEvidenceSummary,
+    PreviewProbe,
+    ResultSummary,
+    VerifierResult,
+    VerifierSignalSummary,
+)
 from app.agent.verifier_repair_recommendation import VerifierRepairRecommendation
 
 
@@ -203,6 +209,55 @@ class OrchestrationPolicyTest(unittest.TestCase):
         self.assertEqual(decision.next_action, "retrieve_benchmarks")
         self.assertIn("weak_execution_evidence", decision.rationale)
         self.assertIn("low_benchmark_support", decision.rationale)
+
+    def test_policy_uses_retry_graph_native_execution_hint_before_verifier(self):
+        session = self._prepare_verified_session()
+        session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
+            backend_graph_native_remediation_hint="retry_graph_native_execution",
+            backend_graph_native_realization_reason="graph_native_realization_achieved",
+            backend_graph_native_execution_realized=True,
+        )
+
+        decision = decide_next_action(session)
+
+        self.assertEqual(decision.next_action, "verify_latest_result")
+        self.assertIn("backend_graph_native_remediation_hint=retry_graph_native_execution", decision.rationale)
+
+    def test_policy_uses_enrich_graph_payload_hint_to_generate_probes(self):
+        session = self._prepare_verified_session()
+        session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
+            backend_graph_native_remediation_hint="enrich_graph_payload",
+            backend_graph_native_realization_reason="insufficient_graph_payload_completeness",
+        )
+
+        decision = decide_next_action(session)
+
+        self.assertEqual(decision.next_action, "generate_probes")
+        self.assertIn("backend_graph_native_remediation_hint=enrich_graph_payload", decision.rationale)
+
+    def test_policy_uses_restore_preserve_alignment_hint_to_rebuild_hypotheses(self):
+        session = self._prepare_verified_session()
+        session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
+            backend_graph_native_remediation_hint="restore_preserve_alignment",
+            backend_graph_native_realization_reason="preserve_safety_downgrade",
+        )
+
+        decision = decide_next_action(session)
+
+        self.assertEqual(decision.next_action, "build_hypotheses")
+        self.assertIn("backend_graph_native_remediation_hint=restore_preserve_alignment", decision.rationale)
+
+    def test_policy_uses_fallback_schema_execution_hint_to_verify_current_result(self):
+        session = self._prepare_verified_session()
+        session.latest_execution_source_evidence = ExecutionSourceEvidenceSummary(
+            backend_graph_native_remediation_hint="fallback_schema_execution",
+            backend_graph_native_realization_reason="unsupported_backend_capability",
+        )
+
+        decision = decide_next_action(session)
+
+        self.assertEqual(decision.next_action, "verify_latest_result")
+        self.assertIn("backend_graph_native_remediation_hint=fallback_schema_execution", decision.rationale)
 
 
 if __name__ == "__main__":
