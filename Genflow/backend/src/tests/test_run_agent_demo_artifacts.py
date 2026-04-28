@@ -160,6 +160,7 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(payload["commit_execution_mode"], "graph_native_execution_handoff")
         self.assertEqual(payload["commit_execution_authority"], "graph_authoritative")
         self.assertEqual(payload["commit_execution_implementation_mode"], "graph_primary_execution")
+        self.assertIn("latest_execution_recovery_directive", payload)
         self.assertTrue(payload["request_graph_native_realization"])
         self.assertEqual(payload["request_backend_execution_mode"], "graph_primary_backend_execution")
         self.assertTrue(payload["backend_graph_primary_capable"])
@@ -174,6 +175,14 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
         self.assertEqual(
             payload["backend_graph_native_remediation_hint"],
             "retry_graph_native_execution",
+        )
+        self.assertEqual(
+            payload["latest_execution_recovery_directive"]["directive_type"],
+            "graph_native_retry",
+        )
+        self.assertEqual(
+            payload["workflow_metadata"]["latest_execution_recovery_directive"]["directive_type"],
+            "graph_native_retry",
         )
         self.assertEqual(payload["request_primary_plan_kind"], "graph_primary")
         self.assertEqual(

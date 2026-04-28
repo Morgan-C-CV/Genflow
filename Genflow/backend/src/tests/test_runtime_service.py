@@ -522,7 +522,36 @@ class RuntimeServiceTest(unittest.TestCase):
         decision = service.get_policy_decision(session.session_id)
 
         self.assertEqual(decision.next_action, "generate_probes")
-        self.assertIn("backend_graph_native_remediation_hint=enrich_graph_payload", decision.rationale)
+        self.assertIn(
+            "execution_recovery_directive=graph_payload_enrichment",
+            decision.rationale,
+        )
+        self.assertIn(
+            "execution_recovery_source_hint=enrich_graph_payload",
+            decision.rationale,
+        )
+        self.assertEqual(
+            session.latest_execution_recovery_directive.directive_type,
+            "graph_payload_enrichment",
+        )
+        self.assertEqual(
+            session.latest_execution_recovery_directive.next_action,
+            "generate_probes",
+        )
+        self.assertEqual(
+            session.latest_execution_recovery_directive.recovery_mode,
+            "graph_payload_enrichment",
+        )
+        session = service.generate_local_probes(session.session_id)
+        self.assertEqual(session.preview_probe_candidates[0].source_kind, "graph_payload_enrichment")
+        self.assertIn(
+            "[graph-payload-enrichment]",
+            session.preview_probe_candidates[0].summary,
+        )
+        self.assertEqual(
+            session.preview_probe_candidates[0].preview_execution_spec["execution_recovery_mode"],
+            "graph_payload_enrichment",
+        )
         self.assertEqual(
             session.workflow_metadata["latest_policy_decision"]["next_action"],
             "generate_probes",

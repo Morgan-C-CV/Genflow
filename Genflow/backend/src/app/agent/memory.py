@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.agent.runtime_models import (
     CommittedPatch,
+    ExecutionRecoveryDirective,
     ExecutionSourceEvidenceSummary,
     NormalizedSchema,
     ParsedFeedbackEvidence,
@@ -106,6 +107,9 @@ class AgentSessionState:
     )
     latest_execution_source_evidence: ExecutionSourceEvidenceSummary = field(
         default_factory=ExecutionSourceEvidenceSummary
+    )
+    latest_execution_recovery_directive: ExecutionRecoveryDirective = field(
+        default_factory=ExecutionRecoveryDirective
     )
     current_uncertainty_estimate: float = 0.0
     latest_verifier_result: VerifierResult = field(default_factory=VerifierResult)

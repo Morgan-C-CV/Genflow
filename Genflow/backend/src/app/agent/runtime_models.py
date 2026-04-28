@@ -148,3 +148,14 @@ class ExecutionSourceEvidenceSummary:
     backend_echoed_execution_behavior_branch: str = ""
     backend_echoed_graph_native_artifact_input_received: bool = False
     comparison_notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ExecutionRecoveryDirective:
+    directive_type: str = ""
+    next_action: str = ""
+    recovery_mode: str = ""
+    source_hint: str = ""
+    source_reason: str = ""
+    rationale: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)

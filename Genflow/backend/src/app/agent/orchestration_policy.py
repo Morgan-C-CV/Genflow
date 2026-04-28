@@ -48,6 +48,9 @@ def decide_next_action(session: "AgentSessionState") -> PolicyDecision:
         return PolicyDecision(next_action="execute_patch", rationale=rationale, continue_loop=True)
 
     if session.accepted_patch.patch_id and _has_executed_accepted_patch(session) and not session.latest_verifier_result.summary:
+        directive_decision = _decide_from_execution_recovery_directive(session)
+        if directive_decision is not None:
+            return directive_decision
         remediation_decision = _decide_from_backend_remediation_hint(session)
         if remediation_decision is not None:
             return remediation_decision
@@ -128,6 +131,29 @@ def _decide_from_backend_remediation_hint(session: "AgentSessionState") -> Polic
         return PolicyDecision(next_action="verify_latest_result", rationale=rationale, continue_loop=True)
 
     return None
+
+
+def _decide_from_execution_recovery_directive(session: "AgentSessionState") -> PolicyDecision | None:
+    directive = session.latest_execution_recovery_directive
+    if not directive.directive_type or not directive.next_action:
+        return None
+
+    rationale = [
+        f"execution_recovery_directive={directive.directive_type}",
+        f"execution_recovery_next_action={directive.next_action}",
+    ]
+    if directive.recovery_mode:
+        rationale.append(f"execution_recovery_mode={directive.recovery_mode}")
+    if directive.source_hint:
+        rationale.append(f"execution_recovery_source_hint={directive.source_hint}")
+    if directive.source_reason:
+        rationale.append(f"execution_recovery_source_reason={directive.source_reason}")
+
+    return PolicyDecision(
+        next_action=directive.next_action,
+        rationale=rationale,
+        continue_loop=directive.next_action != "stop",
+    )
 
 
 def _decide_from_verifier_recommendation(session: "AgentSessionState") -> PolicyDecision | None:

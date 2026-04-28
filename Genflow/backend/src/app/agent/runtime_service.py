@@ -26,7 +26,7 @@ from app.agent.workflow_graph_patch_builder import (
     materialize_workflow_graph_patch_from_candidate,
 )
 from app.agent.workflow_patch_commit_selector import select_commit_patch_winner
-from app.agent.runtime_models import ExecutionSourceEvidenceSummary
+from app.agent.runtime_models import ExecutionRecoveryDirective, ExecutionSourceEvidenceSummary, PreviewProbe
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
 
@@ -210,6 +210,10 @@ class AgentRuntimeService:
             selected_gallery_index=session.selected_gallery_index,
             selected_reference_ids=session.selected_reference_ids,
             refinement_benchmark_set=session.refinement_benchmark_set,
+        )
+        probes = self._apply_execution_recovery_directive_to_probes(
+            probes,
+            session.latest_execution_recovery_directive,
         )
         ranked_probes = self.pbo_probe_ranker(
             probes,
@@ -479,6 +483,7 @@ class AgentRuntimeService:
             ),
             comparison_notes=list(summary.notes),
         )
+        session.latest_execution_recovery_directive = self._build_execution_recovery_directive(session)
         self._sync_workflow_state(session, execution_kind="commit", preview=False)
         return self.memory_service.save_session(session)
 
@@ -755,6 +760,101 @@ class AgentRuntimeService:
         if hasattr(generator, "plan"):
             return [generator.plan(**kwargs)]
         raise TypeError("Patch candidate generator must provide generate(), generate_candidates(), or plan().")
+
+    @staticmethod
+    def _build_execution_recovery_directive(session: AgentSessionState) -> ExecutionRecoveryDirective:
+        evidence = session.latest_execution_source_evidence
+        hint = evidence.backend_graph_native_remediation_hint
+        if not hint:
+            return ExecutionRecoveryDirective()
+
+        retry_next_action = (
+            "verify_latest_result"
+            if evidence.backend_graph_native_execution_realized
+            else "execute_patch"
+        )
+        directive_mapping = {
+            "retry_graph_native_execution": (
+                "graph_native_retry",
+                retry_next_action,
+                "graph_native_retry",
+            ),
+            "enrich_graph_payload": (
+                "graph_payload_enrichment",
+                "generate_probes",
+                "graph_payload_enrichment",
+            ),
+            "restore_preserve_alignment": (
+                "preserve_alignment_recovery",
+                "build_hypotheses",
+                "preserve_alignment_recovery",
+            ),
+            "fallback_schema_execution": (
+                "schema_fallback_recovery",
+                "verify_latest_result",
+                "schema_fallback_recovery",
+            ),
+        }
+        directive_type, next_action, recovery_mode = directive_mapping.get(
+            hint,
+            ("generic_execution_recovery", "verify_latest_result", "generic_execution_recovery"),
+        )
+        rationale = [
+            f"source_hint={hint}",
+            f"next_action={next_action}",
+            f"recovery_mode={recovery_mode}",
+        ]
+        if evidence.backend_graph_native_realization_reason:
+            rationale.append(
+                f"source_reason={evidence.backend_graph_native_realization_reason}"
+            )
+        if evidence.request_patch_id:
+            rationale.append(f"request_patch_id={evidence.request_patch_id}")
+        if evidence.selected_workflow_graph_patch_id:
+            rationale.append(
+                f"selected_workflow_graph_patch_id={evidence.selected_workflow_graph_patch_id}"
+            )
+
+        return ExecutionRecoveryDirective(
+            directive_type=directive_type,
+            next_action=next_action,
+            recovery_mode=recovery_mode,
+            source_hint=hint,
+            source_reason=evidence.backend_graph_native_realization_reason,
+            rationale=rationale,
+            metadata={
+                "request_patch_id": evidence.request_patch_id,
+                "selected_workflow_graph_patch_id": evidence.selected_workflow_graph_patch_id,
+                "request_backend_execution_mode": evidence.request_backend_execution_mode,
+                "backend_realized_execution_mode": evidence.backend_realized_execution_mode,
+            },
+        )
+
+    @staticmethod
+    def _apply_execution_recovery_directive_to_probes(
+        probes: list[PreviewProbe],
+        directive: ExecutionRecoveryDirective,
+    ) -> list[PreviewProbe]:
+        if directive.recovery_mode != "graph_payload_enrichment":
+            return probes
+
+        rewritten_probes: list[PreviewProbe] = []
+        for probe in probes:
+            preview_execution_spec = dict(probe.preview_execution_spec)
+            preview_execution_spec["execution_recovery_mode"] = directive.recovery_mode
+            preview_execution_spec["execution_recovery_directive_type"] = directive.directive_type
+            preview_execution_spec["execution_recovery_source_hint"] = directive.source_hint
+            rewritten_probes.append(
+                PreviewProbe(
+                    probe_id=probe.probe_id,
+                    summary=f"{probe.summary} [graph-payload-enrichment]",
+                    target_axes=list(probe.target_axes),
+                    preserve_axes=list(probe.preserve_axes),
+                    preview_execution_spec=preview_execution_spec,
+                    source_kind="graph_payload_enrichment",
+                )
+            )
+        return rewritten_probes
 
     @staticmethod
     def _apply_patch_to_schema(current_schema, patch):

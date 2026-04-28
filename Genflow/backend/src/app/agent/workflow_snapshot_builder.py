@@ -156,6 +156,15 @@ def build_surrogate_workflow_snapshot(
             ),
         },
         "latest_policy_decision": dict(session.workflow_metadata.get("latest_policy_decision", {})),
+        "latest_execution_recovery_directive": {
+            "directive_type": session.latest_execution_recovery_directive.directive_type,
+            "next_action": session.latest_execution_recovery_directive.next_action,
+            "recovery_mode": session.latest_execution_recovery_directive.recovery_mode,
+            "source_hint": session.latest_execution_recovery_directive.source_hint,
+            "source_reason": session.latest_execution_recovery_directive.source_reason,
+            "rationale": list(session.latest_execution_recovery_directive.rationale),
+            "metadata": dict(session.latest_execution_recovery_directive.metadata),
+        },
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,
@@ -381,6 +390,15 @@ def build_surrogate_workflow_snapshot(
             "graph_primary" if session.commit_execution_authority == "graph_authoritative" else "schema_primary"
         ),
         "latest_policy_decision": dict(session.workflow_metadata.get("latest_policy_decision", {})),
+        "latest_execution_recovery_directive": {
+            "directive_type": session.latest_execution_recovery_directive.directive_type,
+            "next_action": session.latest_execution_recovery_directive.next_action,
+            "recovery_mode": session.latest_execution_recovery_directive.recovery_mode,
+            "source_hint": session.latest_execution_recovery_directive.source_hint,
+            "source_reason": session.latest_execution_recovery_directive.source_reason,
+            "rationale": list(session.latest_execution_recovery_directive.rationale),
+            "metadata": dict(session.latest_execution_recovery_directive.metadata),
+        },
         "execution_source_evidence": {
             "commit_execution_mode": session.latest_execution_source_evidence.commit_execution_mode,
             "commit_execution_authority": session.latest_execution_source_evidence.commit_execution_authority,
