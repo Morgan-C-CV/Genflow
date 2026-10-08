@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import JsonViewer from "./JsonViewer";
 import type {
   ComfyStatus,
   GeneratedImage,
   NormalizedSchema,
   PushResponse,
+  RemediationItem,
   RuntimeCandidate,
   WorkflowOptions,
   WorkflowResponse,
@@ -25,6 +26,7 @@ interface WorkflowStageProps {
   comfyStatus: ComfyStatus | null;
   onBuild: () => void;
   onPush: () => void;
+  onApplyCheckpoint: (checkpoint: string) => void;
   onRefreshResult: () => void;
 }
 
@@ -45,6 +47,7 @@ export default function WorkflowStage({
   comfyStatus,
   onBuild,
   onPush,
+  onApplyCheckpoint,
   onRefreshResult,
 }: WorkflowStageProps) {
   const [tab, setTab] = useState<Tab>("api");
@@ -227,9 +230,25 @@ export default function WorkflowStage({
         </div>
       </div>
 
+      {workflow && workflow.remediation.length > 0 && (
+        <div className="remediation">
+          <h3>Needs attention</h3>
+          <ul>
+            {workflow.remediation.map((item, index) => (
+              <RemediationRow
+                key={`${item.kind}-${item.requested}-${index}`}
+                item={item}
+                busy={busy}
+                onApply={onApplyCheckpoint}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
       {workflow && workflow.warnings.length > 0 && (
         <div className="warnings">
-          <h3>Notes / warnings</h3>
+          <h3>Notes</h3>
           <ul>
             {workflow.warnings.map((warning, index) => (
               <li key={index}>{warning}</li>
@@ -367,6 +386,71 @@ export default function WorkflowStage({
         </div>
       )}
     </div>
+  );
+}
+
+function RemediationRow({
+  item,
+  busy,
+  onApply,
+}: {
+  item: RemediationItem;
+  busy: boolean;
+  onApply: (checkpoint: string) => void;
+}) {
+  // Offer the closest matches first, then everything else that is installed.
+  const choices = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const name of [...item.suggestions, ...item.installed]) {
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        list.push(name);
+      }
+    }
+    return list;
+  }, [item.suggestions, item.installed]);
+
+  const [choice, setChoice] = useState(choices[0] ?? "");
+
+  return (
+    <li className={`remediation-item ${item.kind}`}>
+      <p className="remediation-message">
+        <span className="remediation-kind">{item.kind}</span>
+        {item.message}
+      </p>
+
+      {item.fixable && choices.length > 0 ? (
+        <div className="remediation-fix">
+          <select
+            value={choice}
+            onChange={(event) => setChoice(event.target.value)}
+            disabled={busy}
+            aria-label={`Choose an installed ${item.kind}`}
+          >
+            {choices.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="ghost small"
+            disabled={busy || !choice}
+            onClick={() => onApply(choice)}
+          >
+            Rebuild &amp; push with this checkpoint
+          </button>
+        </div>
+      ) : (
+        item.suggestions.length > 0 && (
+          <p className="muted small">
+            Closest installed: {item.suggestions.join(", ")}
+          </p>
+        )
+      )}
+    </li>
   );
 }
 

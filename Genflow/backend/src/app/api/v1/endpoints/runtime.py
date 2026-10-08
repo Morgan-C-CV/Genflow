@@ -519,6 +519,7 @@ def _workflow_kwargs(request: RuntimeWorkflowRequest) -> Dict[str, Any]:
         "batch_size": request.batch_size,
         "seed": request.seed,
         "filename_prefix": request.filename_prefix or "Genflow",
+        "checkpoint_override": request.checkpoint_override,
     }
 
 

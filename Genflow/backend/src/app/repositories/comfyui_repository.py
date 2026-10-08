@@ -6,6 +6,7 @@ lives behind a repository while ``services`` own orchestration.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -22,6 +23,57 @@ class ComfyUIValidationError(ComfyUIError):
     def __init__(self, message: str, *, node_errors: Optional[Dict[str, Any]] = None):
         super().__init__(message)
         self.node_errors = node_errors or {}
+
+
+def describe_error(error: Any) -> str:
+    """Read ComfyUI's top-level ``error`` object, which is often just a wrapper."""
+    if isinstance(error, dict):
+        message = str(error.get("message") or error.get("type") or "").strip()
+        details = str(error.get("details") or "").strip()
+        if message and details:
+            return f"{message} ({details})"
+        return message or json.dumps(error)[:300]
+    return str(error)
+
+
+def _describe_entry(entry: Dict[str, Any], node_id: str, class_type: str) -> str:
+    extra = entry.get("extra_info") or {}
+    input_name = str(extra.get("input_name") or "").strip()
+    detail = str(entry.get("details") or "").strip()
+    if not detail:
+        message = str(entry.get("message") or "").strip()
+        received = extra.get("received_value")
+        if message and received is not None:
+            detail = f"{message}: {received!r}"
+        else:
+            detail = message
+
+    location = f"node {node_id}"
+    if class_type:
+        location += f" ({class_type})"
+    if input_name:
+        location += f" input {input_name!r}"
+    return f"{location}: {detail}"
+
+
+def describe_node_errors(node_errors: Dict[str, Any], fallback: Any = None) -> str:
+    """Turn ComfyUI's per-node validation errors into a readable sentence.
+
+    The top-level error is only ``prompt_outputs_failed_validation`` with empty
+    details, so the actionable text has to come from ``node_errors``.
+    """
+    issues: List[str] = []
+    for node_id, payload in (node_errors or {}).items():
+        if not isinstance(payload, dict):
+            continue
+        class_type = str(payload.get("class_type") or "").strip()
+        for entry in payload.get("errors") or []:
+            if isinstance(entry, dict):
+                issues.append(_describe_entry(entry, str(node_id), class_type))
+
+    if issues:
+        return "ComfyUI rejected the workflow — " + "; ".join(issues)
+    return f"ComfyUI rejected the workflow: {describe_error(fallback)}"
 
 
 class ComfyUIRepository:
@@ -56,11 +108,13 @@ class ComfyUIRepository:
             if isinstance(body, dict):
                 if body.get("node_errors"):
                     raise ComfyUIValidationError(
-                        f"ComfyUI rejected the workflow: {body.get('error') or detail}",
+                        describe_node_errors(body["node_errors"], body.get("error")),
                         node_errors=body.get("node_errors"),
                     )
                 if body.get("error"):
-                    raise ComfyUIError(f"ComfyUI rejected the request: {body['error']}")
+                    raise ComfyUIError(
+                        f"ComfyUI rejected the request: {describe_error(body['error'])}"
+                    )
             raise ComfyUIError(f"ComfyUI POST {path} failed with HTTP {response.status_code}: {detail}")
         return response.json()
 

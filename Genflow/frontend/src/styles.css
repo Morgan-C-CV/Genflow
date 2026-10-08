@@ -854,6 +854,73 @@ button {
   font-weight: 700;
 }
 
+.remediation {
+  background: var(--bad-soft);
+  border: 1px solid var(--bad-border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.remediation h3 {
+  color: var(--bad);
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.remediation ul {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.remediation-item {
+  border-left: 3px solid var(--bad);
+  padding-left: 12px;
+}
+
+.remediation-item.lora {
+  border-left-color: var(--warn);
+}
+
+.remediation-kind {
+  display: inline-block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-right: 8px;
+  color: var(--text-dim);
+}
+
+.remediation-message {
+  font-size: 13px;
+}
+
+.remediation-fix {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.remediation-fix select {
+  flex: 1;
+  min-width: 200px;
+  max-width: 420px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 6px 9px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
 .push-result {
   border-radius: var(--radius);
   padding: 14px 16px;

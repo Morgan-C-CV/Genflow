@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.modules.comfyui_graph import build_api_graph, build_ui_workflow
+from app.modules.comfyui_graph import build_api_graph, build_ui_workflow, rank_similar
 from app.repositories.comfyui_repository import (
     ComfyUIError,
     ComfyUIRepository,
@@ -54,6 +54,7 @@ class ComfyUIService:
         seed: Optional[int] = None,
         filename_prefix: str = "Genflow",
         title: str = "Genflow Workflow",
+        checkpoint_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Build API-format and UI-format workflows for ``schema``."""
         warnings: List[str] = []
@@ -80,6 +81,7 @@ class ComfyUIService:
             batch_size=batch_size,
             filename_prefix=filename_prefix,
             seed_override=seed,
+            checkpoint_override=checkpoint_override,
         )
         warnings.extend(result.warnings)
 
@@ -92,11 +94,20 @@ class ComfyUIService:
             "ui_workflow": ui_workflow,
             "warnings": warnings,
             "checkpoint": result.checkpoint,
+            "requested_checkpoint": str(getattr(schema, "model", "") or "").strip(),
             "checkpoint_resolved": result.checkpoint_resolved,
             "applied_loras": result.applied_loras,
             "unresolved_loras": result.unresolved_loras,
             "controls": result.controls,
             "available_checkpoints": checkpoints,
+            "available_loras": loras,
+            "remediation": self._remediation_from_build(
+                requested_checkpoint=result.checkpoint,
+                checkpoint_resolved=result.checkpoint_resolved,
+                installed_checkpoints=checkpoints,
+                unresolved_loras=result.unresolved_loras,
+                installed_loras=loras,
+            ),
             "title": title,
         }
 
@@ -121,6 +132,13 @@ class ComfyUIService:
         except ComfyUIValidationError as exc:
             payload["error"] = str(exc)
             payload["node_errors"] = exc.node_errors
+            # ComfyUI is authoritative about what actually failed, so rebuild the
+            # remediation list from its own per-node errors.
+            payload["remediation"] = self._remediation_from_failure(
+                node_errors=exc.node_errors,
+                installed_checkpoints=built["available_checkpoints"],
+                installed_loras=built["available_loras"],
+            )
             return payload
         except ComfyUIError as exc:
             payload["error"] = str(exc)
@@ -130,7 +148,108 @@ class ComfyUIService:
         payload["prompt_id"] = str(response.get("prompt_id", ""))
         payload["queue_number"] = response.get("number")
         payload["node_errors"] = response.get("node_errors") or {}
+        payload["remediation"] = []
         return payload
+
+    # -- remediation ------------------------------------------------------
+    @staticmethod
+    def _checkpoint_item(requested: str, installed: List[str]) -> Dict[str, Any]:
+        if installed:
+            message = (
+                f"Checkpoint {requested!r} is not installed. Choose one of the "
+                f"{len(installed)} installed checkpoint(s), or install this model into "
+                "ComfyUI/models/checkpoints."
+            )
+        else:
+            message = (
+                f"Checkpoint {requested!r} is not installed and ComfyUI has no checkpoints "
+                "at all. Download a model into ComfyUI/models/checkpoints, then retry."
+            )
+        return {
+            "kind": "checkpoint",
+            "input_name": "ckpt_name",
+            "requested": requested,
+            "installed": list(installed),
+            "suggestions": rank_similar(requested, installed),
+            "fixable": bool(installed),
+            "message": message,
+        }
+
+    @staticmethod
+    def _lora_item(requested: str, installed: List[str]) -> Dict[str, Any]:
+        suggestions = rank_similar(requested, installed)
+        message = f"LoRA {requested!r} is not installed."
+        if suggestions:
+            message += f" Closest installed: {', '.join(suggestions[:3])}."
+        return {
+            "kind": "lora",
+            "input_name": "lora_name",
+            "requested": requested,
+            "installed": list(installed),
+            "suggestions": suggestions,
+            "fixable": False,
+            "message": message,
+        }
+
+    def _remediation_from_build(
+        self,
+        *,
+        requested_checkpoint: str,
+        checkpoint_resolved: bool,
+        installed_checkpoints: List[str],
+        unresolved_loras: List[str],
+        installed_loras: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Pre-emptive fixes, derived before ComfyUI has seen the graph."""
+        items: List[Dict[str, Any]] = []
+        if not checkpoint_resolved:
+            items.append(self._checkpoint_item(requested_checkpoint, list(installed_checkpoints)))
+        for name in unresolved_loras:
+            items.append(self._lora_item(str(name), list(installed_loras)))
+        return items
+
+    def _remediation_from_failure(
+        self,
+        *,
+        node_errors: Dict[str, Any],
+        installed_checkpoints: List[str],
+        installed_loras: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Fixes derived from ComfyUI's own validation errors (authoritative)."""
+        items: List[Dict[str, Any]] = []
+        for node_id, node_payload in (node_errors or {}).items():
+            if not isinstance(node_payload, dict):
+                continue
+            class_type = str(node_payload.get("class_type") or "")
+            for entry in node_payload.get("errors") or []:
+                if not isinstance(entry, dict):
+                    continue
+                extra = entry.get("extra_info") or {}
+                input_name = str(extra.get("input_name") or "")
+                received = str(extra.get("received_value") or "")
+                if input_name == "ckpt_name":
+                    items.append(self._checkpoint_item(received, list(installed_checkpoints)))
+                elif input_name == "lora_name":
+                    items.append(self._lora_item(received, list(installed_loras)))
+                else:
+                    items.append(
+                        {
+                            "kind": "input",
+                            "node_id": str(node_id),
+                            "class_type": class_type,
+                            "input_name": input_name,
+                            "requested": received,
+                            "installed": [],
+                            "suggestions": [],
+                            "fixable": False,
+                            "message": str(
+                                entry.get("details")
+                                or entry.get("message")
+                                or "ComfyUI rejected this input."
+                            ),
+                        }
+                    )
+        return items
 
     # -- results ----------------------------------------------------------
     def prompt_result(self, prompt_id: str) -> Dict[str, Any]:

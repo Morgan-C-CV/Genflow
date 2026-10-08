@@ -132,11 +132,14 @@ export interface WorkflowResponse {
   ui_workflow: Record<string, unknown>;
   warnings: string[];
   checkpoint: string;
+  requested_checkpoint: string;
   checkpoint_resolved: boolean;
   applied_loras: AppliedLora[];
   unresolved_loras: string[];
   controls: Record<string, unknown>;
   available_checkpoints: string[];
+  available_loras: string[];
+  remediation: RemediationItem[];
 }
 
 export interface PushResponse extends WorkflowResponse {
@@ -178,6 +181,20 @@ export interface WorkflowOptions {
   batch_size: number;
   seed: number | null;
   filename_prefix: string;
+  /** Explicit checkpoint chosen to work around an uninstalled model. */
+  checkpoint_override: string | null;
+}
+
+export interface RemediationItem {
+  kind: string;
+  node_id: string;
+  class_type: string;
+  input_name: string;
+  requested: string;
+  installed: string[];
+  suggestions: string[];
+  fixable: boolean;
+  message: string;
 }
 
 export interface RefinementHistoryEntry {

@@ -13,6 +13,7 @@ This module is pure: no network access, no global state.
 
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -136,6 +137,30 @@ def resolve_against(candidate: str, available: Sequence[str]) -> Optional[str]:
             if len(norm) > best_len:
                 best, best_len = original, len(norm)
     return best
+
+
+def rank_similar(candidate: str, available: Sequence[str], limit: int = 5) -> List[str]:
+    """Rank installed names by similarity, for "did you mean" suggestions."""
+    names = [str(name) for name in available if str(name).strip()]
+    if not names:
+        return []
+
+    target = _normalize_name(candidate)
+    if not target:
+        return names[:limit]
+
+    scored: List[Tuple[float, str]] = []
+    for name in names:
+        norm = _normalize_name(name)
+        if not norm:
+            continue
+        ratio = difflib.SequenceMatcher(None, target, norm).ratio()
+        if target in norm or norm in target:
+            ratio = max(ratio, 0.75)
+        scored.append((ratio, name))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [name for _, name in scored[:limit]]
 
 
 def _coerce_int(value: Any, default: int, *, minimum: Optional[int] = None) -> Tuple[int, Optional[str]]:
@@ -272,20 +297,24 @@ def resolve_loras(
     unresolved: List[str] = []
     seen_files: set[str] = set()
     seen_names: set[str] = set()
+    seen_unresolved: set[str] = set()
 
     def _record(requested: str, weight: float) -> None:
+        key = _normalize_name(requested)
         resolved = resolve_against(requested, available)
         if resolved:
-            key = resolved.lower()
-            if key in seen_files:
+            file_key = resolved.lower()
+            if file_key in seen_files:
                 return
-            seen_files.add(key)
-            seen_names.update({_normalize_name(requested), _normalize_name(resolved)})
+            seen_files.add(file_key)
+            seen_names.update({key, _normalize_name(resolved)})
             applied.append({"requested": requested, "resolved": resolved, "weight": weight})
             return
-        # An unresolved tag that duplicates an already-applied LoRA is not news.
-        if _normalize_name(requested) in seen_names:
+        # The schema's `lora` field repeats the inline tags, so an unresolved name
+        # would otherwise be reported once per source.
+        if key in seen_names or key in seen_unresolved:
             return
+        seen_unresolved.add(key)
         unresolved.append(requested)
 
     for tag in tags:
@@ -313,6 +342,7 @@ def build_api_graph(
     batch_size: int = 1,
     filename_prefix: str = "Genflow",
     seed_override: Optional[int] = None,
+    checkpoint_override: Optional[str] = None,
 ) -> GraphBuildResult:
     """Build a ComfyUI API-format txt2img graph from a Genflow schema."""
     result = GraphBuildResult()
@@ -323,25 +353,23 @@ def build_api_graph(
     samplers = list(samplers)
 
     # --- checkpoint ------------------------------------------------------
+    # Missing checkpoints/LoRAs are reported as structured remediation items by
+    # ComfyUIService rather than as free-text warnings, so they are not repeated here.
     requested_model = str(getattr(schema, "model", "") or "").strip()
-    resolved_checkpoint = resolve_against(requested_model, checkpoints)
-    if resolved_checkpoint:
-        result.checkpoint = resolved_checkpoint
-        result.checkpoint_resolved = True
+    override = str(checkpoint_override or "").strip()
+    if override:
+        # The caller explicitly chose this checkpoint (a remediation); honour it
+        # verbatim and only report whether ComfyUI actually has it.
+        result.checkpoint = override
+        result.checkpoint_resolved = override in checkpoints
     else:
-        result.checkpoint = requested_model
-        result.checkpoint_resolved = False
-        if not checkpoints:
-            warnings.append(
-                "ComfyUI reports no installed checkpoints; the graph references the "
-                "Genflow model name and will fail ComfyUI validation until a matching "
-                "checkpoint is placed in models/checkpoints."
-            )
+        resolved_checkpoint = resolve_against(requested_model, checkpoints)
+        if resolved_checkpoint:
+            result.checkpoint = resolved_checkpoint
+            result.checkpoint_resolved = True
         else:
-            warnings.append(
-                f"Checkpoint {requested_model!r} is not installed in ComfyUI. "
-                f"Available: {', '.join(checkpoints[:5])}"
-            )
+            result.checkpoint = requested_model
+            result.checkpoint_resolved = False
 
     # --- scalars ---------------------------------------------------------
     steps, note = _coerce_int(getattr(schema, "steps", ""), 30, minimum=1)
@@ -379,11 +407,6 @@ def build_api_graph(
     applied_loras, unresolved_loras = resolve_loras(lora_tags, loras, declared_loras)
     result.applied_loras = applied_loras
     result.unresolved_loras = unresolved_loras
-    if unresolved_loras:
-        warnings.append(
-            "These LoRAs are not installed in ComfyUI and were left out of the graph: "
-            + ", ".join(unresolved_loras)
-        )
 
     negative_prompt = str(getattr(schema, "negative_prompt", "") or "")
     _, negative_tags = split_lora_tags(negative_prompt)

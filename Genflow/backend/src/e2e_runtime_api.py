@@ -128,6 +128,15 @@ def run_episode(intent, label):
         print("   detail:", str(body)[:400])
         return
 
+    check(
+        "build reports structured remediation",
+        isinstance(body.get("remediation"), list)
+        and any(item["kind"] == "checkpoint" for item in body["remediation"]),
+        str([item["kind"] for item in body.get("remediation", [])]),
+    )
+    for item in body.get("remediation", [])[:3]:
+        print(f"  remediation[{item['kind']}]: {item['message'][:110]}")
+
     api_graph = body["api_graph"]
     ui_workflow = body["ui_workflow"]
     print(f"  api nodes: {len(api_graph)} | ui nodes: {len(ui_workflow.get('nodes', []))}")
@@ -176,6 +185,20 @@ def run_episode(intent, label):
         else:
             check("push blocked with actionable message when no checkpoint", bool(body["error"]), body["error"][:160])
             check("push did not claim success", body["pushed"] is False)
+            check(
+                "error names the offending node and input",
+                "ckpt_name" in body["error"] and "CheckpointLoaderSimple" in body["error"],
+                body["error"][:140],
+            )
+            check(
+                "error is not the opaque ComfyUI wrapper",
+                "prompt_outputs_failed_validation" not in body["error"],
+            )
+            check(
+                "failure remediation stays actionable",
+                any(item["kind"] == "checkpoint" for item in body.get("remediation", [])),
+                str([item["kind"] for item in body.get("remediation", [])]),
+            )
 
 
 if __name__ == "__main__":

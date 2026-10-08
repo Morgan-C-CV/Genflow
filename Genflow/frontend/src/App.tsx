@@ -31,6 +31,7 @@ const DEFAULT_OPTIONS: WorkflowOptions = {
   batch_size: 1,
   seed: null,
   filename_prefix: "Genflow",
+  checkpoint_override: null,
 };
 
 let entryCounter = 0;
@@ -231,6 +232,7 @@ export default function App() {
       setWorkflow(null);
       setPush(null);
       setImages([]);
+      setOptions(DEFAULT_OPTIONS);
       log("user", intent);
 
       try {
@@ -520,6 +522,42 @@ export default function App() {
     }
   }, [session, options, describeError, log]);
 
+  const handleApplyCheckpoint = useCallback(
+    async (checkpoint: string) => {
+      if (!session) return;
+      const next: WorkflowOptions = {
+        ...options,
+        checkpoint_override: checkpoint,
+      };
+      setOptions(next);
+      setBusy(true);
+      setImages([]);
+      log("user", `Use checkpoint ${checkpoint}`);
+      try {
+        const pushed = await api.pushWorkflow(session.session_id, next);
+        setWorkflow(pushed);
+        setPush(pushed);
+        if (pushed.pushed) {
+          log(
+            "agent",
+            `Queued in ComfyUI with checkpoint ${checkpoint}, prompt_id ${pushed.prompt_id}.`,
+          );
+        } else {
+          log("system", pushed.error || "Push failed.", { tone: "error" });
+        }
+      } catch (error) {
+        log(
+          "system",
+          describeError(error, "Failed to push with the chosen checkpoint."),
+          { tone: "error" },
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session, options, describeError, log],
+  );
+
   const handleRefreshResult = useCallback(async () => {
     if (!push?.prompt_id) return;
     try {
@@ -629,6 +667,7 @@ export default function App() {
               comfyStatus={comfyStatus}
               onBuild={handleBuild}
               onPush={handlePush}
+              onApplyCheckpoint={handleApplyCheckpoint}
               onRefreshResult={handleRefreshResult}
             />
           )}

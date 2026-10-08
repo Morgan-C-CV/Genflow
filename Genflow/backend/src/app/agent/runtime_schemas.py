@@ -99,6 +99,7 @@ class RuntimeWorkflowRequest(BaseModel):
     batch_size: int = Field(default=1, ge=1, le=16)
     seed: Optional[int] = Field(default=None, ge=0)
     filename_prefix: str = "Genflow"
+    checkpoint_override: Optional[str] = None
 
 
 class RuntimeStartResponse(BaseModel):
@@ -138,6 +139,20 @@ class RuntimeResultResponse(BaseModel):
     summary: Dict[str, Any] = Field(default_factory=dict)
 
 
+class RuntimeRemediationItem(BaseModel):
+    """An actionable fix for something ComfyUI cannot satisfy."""
+
+    kind: str = ""
+    node_id: str = ""
+    class_type: str = ""
+    input_name: str = ""
+    requested: str = ""
+    installed: List[str] = Field(default_factory=list)
+    suggestions: List[str] = Field(default_factory=list)
+    fixable: bool = False
+    message: str = ""
+
+
 class RuntimeWorkflowResponse(BaseModel):
     session: RuntimeSessionView
     title: str = "Genflow Workflow"
@@ -145,11 +160,14 @@ class RuntimeWorkflowResponse(BaseModel):
     ui_workflow: Dict[str, Any] = Field(default_factory=dict)
     warnings: List[str] = Field(default_factory=list)
     checkpoint: str = ""
+    requested_checkpoint: str = ""
     checkpoint_resolved: bool = False
     applied_loras: List[Dict[str, Any]] = Field(default_factory=list)
     unresolved_loras: List[str] = Field(default_factory=list)
     controls: Dict[str, Any] = Field(default_factory=dict)
     available_checkpoints: List[str] = Field(default_factory=list)
+    available_loras: List[str] = Field(default_factory=list)
+    remediation: List[RuntimeRemediationItem] = Field(default_factory=list)
 
 
 class RuntimePushResponse(RuntimeWorkflowResponse):
