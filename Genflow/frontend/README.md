@@ -43,7 +43,7 @@ needed. If the backend runs elsewhere, set `VITE_API_BASE`
 | Route | Page |
 |---|---|
 | `/` | The studio — the full prompt → clarify → candidates → refine → workflow flow |
-| `/showcase/refine` | Interactive refine walkthrough over real gallery images |
+| `/showcase/refine` | End-to-end walkthrough of the real pipeline, then the refine loop |
 
 Routing is a ~40-line history-API helper (`src/router.tsx`) rather than a router
 dependency, since the app has two entry points. Vite's dev server already falls
@@ -51,12 +51,25 @@ back to `index.html`, so a hard refresh on `/showcase/refine` works.
 
 ### `/showcase/refine`
 
-A self-contained walkthrough of the shift/modify loop: pick a gallery image as
-the baseline result, then give feedback and walk Σ0 → Σ7 — parsed axes, three
-ranked HCS probes, preview, commit, execute, verify. It drives the **real**
-modify endpoints and the real ranking pipeline, but skips the create path — the
-baseline schema comes straight from the gallery record — so it costs no LLM
-calls.
+An end-to-end walkthrough of the **real** pipeline, in five phases:
+
+1. **Intent** — the prompt that opens the session
+2. **Clarify** — the planner's questions, if it asks any
+3. **Candidates** — the expansion model's queries and the 16-image wall
+4. **Schema** — the generation model's composed schema
+5. **Refine** — the shift/modify loop: parsed axes, three ranked HCS probes,
+   preview, commit, execute, verify
+
+Nothing is fabricated — the planner, expansion and generation models are all
+called for that session, so the walkthrough spends real LLM calls (the page shows
+a running count). Execution inside the refine loop still goes through the repo's
+mock `ResultExecutor`, which returns payloads and summaries rather than rendered
+pixels; push the workflow from the studio to actually render.
+
+> An earlier version of this page skipped the create path and synthesised a
+> baseline schema from a gallery record. That shortcut is gone. The
+> `POST /showcase/modify` endpoint it used still exists and is exercised by
+> `e2e_runtime_api.py`, but no UI calls it.
 
 ## LLM configuration
 
@@ -124,11 +137,15 @@ Routes are defined in `backend/src/app/api/v1/endpoints/runtime.py`
 | GET | `/comfyui/status` | ComfyUI reachability and available assets |
 | GET | `/gallery/images` | Gallery index listing (served without warming the embedding stack) |
 | GET | `/gallery/image/{index}?w=` | Original image, or a cached downscaled thumbnail |
-| POST | `/showcase/episode` | Planner-free session over hand-picked gallery images |
-| POST | `/showcase/modify` | Planner-free baseline result to run the modify loop on |
+| POST | `/showcase/episode` | Planner-free session over hand-picked gallery images (used by tooling only) |
+| POST | `/showcase/modify` | Planner-free baseline result for the modify loop (used by `e2e_runtime_api.py`; no UI calls it) |
 
 The `/refine/*` PBO endpoints from an earlier iteration are still served for
 `backend/src/tests/cli_test.py`; the UI no longer uses them.
+
+Neither `/showcase/*` endpoint is used by `/showcase/refine` any more — that page
+drives the ordinary `/episodes/*` pipeline so the planner, expansion and
+generation models all run.
 
 Gallery originals average ~1.8 MB (some exceed 20 MB at 2560×3712), so grids
 request `?w=640` thumbnails. Those are generated once with Pillow and cached in

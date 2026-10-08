@@ -1352,6 +1352,19 @@ button {
   text-decoration: underline;
 }
 
+.showcase-meter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.showcase-meter .sigma-rail {
+  margin-bottom: 0;
+}
+
 .showcase-error {
   background: var(--bad-soft);
   border: 1px solid var(--bad-border);
