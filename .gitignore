@@ -36,3 +36,5 @@ ComfyUI/
 **/backend/.venv/
 Genflow/frontend/node_modules/
 Genflow/frontend/dist/
+# Cached gallery thumbnails
+Genflow/backend/.thumbnails/

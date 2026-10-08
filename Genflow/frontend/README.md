@@ -40,6 +40,25 @@ The Vite dev server proxies `/api` to `127.0.0.1:8000`, so no extra CORS setup i
 needed. If the backend runs elsewhere, set `VITE_API_BASE`
 (e.g. `VITE_API_BASE=http://10.0.0.5:8000/api/v1`).
 
+## Routes
+
+| Route | Page |
+|---|---|
+| `/` | The studio — the full prompt → clarify → candidates → refine → workflow flow |
+| `/showcase/refine` | Interactive refine walkthrough over real gallery images |
+
+Routing is a ~40-line history-API helper (`src/router.tsx`) rather than a router
+dependency, since the app has two entry points. Vite's dev server already falls
+back to `index.html`, so a hard refresh on `/showcase/refine` works.
+
+### `/showcase/refine`
+
+A self-contained walkthrough of the preference search: pick seed images from the
+gallery, then run rounds of six candidates, marking **Best** and **Worst**, and
+finish to see the model's chosen match. It drives the **real** refinement
+endpoints and the real Gaussian-process fit, but skips the planner and retrieval
+pipeline — the seed wall is whatever you pick — so it costs no LLM calls.
+
 ## LLM configuration
 
 The backend uses the **DeepSeek official endpoint** by default
@@ -100,7 +119,14 @@ Routes are defined in `backend/src/app/api/v1/endpoints/runtime.py`
 | POST | `/episodes/{id}/workflow/push` | Build and push to the ComfyUI queue |
 | GET | `/workflow/result/{prompt_id}` | Poll for generated images |
 | GET | `/comfyui/status` | ComfyUI reachability and available assets |
-| GET | `/gallery/image/{index}` | Gallery thumbnails |
+| GET | `/gallery/images` | Gallery index listing (served without warming the embedding stack) |
+| GET | `/gallery/image/{index}?w=` | Original image, or a cached downscaled thumbnail |
+| POST | `/showcase/episode` | Planner-free session over hand-picked gallery images |
+
+Gallery originals average ~1.8 MB (some exceed 20 MB at 2560×3712), so grids
+request `?w=640` thumbnails. Those are generated once with Pillow and cached in
+`Genflow/backend/.thumbnails/` — a 24 MB original becomes ~39 KB and is served
+in ~2 ms once cached.
 
 ## Two things to know about the ComfyUI integration
 

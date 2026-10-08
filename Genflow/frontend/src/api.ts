@@ -9,6 +9,7 @@
 import type {
   CandidatesResponse,
   ComfyStatus,
+  GalleryListing,
   PlanResponse,
   PromptResult,
   PushResponse,
@@ -16,6 +17,7 @@ import type {
   ResultResponse,
   SchemaResponse,
   SelectResponse,
+  ShowcaseResponse,
   StartResponse,
   WorkflowOptions,
   WorkflowResponse,
@@ -188,5 +190,24 @@ export const api = {
     return request<RefineResponse>(
       `/runtime/episodes/${encodeURIComponent(sessionId)}/refine`,
     );
+  },
+
+  /** Gallery listings are served without warming the embedding stack. */
+  galleryImages(limit = 48, offset = 0) {
+    return request<GalleryListing>(
+      `/gallery/images?limit=${limit}&offset=${offset}`,
+    );
+  },
+
+  /** Planner-free session over hand-picked gallery images (showcase pages). */
+  startShowcaseEpisode(galleryIndices: number[], label = "Refine showcase") {
+    return request<ShowcaseResponse>("/runtime/showcase/episode", {
+      method: "POST",
+      body: JSON.stringify({
+        gallery_indices: galleryIndices,
+        label,
+        size: Math.max(galleryIndices.length, 16),
+      }),
+    });
   },
 };

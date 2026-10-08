@@ -36,6 +36,8 @@ from app.agent.runtime_schemas import (
     RuntimeSelectRequest,
     RuntimeSelectResponse,
     RuntimeSessionView,
+    RuntimeShowcaseRequest,
+    RuntimeShowcaseResponse,
     RuntimeStartRequest,
     RuntimeStartResponse,
     RuntimeWallView,
@@ -44,6 +46,7 @@ from app.agent.runtime_schemas import (
 )
 from app.core.config import settings
 from app.core.llm_client import active_provider
+from app.modules import gallery_catalog
 from app.repositories.comfyui_repository import ComfyUIError
 from app.services.comfyui_service import ComfyUIService
 
@@ -180,7 +183,9 @@ def _gallery_row(service, gallery_index: int) -> Dict[str, Any]:
 
 
 def _image_url_for(gallery_index: int) -> str:
-    return f"/api/v1/runtime/gallery/image/{gallery_index}"
+    # The dedicated gallery route serves a cached thumbnail without touching the
+    # embedding stack, so grids render fast even before the search service is warm.
+    return gallery_catalog.image_url(gallery_index)
 
 
 def _candidate_view(service, gallery_index: int, slot: int, group_index: int, group_label: str) -> RuntimeCandidateView:
@@ -562,45 +567,46 @@ def workflow_result(prompt_id: str):
 
 
 def _detect_image_media_type(path: Path) -> str:
-    """Sniff the real image type; gallery files carry misleading extensions."""
-    try:
-        with path.open("rb") as handle:
-            header = handle.read(12)
-    except OSError:
-        return "application/octet-stream"
-    if header.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if header.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
-        return "image/webp"
-    if header.startswith(b"GIF8"):
-        return "image/gif"
-    return "application/octet-stream"
+    """Kept for backwards compatibility; delegates to the shared catalog."""
+    return gallery_catalog.media_type(path)
 
 
 @router.get("/gallery/image/{gallery_index}")
 def gallery_image(gallery_index: int):
+    """Serve a gallery thumbnail without initialising the embedding stack."""
+    try:
+        path = gallery_catalog.image_path(gallery_index)
+    except gallery_catalog.GalleryImageNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return FileResponse(path, media_type=gallery_catalog.media_type(path))
+
+
+# ---------------------------------------------------------------------------
+# refine showcase
+# ---------------------------------------------------------------------------
+
+
+@router.post("/showcase/episode", response_model=RuntimeShowcaseResponse)
+def start_showcase_episode(request: RuntimeShowcaseRequest):
+    """Fabricate a session over chosen gallery images.
+
+    Lets the preference-search UI be exercised against the real PBO loop without
+    running the planner or the retrieval pipeline.
+    """
     service = get_runtime_service()
     try:
-        row = _gallery_row(service, gallery_index)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    gallery_dir = Path(settings.GALLERY_DIR) if settings.GALLERY_DIR else None
-    if gallery_dir is None or not gallery_dir.is_dir():
-        raise HTTPException(status_code=500, detail="GALLERY_DIR is not configured.")
-
-    local_path = str(row.get("local_path", "") or "")
-    if not local_path:
-        local_path = f"image_{row.get('id')}.jpg"
-
-    # Contain the resolved path inside the gallery directory.
-    candidate = (gallery_dir / local_path).resolve()
-    root = gallery_dir.resolve()
-    if root not in candidate.parents and candidate != root:
-        raise HTTPException(status_code=400, detail="Resolved image path escapes the gallery directory.")
-    if not candidate.is_file():
-        raise HTTPException(status_code=404, detail=f"Image file not found: {local_path}")
-
-    return FileResponse(candidate, media_type=_detect_image_media_type(candidate))
+        session = service.start_showcase_session(
+            gallery_indices=request.gallery_indices,
+            label=request.label,
+            size=request.size,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RuntimeShowcaseResponse(
+        session=_session_view(session),
+        wall=_wall_view(service, session),
+    )

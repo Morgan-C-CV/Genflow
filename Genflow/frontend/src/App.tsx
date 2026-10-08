@@ -41,7 +41,7 @@ function nextId(): string {
 }
 
 function imageUrlFor(galleryIndex: number): string {
-  return `/api/v1/runtime/gallery/image/${galleryIndex}`;
+  return `/api/v1/gallery/image/${galleryIndex}?w=768`;
 }
 
 export default function App() {

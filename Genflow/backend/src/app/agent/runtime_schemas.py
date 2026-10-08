@@ -225,3 +225,16 @@ class RuntimeRefineResponse(BaseModel):
     refinement: RuntimeRefinementView
     anchor_summary: str = ""
     selected_reference_ids: List[int] = Field(default_factory=list)
+
+
+class RuntimeShowcaseRequest(BaseModel):
+    """Hand-picked gallery images for a planner-free refinement session."""
+
+    gallery_indices: List[int] = Field(default_factory=list)
+    label: str = "Refine showcase"
+    size: int = Field(default=16, ge=2, le=64)
+
+
+class RuntimeShowcaseResponse(BaseModel):
+    session: RuntimeSessionView
+    wall: RuntimeWallView

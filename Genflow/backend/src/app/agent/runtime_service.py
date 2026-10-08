@@ -33,6 +33,7 @@ from app.agent.workflow_patch_commit_selector import select_commit_patch_winner
 from app.agent.runtime_models import ExecutionRecoveryDirective, ExecutionSourceEvidenceSummary, PreviewProbe
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
+from app.agents.creative_agent import CandidateWall, CreativeIntentPlan
 
 
 @dataclass
@@ -291,6 +292,60 @@ class AgentRuntimeService:
         session.pbo_current_candidates = []
         self.memory_service.save_session(session)
         return self.select_initial_reference(session_id, best_index)
+
+    def start_showcase_session(
+        self,
+        gallery_indices: Optional[list[int]] = None,
+        label: str = "Refine showcase",
+        size: int = 16,
+    ) -> AgentSessionState:
+        """Create a session over hand-picked gallery images.
+
+        The planner and retrieval pipeline are skipped: the seed wall is whatever
+        the caller supplies, so the refinement loop still runs against real
+        gallery embeddings.
+        """
+        total = len(self.search_service.search_repo.search_engine.pbo_space)
+
+        requested: list[int] = []
+        for value in gallery_indices or []:
+            try:
+                index = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= index < total and index not in requested:
+                requested.append(index)
+
+        if not requested:
+            if total < size:
+                raise ValueError(f"The gallery only holds {total} images; need at least {size}.")
+            step = max(1, total // size)
+            requested = [min(total - 1, position * step) for position in range(size)]
+        requested = requested[: max(size, 1)]
+
+        session = self.memory_service.create_session(label)
+        session.clarified_intent = label
+        session.plan = CreativeIntentPlan(
+            user_intent=label,
+            fixed_constraints={},
+            free_variables=[],
+            locked_axes=[],
+            unclear_axes=[],
+            next_action="retrieve_resources",
+            clarification_questions=[],
+            reasoning_summary=(
+                "Showcase session: the candidate wall was supplied directly, so the "
+                "preference search runs without the planner or retrieval pipeline."
+            ),
+        )
+
+        groups = [requested[start : start + 2] for start in range(0, len(requested), 2)]
+        session.latest_wall = CandidateWall(
+            groups=groups,
+            flat_indices=list(requested),
+            query_labels=[f"Showcase group {position}" for position in range(1, len(groups) + 1)],
+        )
+        return self.memory_service.save_session(session)
 
     def generate_initial_schema(self, session_id: str) -> AgentSessionState:
         session = self.memory_service.get_session(session_id)

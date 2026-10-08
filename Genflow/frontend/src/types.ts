@@ -223,3 +223,20 @@ export interface RefineResponse {
   anchor_summary: string;
   selected_reference_ids: number[];
 }
+
+export interface GalleryImage {
+  index: number;
+  id: string;
+  url: string;
+}
+
+export interface GalleryListing {
+  total: number;
+  offset: number;
+  images: GalleryImage[];
+}
+
+export interface ShowcaseResponse {
+  session: RuntimeSession;
+  wall: RuntimeWall;
+}
