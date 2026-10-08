@@ -49,6 +49,9 @@ export default function WorkflowStage({
 }: WorkflowStageProps) {
   const [tab, setTab] = useState<Tab>("api");
 
+  // No matching checkpoint/LoRA: still pushable, but say so on hover.
+  const pushAnyway = Boolean(workflow && !workflow.checkpoint_resolved);
+
   const setNumber = (key: keyof WorkflowOptions, raw: string) => {
     const parsed = Number.parseInt(raw, 10);
     if (Number.isNaN(parsed)) return;
@@ -75,16 +78,21 @@ export default function WorkflowStage({
           </button>
           <button
             type="button"
-            className="primary"
+            className={`primary push-button ${pushAnyway ? "push-anyway" : ""}`}
             onClick={onPush}
-            disabled={busy || !workflow?.checkpoint_resolved}
-            title={
-              workflow && !workflow.checkpoint_resolved
-                ? "No matching checkpoint, cannot execute"
-                : undefined
-            }
+            disabled={busy}
+            title={pushAnyway ? "Push anyway" : "Push to ComfyUI queue"}
           >
-            {busy ? "Pushing…" : "Push to ComfyUI queue"}
+            {busy ? (
+              "Pushing…"
+            ) : pushAnyway ? (
+              <>
+                <span className="label-default">Push to ComfyUI queue</span>
+                <span className="label-hover">Push anyway</span>
+              </>
+            ) : (
+              "Push to ComfyUI queue"
+            )}
           </button>
         </div>
       </div>

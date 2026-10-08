@@ -406,6 +406,28 @@ button {
   align-items: center;
 }
 
+/* "Push anyway": keep the normal primary look and swap the label on hover.
+   The default label stays in flow so the button never changes size. */
+.push-button {
+  position: relative;
+}
+
+.push-button .label-hover {
+  display: none;
+}
+
+.push-button.push-anyway:hover .label-default {
+  visibility: hidden;
+}
+
+.push-button.push-anyway:hover .label-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ---------- chips ---------- */
 
 .chips {

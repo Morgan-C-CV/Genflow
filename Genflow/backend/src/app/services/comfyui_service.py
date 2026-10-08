@@ -113,13 +113,9 @@ class ComfyUIService:
             "error": "",
         }
 
-        if not built["checkpoint_resolved"]:
-            payload["error"] = (
-                f"No installed ComfyUI checkpoint matches {built['checkpoint']!r}. "
-                "Add a checkpoint to ComfyUI/models/checkpoints before running."
-            )
-            return payload
-
+        # Always attempt the submission, even when no checkpoint or LoRA matched.
+        # The caller may deliberately push anyway; ComfyUI then validates the
+        # graph and its node_errors explain exactly which value is unusable.
         try:
             response = self.repository.queue_prompt(built["api_graph"])
         except ComfyUIValidationError as exc:
