@@ -15,8 +15,7 @@ Architecture:
 """
 
 import json
-from app.core.config import settings
-from app.core.genai_client import GenAIModel
+from app.core.llm_client import build_llm_model
 
 
 # ──────────────────────────────────────────────
@@ -121,23 +120,11 @@ class LLMRepository:
     """
 
     def __init__(self):
-        if not settings.GOOGLE_API_KEY.strip():
-            raise RuntimeError(
-                "GOOGLE_API_KEY is required to initialize LLMRepository."
-            )
-
-        from google import genai
-        self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
-
-        self._summary_agent = GenAIModel(
-            client=self._client,
-            model_name=settings.GEMINI_MODEL,
+        self._summary_agent = build_llm_model(
             system_instruction=_SUMMARY_SYSTEM_INSTRUCTION,
         )
 
-        self._generation_agent = GenAIModel(
-            client=self._client,
-            model_name=settings.GEMINI_MODEL,
+        self._generation_agent = build_llm_model(
             system_instruction=_GENERATION_SYSTEM_INSTRUCTION,
             response_mime_type="application/json",
             temperature=0.7,

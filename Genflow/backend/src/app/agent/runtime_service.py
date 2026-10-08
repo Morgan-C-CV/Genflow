@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+import numpy as np
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import Matern
+
 from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.feedback_parser import FeedbackParser
 from app.agent.memory import AgentMemoryService, AgentSessionState
@@ -134,6 +138,159 @@ class AgentRuntimeService:
         session.current_gallery_anchor_summary = self._build_anchor_summary(reference_bundle)
         self._sync_workflow_state(session, execution_kind="reference_select", preview=False)
         return self.memory_service.save_session(session)
+
+    # -- PBO refinement loop ---------------------------------------------
+    #
+    # Mirrors the multi-round candidate flow: the initial wall seeds a Gaussian
+    # process, then each round proposes a fresh batch, the user marks best/worst,
+    # and the final reference is the argmax of the fitted preference model.
+
+    @property
+    def _creative_agent(self):
+        return self.orchestration_service.tools_service.creative_agent
+
+    def start_refinement(self, session_id: str, seed_indices: list[int]) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        if session.latest_wall is None or not session.latest_wall.flat_indices:
+            raise ValueError("No candidate wall available; generate candidates first.")
+
+        wall_indices = list(session.latest_wall.flat_indices)
+        seeds: list[int] = []
+        for value in seed_indices:
+            try:
+                index = int(value)
+            except (TypeError, ValueError):
+                continue
+            if index in wall_indices and index not in seeds:
+                seeds.append(index)
+        if not seeds:
+            raise ValueError("None of the supplied seeds belong to the current candidate wall.")
+
+        search_engine = self.search_service.search_repo.search_engine
+        x_train, y_train = self._creative_agent.build_training_labels(
+            pbo_space=search_engine.pbo_space,
+            selected_indices=seeds,
+            wall=session.latest_wall,
+            selected_score=1.0,
+            unselected_score=0.5,
+        )
+
+        session.pbo_active = True
+        session.pbo_finished = False
+        session.pbo_seed_indices = seeds
+        session.pbo_x_train = list(x_train)
+        session.pbo_y_train = [float(value) for value in y_train]
+        session.pbo_round_index = 0
+        session.pbo_consecutive_skips = 0
+        session.pbo_current_candidates = []
+        session.pbo_history = []
+        session.pbo_best_index = None
+        return self.memory_service.save_session(session)
+
+    def run_refinement_round(self, session_id: str, batch_size: Optional[int] = None) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        if not session.pbo_active:
+            raise ValueError("Refinement has not been started; select seeds first.")
+
+        size = int(batch_size or session.pbo_batch_size or 6)
+        search_engine = self.search_service.search_repo.search_engine
+        candidates = search_engine.run_pbo_round(
+            session.pbo_x_train,
+            session.pbo_y_train,
+            selected_indices=session.pbo_seed_indices,
+            batch_size=size,
+            consecutive_skips=session.pbo_consecutive_skips,
+        )
+        session.pbo_batch_size = size
+        session.pbo_current_candidates = [int(index) for index in candidates]
+        return self.memory_service.save_session(session)
+
+    def submit_refinement_feedback(
+        self,
+        session_id: str,
+        best_slot: Optional[int] = None,
+        worst_slot: Optional[int] = None,
+        skip: bool = False,
+    ) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        if not session.pbo_active:
+            raise ValueError("Refinement has not been started; select seeds first.")
+
+        candidates = list(session.pbo_current_candidates)
+        if not candidates:
+            raise ValueError("No refinement round is pending; run a round first.")
+
+        pbo_space = self.search_service.search_repo.search_engine.pbo_space
+
+        if skip:
+            session.pbo_consecutive_skips += 1
+            for index in candidates:
+                session.pbo_x_train.append(np.asarray(pbo_space[index]))
+                session.pbo_y_train.append(0.0)
+            session.pbo_history.append(
+                {
+                    "round": session.pbo_round_index + 1,
+                    "candidates": list(candidates),
+                    "best_slot": None,
+                    "worst_slot": None,
+                    "skipped": True,
+                }
+            )
+            session.pbo_current_candidates = []
+            return self.memory_service.save_session(session)
+
+        if best_slot is None or worst_slot is None:
+            raise ValueError("Both a best and a worst candidate are required.")
+        best = int(best_slot)
+        worst = int(worst_slot)
+        if best == worst:
+            raise ValueError("The best and worst candidates must differ.")
+        for slot in (best, worst):
+            if not 1 <= slot <= len(candidates):
+                raise ValueError(f"Slot {slot} is out of range 1..{len(candidates)}.")
+
+        session.pbo_consecutive_skips = 0
+        for position, index in enumerate(candidates, start=1):
+            session.pbo_x_train.append(np.asarray(pbo_space[index]))
+            if position == best:
+                session.pbo_y_train.append(1.0)
+            elif position == worst:
+                session.pbo_y_train.append(0.0)
+            else:
+                session.pbo_y_train.append(0.5)
+
+        session.pbo_round_index += 1
+        session.pbo_history.append(
+            {
+                "round": session.pbo_round_index,
+                "candidates": list(candidates),
+                "best_slot": best,
+                "worst_slot": worst,
+                "skipped": False,
+            }
+        )
+        session.pbo_current_candidates = []
+        return self.memory_service.save_session(session)
+
+    def finish_refinement(self, session_id: str) -> AgentSessionState:
+        session = self.memory_service.get_session(session_id)
+        if not session.pbo_active:
+            raise ValueError("Refinement has not been started; select seeds first.")
+        if len(session.pbo_x_train) < 2:
+            raise ValueError("Not enough feedback to fit the preference model.")
+
+        pbo_space = self.search_service.search_repo.search_engine.pbo_space
+        kernel = 1.0 * Matern(length_scale=1.0, nu=1.5)
+        gp = GaussianProcessRegressor(kernel=kernel, alpha=0.1, n_restarts_optimizer=5)
+        gp.fit(np.array(session.pbo_x_train), np.array(session.pbo_y_train))
+        best_index = int(np.argmax(gp.predict(pbo_space)))
+
+        session.pbo_best_index = best_index
+        session.pbo_finished = True
+        session.pbo_active = False
+        session.pbo_current_candidates = []
+        self.memory_service.save_session(session)
+        return self.select_initial_reference(session_id, best_index)
 
     def generate_initial_schema(self, session_id: str) -> AgentSessionState:
         session = self.memory_service.get_session(session_id)

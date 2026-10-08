@@ -36,6 +36,32 @@ def _compute_repo_relative_defaults():
     return default_meta, default_gallery
 
 
+def _load_deepseek_credentials() -> str:
+    """Read the DeepSeek API key from the ``.env_ds`` file, if present.
+
+    Genflow keeps the DeepSeek key in a separate file so the Gemini ``.env``
+    stays untouched. Both ``api_key=`` and ``DEEPSEEK_API_KEY=`` are accepted.
+    """
+    here = Path(__file__).resolve()
+    for parent in [here] + list(here.parents):
+        candidate = parent / ".env_ds"
+        if not candidate.is_file():
+            continue
+        try:
+            lines = candidate.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return ""
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            if key.strip().lower() in {"api_key", "deepseek_api_key"}:
+                return value.strip().strip('"').strip("'")
+        return ""
+    return ""
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -43,6 +69,14 @@ class Settings(BaseSettings):
     METADATA_PATH: str = ""
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite-preview-02-05")
     GALLERY_DIR: str = ""
+
+    # --- LLM provider selection -----------------------------------------
+    # "gemini" | "deepseek" | "" (auto: DeepSeek when a key is available).
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "")
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "") or _load_deepseek_credentials()
+    DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+    DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+    LLM_REQUEST_TIMEOUT: float = float(os.getenv("LLM_REQUEST_TIMEOUT", "300"))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -38,7 +38,10 @@ class AgentOrchestrationService:
         session.clarification_rounds += 1
 
         if clarification_closed:
-            fallback_text = "用户表示不清楚或不想继续补充，请Agent自主推断。"
+            fallback_text = (
+                "The user is unsure or does not want to add more detail; "
+                "the agent should infer the remaining axes autonomously."
+            )
             if fallback_text not in session.clarified_intent:
                 session.clarified_intent += f" | {fallback_text}"
 

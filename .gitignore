@@ -22,3 +22,17 @@ comparison_rounds/
 
 # Documentation
 doc/
+
+# Local ComfyUI install (nested clone, not part of this repo)
+ComfyUI/
+# uv download cache
+.uv-cache/
+# npm cache (kept in-workspace because the sandbox blocks ~/.npm)
+.npm-cache/
+# DeepSeek credentials - never commit
+.env_ds
+**/.env_ds
+# Local virtualenvs and build output
+**/backend/.venv/
+Genflow/frontend/node_modules/
+Genflow/frontend/dist/

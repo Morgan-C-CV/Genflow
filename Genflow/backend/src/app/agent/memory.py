@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
 
 from app.agent.runtime_models import (
@@ -120,6 +120,20 @@ class AgentSessionState:
     continue_recommended: bool = False
     stop_reason: str = ""
     verifier_confidence: float = 0.0
+    # PBO (preference Bayesian optimisation) refinement loop, mirroring the
+    # multi-round candidate flow: seeds -> rounds of candidates -> best/worst
+    # feedback -> GP argmax picks the final reference.
+    pbo_active: bool = False
+    pbo_seed_indices: List[int] = field(default_factory=list)
+    pbo_x_train: List[Any] = field(default_factory=list)
+    pbo_y_train: List[float] = field(default_factory=list)
+    pbo_round_index: int = 0
+    pbo_consecutive_skips: int = 0
+    pbo_batch_size: int = 6
+    pbo_current_candidates: List[int] = field(default_factory=list)
+    pbo_history: List[Dict[str, Any]] = field(default_factory=list)
+    pbo_finished: bool = False
+    pbo_best_index: Optional[int] = None
 
 
 class AgentMemoryService:

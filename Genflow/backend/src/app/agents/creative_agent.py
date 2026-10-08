@@ -14,9 +14,8 @@ from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import silhouette_score
 
-from app.core.config import settings
+from app.core.llm_client import build_llm_model
 from app.agents.prompts import EXPANSION_SYSTEM_INSTRUCTION, PLANNER_SYSTEM_INSTRUCTION
-from app.core.genai_client import GenAIModel
 
 
 AXES = [
@@ -94,28 +93,19 @@ class CandidateWall:
 
 class CreativeAgent:
     def __init__(self, resources_path: Optional[str] = None, model_name: Optional[str] = None):
-        api_key = settings.GOOGLE_API_KEY.strip()
-        if not api_key:
-            raise RuntimeError("GOOGLE_API_KEY is required for CreativeAgent.")
-
-        from google import genai
-        self._client = genai.Client(api_key=api_key)
-
-        self.model_name = model_name or settings.GEMINI_MODEL
-        self._planner_model = GenAIModel(
-            client=self._client,
-            model_name=self.model_name,
+        self._planner_model = build_llm_model(
+            model_name=model_name,
             system_instruction=PLANNER_SYSTEM_INSTRUCTION,
             response_mime_type="application/json",
             temperature=0.2,
         )
-        self._expander_model = GenAIModel(
-            client=self._client,
-            model_name=self.model_name,
+        self._expander_model = build_llm_model(
+            model_name=model_name,
             system_instruction=EXPANSION_SYSTEM_INSTRUCTION,
             response_mime_type="application/json",
             temperature=0.7,
         )
+        self.model_name = self._planner_model.model_name
 
         default_path = Path(__file__).with_name("resources.md")
         self.resources_path = Path(resources_path) if resources_path else default_path
@@ -575,7 +565,12 @@ class CreativeAgent:
         )
 
     def describe_wall(self, wall: CandidateWall) -> str:
-        lines = ["16 图发散矩阵的 8 个轴向分组："]
+        directions = len(wall.query_labels)
+        candidates = len(wall.flat_indices)
+        lines = [
+            f"{candidates} candidates across {directions} retrieval "
+            f"{'direction' if directions == 1 else 'directions'}:"
+        ]
         for i, label in enumerate(wall.query_labels, start=1):
             lines.append(f"- Group {i}: {label}")
         return "\n".join(lines)
@@ -629,7 +624,7 @@ class CreativeAgent:
                     expansion=expansion,
                     target_cluster_id=None,
                 ):
-                    if idx in seen_indices:
+                    if idx in seen_indices or idx in blocked_indices:
                         continue
                     group.append(idx)
                     seen_indices.add(idx)
