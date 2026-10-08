@@ -129,7 +129,6 @@ export default function ModifyShowcase() {
             </Link>
           </p>
         </div>
-        <span className="pill">/showcase/refine</span>
       </header>
 
       {error && <div className="showcase-error">{error}</div>}
