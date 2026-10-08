@@ -238,3 +238,72 @@ class RuntimeShowcaseRequest(BaseModel):
 class RuntimeShowcaseResponse(BaseModel):
     session: RuntimeSessionView
     wall: RuntimeWallView
+
+
+# ---------------------------------------------------------------------------
+# Shift/modify refinement loop (thesis 4.3)
+# ---------------------------------------------------------------------------
+
+
+class RuntimeHypothesisView(BaseModel):
+    hypothesis_id: str = ""
+    summary: str = ""
+    patch_family: str = ""
+    changed_axes: List[str] = Field(default_factory=list)
+    preserved_axes: List[str] = Field(default_factory=list)
+    rank: int = 0
+
+
+class RuntimeProbeView(BaseModel):
+    probe_id: str = ""
+    summary: str = ""
+    regime: str = ""
+    patch_family: str = ""
+    source_kind: str = ""
+    target_axes: List[str] = Field(default_factory=list)
+    preserve_axes: List[str] = Field(default_factory=list)
+    score: float = 0.0
+    rationale: List[str] = Field(default_factory=list)
+
+
+class RuntimeModifyState(BaseModel):
+    """Σ — the state record of the shift/modify path."""
+
+    stage: str = "idle"
+    round_index: int = 0
+    max_rounds: int = 3
+    feedback_text: str = ""
+    dissatisfaction_axes: List[str] = Field(default_factory=list)
+    preserve_constraints: List[str] = Field(default_factory=list)
+    requested_changes: List[str] = Field(default_factory=list)
+    uncertainty: float = 0.0
+    hypotheses: List[RuntimeHypothesisView] = Field(default_factory=list)
+    probes: List[RuntimeProbeView] = Field(default_factory=list)
+    selected_probe_id: str = ""
+    preview: Dict[str, Any] = Field(default_factory=dict)
+    committed_patch: Dict[str, Any] = Field(default_factory=dict)
+    result: Dict[str, Any] = Field(default_factory=dict)
+    verifier: Dict[str, Any] = Field(default_factory=dict)
+    continue_recommended: bool = False
+    benchmark_summary: str = ""
+    baseline: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RuntimeModifyFeedbackRequest(BaseModel):
+    feedback_text: str = Field(..., min_length=1)
+
+
+class RuntimeModifySelectRequest(BaseModel):
+    probe_id: str = Field(..., min_length=1)
+
+
+class RuntimeModifyResponse(BaseModel):
+    session: RuntimeSessionView
+    modify: RuntimeModifyState
+
+
+class RuntimeShowcaseModifyRequest(BaseModel):
+    """Baseline gallery record to modify, for the planner-free walkthrough."""
+
+    gallery_index: Optional[int] = Field(default=None, ge=0)
+    label: str = "Modify showcase"

@@ -62,6 +62,9 @@ class PreviewProbe:
     preserve_axes: List[str] = field(default_factory=list)
     preview_execution_spec: Dict[str, Any] = field(default_factory=dict)
     source_kind: str = ""
+    # Hyper Candidate Strategy regime: "close", "exploratory" or "far".
+    # HCS draws three candidates at increasing distance from the current result.
+    hcs_regime: str = ""
 
 
 @dataclass

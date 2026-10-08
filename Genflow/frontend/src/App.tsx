@@ -3,16 +3,16 @@ import { ApiError, api } from "./api";
 import CandidatesStage from "./components/CandidatesStage";
 import ClarifyStage from "./components/ClarifyStage";
 import ComposeStage from "./components/ComposeStage";
-import RefineStage from "./components/RefineStage";
+import ModifyStage from "./components/ModifyStage";
 import SidePanel, { type TranscriptEntry } from "./components/SidePanel";
 import Stepper, { type Stage } from "./components/Stepper";
 import WorkflowStage from "./components/WorkflowStage";
 import type {
   ComfyStatus,
   GeneratedImage,
+  ModifyState,
   NormalizedSchema,
   PushResponse,
-  RefinementState,
   RuntimeCandidate,
   RuntimePlan,
   RuntimeSession,
@@ -20,10 +20,6 @@ import type {
   WorkflowOptions,
   WorkflowResponse,
 } from "./types";
-
-/** Mirrors the CLI's exploitation loop length. */
-const MAX_REFINE_ROUNDS = 8;
-const REFINE_BATCH_SIZE = 6;
 
 const DEFAULT_OPTIONS: WorkflowOptions = {
   width: 1024,
@@ -53,7 +49,7 @@ export default function App() {
 
   const [wall, setWall] = useState<RuntimeWall | null>(null);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
-  const [refinement, setRefinement] = useState<RefinementState | null>(null);
+  const [modify, setModify] = useState<ModifyState | null>(null);
 
   const [schema, setSchema] = useState<NormalizedSchema | null>(null);
   const [rawMetadata, setRawMetadata] = useState("");
@@ -157,11 +153,9 @@ export default function App() {
     if (session) list.push("compose");
     if (session && plan && plan.next_action !== "ask_user") list.push("clarify");
     if (wall) list.push("candidates");
-    if (session?.selected_gallery_index !== null && session?.selected_gallery_index !== undefined) {
-      list.push("refine");
-    }
+    if (modify && modify.stage === "verified") list.push("modify");
     return list;
-  }, [session, plan, wall]);
+  }, [session, plan, wall, modify]);
 
   /** The image the reference bundle was built from (for the workflow thumbnail). */
   const anchorCandidate = useMemo<RuntimeCandidate | null>(() => {
@@ -226,7 +220,7 @@ export default function App() {
       setBusy(true);
       setWall(null);
       setSelectedIndices([]);
-      setRefinement(null);
+      setModify(null);
       setSchema(null);
       setRawMetadata("");
       setWorkflow(null);
@@ -301,14 +295,10 @@ export default function App() {
   );
 
   const toggleCandidate = useCallback((candidate: RuntimeCandidate) => {
-    setSelectedIndices((previous) =>
-      previous.includes(candidate.gallery_index)
-        ? previous.filter((index) => index !== candidate.gallery_index)
-        : [...previous, candidate.gallery_index],
-    );
+    setSelectedIndices([candidate.gallery_index]);
   }, []);
 
-  /** Shared tail: build the reference bundle result into a schema + result. */
+  /** Create stage tail: build the reference result into a schema + result, then refine. */
   const runSchemaAndResult = useCallback(
     async (sessionId: string) => {
       log("agent", "Reference bundle ready. Generating metadata / schema…");
@@ -323,7 +313,7 @@ export default function App() {
       try {
         const result = await api.produceResult(sessionId);
         setSession(result.session);
-        log("agent", "Initial result produced. Ready to push to ComfyUI.");
+        log("agent", "Initial result produced. You can now refine it.");
       } catch (error) {
         log(
           "system",
@@ -334,7 +324,17 @@ export default function App() {
           { tone: "muted" },
         );
       }
-      setStage("workflow");
+
+      // Open the modify state so the feedback box is ready immediately.
+      try {
+        const modifyState = await api.modifyState(sessionId);
+        setModify(modifyState.modify);
+      } catch (error) {
+        log("system", describeError(error, "Could not open the refine loop."), {
+          tone: "muted",
+        });
+      }
+      setStage("modify");
     },
     [describeError, log],
   );
@@ -358,127 +358,103 @@ export default function App() {
     }
   }, [session, selectedIndices, describeError, log, runSchemaAndResult]);
 
-  const handleStartRefine = useCallback(async () => {
-    if (!session || selectedIndices.length === 0) return;
-    setBusy(true);
-    log("user", `Refine seeds: ${selectedIndices.join(", ")}`);
-    try {
-      const response = await api.startRefinement(session.session_id, selectedIndices);
-      setRefinement(response.refinement);
-      setStage("refine");
-      log(
-        "agent",
-        `Preference search seeded with ${response.refinement.seed_indices.length} image(s). Run a round to see candidates.`,
-      );
-    } catch (error) {
-      log("system", describeError(error, "Could not start refinement."), {
-        tone: "error",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }, [session, selectedIndices, describeError, log]);
+  /* ---------- shift/modify loop (thesis 4.3) ---------- */
 
-  const handleRunRound = useCallback(async () => {
-    if (!session) return;
-    setBusy(true);
-    try {
-      const response = await api.refinementRound(session.session_id, REFINE_BATCH_SIZE);
-      setRefinement(response.refinement);
-      setSession(response.session);
-      log(
-        "agent",
-        `Round ${response.refinement.round_index + 1}: ${response.refinement.pending_candidates.length} candidates. Mark the best and worst.`,
-      );
-    } catch (error) {
-      log("system", describeError(error, "Could not run a refinement round."), {
-        tone: "error",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }, [session, describeError, log]);
-
-  const advanceAfterFeedback = useCallback(
-    async (sessionId: string, roundIndex: number) => {
-      if (roundIndex >= MAX_REFINE_ROUNDS) {
-        log(
-          "agent",
-          `Reached ${MAX_REFINE_ROUNDS} rounds. Finish to use the best match.`,
-        );
-        return;
-      }
-      const next = await api.refinementRound(sessionId, REFINE_BATCH_SIZE);
-      setRefinement(next.refinement);
-      setSession(next.session);
-    },
-    [log],
-  );
-
-  const handleSubmitFeedback = useCallback(
-    async (bestSlot: number, worstSlot: number) => {
+  const runModify = useCallback(
+    async (
+      action: (sessionId: string) => Promise<{ modify: ModifyState }>,
+      label: string,
+    ) => {
       if (!session) return;
       setBusy(true);
-      log("user", `Round feedback — best #${bestSlot}, worst #${worstSlot}`);
       try {
-        const response = await api.refinementFeedback(session.session_id, {
-          best_slot: bestSlot,
-          worst_slot: worstSlot,
-        });
-        setRefinement(response.refinement);
-        setSession(response.session);
-        await advanceAfterFeedback(session.session_id, response.refinement.round_index);
+        const response = await action(session.session_id);
+        setModify(response.modify);
+        log("agent", label);
       } catch (error) {
-        log("system", describeError(error, "Could not submit feedback."), {
+        log("system", describeError(error, "The refinement step failed."), {
           tone: "error",
         });
       } finally {
         setBusy(false);
       }
     },
-    [session, describeError, log, advanceAfterFeedback],
+    [session, describeError, log],
   );
 
-  const handleSkipRound = useCallback(async () => {
-    if (!session) return;
-    setBusy(true);
-    log("user", "Skip this round");
-    try {
-      const response = await api.refinementFeedback(session.session_id, { skip: true });
-      setRefinement(response.refinement);
-      setSession(response.session);
-      await advanceAfterFeedback(session.session_id, response.refinement.round_index);
-    } catch (error) {
-      log("system", describeError(error, "Could not skip the round."), {
-        tone: "error",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }, [session, describeError, log, advanceAfterFeedback]);
+  const handleModifyFeedback = useCallback(
+    async (text: string) => {
+      if (!session) return;
+      setBusy(true);
+      log("user", text);
+      try {
+        const response = await api.modifyFeedback(session.session_id, text);
+        setModify(response.modify);
+        const axes = response.modify.dissatisfaction_axes.join(", ") || "none";
+        log(
+          "agent",
+          `Parsed axes: ${axes}. Built ${response.modify.hypotheses.length} hypotheses and sampled ${response.modify.probes.length} probes.`,
+        );
+      } catch (error) {
+        log("system", describeError(error, "Feedback analysis failed."), {
+          tone: "error",
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session, describeError, log],
+  );
 
-  const handleFinishRefine = useCallback(async () => {
+  const handleSelectProbe = useCallback(
+    (probeId: string) =>
+      void runModify(
+        (id) => api.modifySelect(id, probeId),
+        `Selected probe ${probeId}.`,
+      ),
+    [runModify],
+  );
+
+  const handleModifyPreview = useCallback(
+    () =>
+      void runModify(
+        (id) => api.modifyPreview(id),
+        "Preview rendered. The committed schema is untouched.",
+      ),
+    [runModify],
+  );
+
+  const handleModifyCommit = useCallback(
+    () => void runModify((id) => api.modifyCommit(id), "Patch committed to the schema."),
+    [runModify],
+  );
+
+  const handleModifyExecute = useCallback(
+    () =>
+      void runModify(
+        (id) => api.modifyExecute(id),
+        "Executed the committed patch.",
+      ),
+    [runModify],
+  );
+
+  const handleModifyVerify = useCallback(async () => {
     if (!session) return;
     setBusy(true);
-    log("agent", "Fitting the preference model to pick the best match…");
     try {
-      const response = await api.finishRefinement(session.session_id);
-      setRefinement(response.refinement);
-      setSession(response.session);
-      setAnchorSummary(response.anchor_summary);
+      const response = await api.modifyVerify(session.session_id);
+      setModify(response.modify);
+      const verifier = response.modify.verifier ?? {};
       log(
         "agent",
-        `Best match selected (gallery index ${response.refinement.best_index}), reference bundle built from ${response.selected_reference_ids.length} images.`,
+        `Verified round ${response.modify.round_index}: improved=${verifier.improved}, confidence=${verifier.confidence}, continue=${response.modify.continue_recommended}.`,
       );
-      await runSchemaAndResult(session.session_id);
     } catch (error) {
-      log("system", describeError(error, "Could not finish refinement."), {
-        tone: "error",
-      });
+      log("system", describeError(error, "Verification failed."), { tone: "error" });
     } finally {
       setBusy(false);
     }
-  }, [session, describeError, log, runSchemaAndResult]);
+  }, [session, describeError, log]);
 
   const handleBuild = useCallback(async () => {
     if (!session) return;
@@ -579,12 +555,12 @@ export default function App() {
   const handleJump = useCallback(
     (target: Stage) => {
       if (target === "workflow" && !schema) return;
-      if (target === "refine" && !refinement && !schema) return;
+      if (target === "modify" && !modify && !schema) return;
       if (target === "candidates" && !wall) return;
       if (target === "clarify" && !plan) return;
       setStage(target);
     },
-    [schema, wall, plan, refinement],
+    [schema, wall, plan, modify],
   );
 
   const handleRefreshCandidates = useCallback(() => {
@@ -630,25 +606,64 @@ export default function App() {
             <CandidatesStage
               wall={wall}
               busy={busy}
-              selectedIndices={selectedIndices}
-              onToggle={toggleCandidate}
+              selectedIndex={selectedIndices[0] ?? null}
+              onSelect={toggleCandidate}
               onRefresh={handleRefreshCandidates}
-              onRefine={handleStartRefine}
-              onUseDirectly={handleUseDirectly}
+              onConfirm={handleUseDirectly}
             />
           )}
 
-          {stage === "refine" && refinement && (
-            <RefineStage
-              refinement={refinement}
+          {stage === "modify" && modify && (
+            <ModifyStage
+              modify={modify}
               busy={busy}
-              maxRounds={MAX_REFINE_ROUNDS}
-              onRunRound={handleRunRound}
-              onSubmitFeedback={handleSubmitFeedback}
-              onSkipRound={handleSkipRound}
-              onFinish={handleFinishRefine}
-              onBackToCandidates={() => setStage("candidates")}
+              onFeedback={(text) => void handleModifyFeedback(text)}
+              onSelectProbe={handleSelectProbe}
+              onPreview={handleModifyPreview}
+              onCommit={handleModifyCommit}
+              onExecute={handleModifyExecute}
+              onVerify={() => void handleModifyVerify()}
+              onContinue={() => setStage("workflow")}
             />
+          )}
+
+          {stage === "modify" && !modify && schema && (
+            <div className="stage">
+              <h1>Refine the current result</h1>
+              <p className="lede">
+                A result is ready. Describe what you would change about it to start the
+                refinement loop.
+              </p>
+              <div className="compose-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => {
+                    if (!session) return;
+                    setBusy(true);
+                    api
+                      .modifyState(session.session_id)
+                      .then((response) => setModify(response.modify))
+                      .catch((error) =>
+                        log("system", describeError(error, "Could not load the refine state."), {
+                          tone: "error",
+                        }),
+                      )
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Start refining
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setStage("workflow")}
+                >
+                  Skip to workflow
+                </button>
+              </div>
+            </div>
           )}
 
           {stage === "workflow" && (

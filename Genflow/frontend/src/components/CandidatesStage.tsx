@@ -3,25 +3,25 @@ import type { RuntimeCandidate, RuntimeWall } from "../types";
 interface CandidatesStageProps {
   wall: RuntimeWall;
   busy: boolean;
-  selectedIndices: number[];
-  onToggle: (candidate: RuntimeCandidate) => void;
+  selectedIndex: number | null;
+  onSelect: (candidate: RuntimeCandidate) => void;
   onRefresh: () => void;
-  onRefine: () => void;
-  onUseDirectly: () => void;
+  onConfirm: () => void;
 }
 
+/**
+ * Creation stage candidate wall (thesis 4.2.4): 8 expansions x 2 records, with a
+ * refresh that blocks everything already shown. Selecting one record is the
+ * preference evidence the rest of the pipeline inherits from.
+ */
 export default function CandidatesStage({
   wall,
   busy,
-  selectedIndices,
-  onToggle,
+  selectedIndex,
+  onSelect,
   onRefresh,
-  onRefine,
-  onUseDirectly,
+  onConfirm,
 }: CandidatesStageProps) {
-  const selected = new Set(selectedIndices);
-  const selectedCount = selectedIndices.length;
-
   // Preserve the group ordering the agent returned, one row per direction.
   const groups: { label: string; items: RuntimeCandidate[] }[] = [];
   for (const candidate of wall.candidates) {
@@ -36,11 +36,11 @@ export default function CandidatesStage({
     <div className="stage candidates-stage">
       <div className="stage-head">
         <div>
-          <h1>Pick seed images</h1>
+          <h1>Pick a reference image</h1>
           <p className="lede">
             {wall.candidates.length} images across {groups.length} retrieval
-            directions. Select one or more seeds, then refine them with a
-            preference search or use a single one directly.
+            directions. Your choice becomes the reference the workflow is composed
+            from.
           </p>
         </div>
         <button type="button" className="ghost" onClick={onRefresh} disabled={busy}>
@@ -50,32 +50,19 @@ export default function CandidatesStage({
 
       <div className="selection-bar">
         <span className="selection-count">
-          {selectedCount === 0
-            ? "No images selected"
-            : `${selectedCount} image${selectedCount === 1 ? "" : "s"} selected`}
+          {selectedIndex === null
+            ? "No image selected"
+            : `Selected image #${selectedIndex}`}
         </span>
         <div className="actions">
           <button
             type="button"
-            className="ghost"
-            onClick={onUseDirectly}
-            disabled={busy || selectedCount !== 1}
-            title={
-              selectedCount === 1
-                ? undefined
-                : "Select exactly one image to use it directly"
-            }
-          >
-            Use selected image directly
-          </button>
-          <button
-            type="button"
             className="primary"
-            onClick={onRefine}
-            disabled={busy || selectedCount === 0}
-            title={selectedCount === 0 ? "Select at least one image" : undefined}
+            onClick={onConfirm}
+            disabled={busy || selectedIndex === null}
+            title={selectedIndex === null ? "Select an image first" : undefined}
           >
-            {busy ? "Working…" : "Refine with preference search"}
+            {busy ? "Working…" : "Use this image →"}
           </button>
         </div>
       </div>
@@ -87,13 +74,13 @@ export default function CandidatesStage({
           </h3>
           <div className="candidate-grid">
             {group.items.map((candidate) => {
-              const isSelected = selected.has(candidate.gallery_index);
+              const isSelected = selectedIndex === candidate.gallery_index;
               return (
                 <button
                   key={candidate.gallery_index}
                   type="button"
                   className={`candidate-card plain ${isSelected ? "selected" : ""}`}
-                  onClick={() => onToggle(candidate)}
+                  onClick={() => onSelect(candidate)}
                   disabled={busy}
                   aria-pressed={isSelected}
                 >

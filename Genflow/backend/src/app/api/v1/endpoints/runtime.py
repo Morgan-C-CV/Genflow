@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from app.agent.memory import AgentMemoryService, AgentSessionState
+from app.agent.runtime_models import PreviewProbe
 from app.agent.runtime_schemas import (
     ComfyUIStatusResponse,
     RuntimeCandidatesRequest,
@@ -22,8 +23,14 @@ from app.agent.runtime_schemas import (
     RuntimeCandidateView,
     RuntimeClarifyRequest,
     RuntimeExpansionView,
+    RuntimeHypothesisView,
+    RuntimeModifyFeedbackRequest,
+    RuntimeModifyResponse,
+    RuntimeModifySelectRequest,
+    RuntimeModifyState,
     RuntimePlanResponse,
     RuntimePlanView,
+    RuntimeProbeView,
     RuntimePushResponse,
     RuntimeRecommendationView,
     RuntimeRefineFeedbackRequest,
@@ -36,6 +43,7 @@ from app.agent.runtime_schemas import (
     RuntimeSelectRequest,
     RuntimeSelectResponse,
     RuntimeSessionView,
+    RuntimeShowcaseModifyRequest,
     RuntimeShowcaseRequest,
     RuntimeShowcaseResponse,
     RuntimeStartRequest,
@@ -610,3 +618,221 @@ def start_showcase_episode(request: RuntimeShowcaseRequest):
         session=_session_view(session),
         wall=_wall_view(service, session),
     )
+
+
+# ---------------------------------------------------------------------------
+# shift/modify refinement loop (thesis 4.3)
+#
+#   Sigma0 --feedback--> Sigma1 --hypotheses--> Sigma2 --probes--> Sigma3
+#          --preview--> Sigma4 --commit--> Sigma5 --execute--> Sigma6 --verify--> Sigma7
+# ---------------------------------------------------------------------------
+
+MODIFY_MAX_ROUNDS = 3
+
+
+def _probe_view(probe: PreviewProbe) -> RuntimeProbeView:
+    spec = probe.preview_execution_spec or {}
+    return RuntimeProbeView(
+        probe_id=probe.probe_id,
+        summary=probe.summary,
+        regime=probe.hcs_regime or str(spec.get("hcs_regime", "")),
+        patch_family=str(spec.get("patch_family", "")),
+        source_kind=probe.source_kind,
+        target_axes=list(probe.target_axes),
+        preserve_axes=list(probe.preserve_axes),
+        score=float(spec.get("pbo_score", 0.0) or 0.0),
+        rationale=[str(item) for item in (spec.get("pbo_rationale") or [])],
+    )
+
+
+def _modify_view(session: AgentSessionState) -> RuntimeModifyState:
+    evidence = session.parsed_feedback
+
+    preview: Dict[str, Any] = {}
+    if session.preview_probe_results:
+        latest = session.preview_probe_results[-1]
+        preview = {
+            "probe_id": latest.probe_id,
+            "summary": _to_serializable(latest.summary),
+            "payload": _to_serializable(latest.payload),
+            "comparison_notes": list(latest.comparison_notes),
+        }
+
+    return RuntimeModifyState(
+        stage=session.modify_stage or "idle",
+        round_index=session.modify_round_index,
+        max_rounds=MODIFY_MAX_ROUNDS,
+        feedback_text=session.modify_feedback_text or session.latest_feedback,
+        dissatisfaction_axes=list(evidence.dissatisfaction_scope),
+        preserve_constraints=list(evidence.preserve_constraints),
+        requested_changes=list(evidence.requested_changes),
+        uncertainty=float(evidence.uncertainty_estimate),
+        hypotheses=[
+            RuntimeHypothesisView(
+                hypothesis_id=item.hypothesis_id,
+                summary=item.summary,
+                patch_family=item.likely_patch_family,
+                changed_axes=list(item.likely_changed_axes),
+                preserved_axes=list(item.likely_preserved_axes),
+                rank=item.rank,
+            )
+            for item in session.repair_hypotheses
+        ],
+        probes=[_probe_view(item) for item in session.preview_probe_candidates],
+        selected_probe_id=session.selected_probe.probe_id,
+        preview=preview,
+        committed_patch=(
+            _to_serializable(session.accepted_patch) if session.accepted_patch.patch_id else {}
+        ),
+        result=_to_serializable(
+            {
+                "payload": session.current_result_payload,
+                "summary": session.current_result_summary,
+            }
+        ),
+        verifier=_to_serializable(session.latest_verifier_result),
+        continue_recommended=bool(session.continue_recommended),
+        benchmark_summary=session.refinement_benchmark_summary,
+        baseline=_to_serializable(
+            {
+                "gallery_index": session.selected_gallery_index,
+                "schema": session.current_schema,
+            }
+        ),
+    )
+
+
+def _modify_response(service, session_id: str) -> RuntimeModifyResponse:
+    session = _get_session(service, session_id)
+    return RuntimeModifyResponse(session=_session_view(session), modify=_modify_view(session))
+
+
+def _modify_guard(service, session_id: str) -> AgentSessionState:
+    session = _get_session(service, session_id)
+    if not session.current_schema_raw:
+        raise HTTPException(
+            status_code=409,
+            detail="No current result to modify. Generate a schema first.",
+        )
+    if session.modify_round_index >= MODIFY_MAX_ROUNDS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"The modify stage is capped at {MODIFY_MAX_ROUNDS} rounds.",
+        )
+    return session
+
+
+def _run_modify(service, session_id: str, action, failure: str) -> RuntimeModifyResponse:
+    try:
+        action()
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 - surface upstream pipeline failures
+        raise HTTPException(status_code=502, detail=f"{failure}: {exc}") from exc
+    return _modify_response(service, session_id)
+
+
+@router.get("/episodes/{session_id}/modify", response_model=RuntimeModifyResponse)
+def get_modify_state(session_id: str):
+    service = get_runtime_service()
+    _get_session(service, session_id)
+    return _modify_response(service, session_id)
+
+
+@router.post("/episodes/{session_id}/modify/feedback", response_model=RuntimeModifyResponse)
+def submit_modify_feedback(session_id: str, request: RuntimeModifyFeedbackRequest):
+    """Σ0 → Σ2: parse the feedback, build repair hypotheses, generate probes."""
+    service = get_runtime_service()
+    _modify_guard(service, session_id)
+
+    def action() -> None:
+        service.submit_feedback(session_id, request.feedback_text)
+        service.build_repair_hypotheses(session_id)
+        service.generate_local_probes(session_id)
+        service.mark_modify_stage(session_id, "probes", feedback_text=request.feedback_text)
+
+    return _run_modify(service, session_id, action, "Feedback analysis failed")
+
+
+@router.post("/episodes/{session_id}/modify/select", response_model=RuntimeModifyResponse)
+def select_modify_probe(session_id: str, request: RuntimeModifySelectRequest):
+    """Σ2 → Σ3: choose one of the three HCS probes."""
+    service = get_runtime_service()
+    _modify_guard(service, session_id)
+
+    def action() -> None:
+        service.select_probe(session_id, request.probe_id)
+        service.mark_modify_stage(session_id, "probe_selected")
+
+    return _run_modify(service, session_id, action, "Probe selection failed")
+
+
+@router.post("/episodes/{session_id}/modify/preview", response_model=RuntimeModifyResponse)
+def preview_modify_probe(session_id: str):
+    """Σ3 → Σ4: render the proposal without touching the committed schema."""
+    service = get_runtime_service()
+    _modify_guard(service, session_id)
+
+    def action() -> None:
+        service.preview_selected_probe(session_id)
+        service.mark_modify_stage(session_id, "preview")
+
+    return _run_modify(service, session_id, action, "Preview failed")
+
+
+@router.post("/episodes/{session_id}/modify/commit", response_model=RuntimeModifyResponse)
+def commit_modify_patch(session_id: str):
+    """Σ4 → Σ5: apply the ranked patch to the committed schema."""
+    service = get_runtime_service()
+    _modify_guard(service, session_id)
+
+    def action() -> None:
+        service.commit_patch(session_id)
+        service.mark_modify_stage(session_id, "committed")
+
+    return _run_modify(service, session_id, action, "Commit failed")
+
+
+@router.post("/episodes/{session_id}/modify/execute", response_model=RuntimeModifyResponse)
+def execute_modify_patch(session_id: str):
+    """Σ5 → Σ6: run the committed patch through the execution adapter."""
+    service = get_runtime_service()
+    _modify_guard(service, session_id)
+
+    def action() -> None:
+        service.execute_patch(session_id)
+        service.mark_modify_stage(session_id, "executed")
+
+    return _run_modify(service, session_id, action, "Execution failed")
+
+
+@router.post("/episodes/{session_id}/modify/verify", response_model=RuntimeModifyResponse)
+def verify_modify_result(session_id: str):
+    """Σ6 → Σ7: compare summaries and finish the round."""
+    service = get_runtime_service()
+    _modify_guard(service, session_id)
+
+    def action() -> None:
+        service.verify_latest_result(session_id)
+        service.advance_modify_round(session_id)
+        service.mark_modify_stage(session_id, "verified")
+
+    return _run_modify(service, session_id, action, "Verification failed")
+
+
+@router.post("/showcase/modify", response_model=RuntimeModifyResponse)
+def start_showcase_modify(request: RuntimeShowcaseModifyRequest):
+    """Baseline session for the shift/modify walkthrough (no planner, no LLM)."""
+    service = get_runtime_service()
+    try:
+        session = service.start_showcase_modify_session(
+            gallery_index=request.gallery_index,
+            label=request.label,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _modify_response(service, session.session_id)

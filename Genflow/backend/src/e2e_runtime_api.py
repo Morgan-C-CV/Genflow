@@ -201,6 +201,120 @@ def run_episode(intent, label):
             )
 
 
+def run_modify_loop(label="SHIFT/MODIFY LOOP (thesis 4.3)"):
+    """feedback -> hypotheses -> 3 HCS probes -> preview -> commit -> execute -> verify."""
+    print(f"\n=== {label} ===")
+
+    status, body = post("/showcase/modify", {"gallery_index": 12, "label": "Modify showcase"})
+    check("POST /showcase/modify -> 200", status == 200, f"HTTP {status}")
+    if status != 200:
+        print("   detail:", str(body)[:400])
+        return
+    session_id = body["session"]["session_id"]
+    modify = body["modify"]
+    check("baseline schema present", bool(modify["baseline"]["schema"]["prompt"]))
+    check("modify stage caps at three rounds", modify["max_rounds"] == 3, str(modify["max_rounds"]))
+    check("starts at round 0", modify["round_index"] == 0, str(modify["round_index"]))
+
+    # --- Sigma0 -> Sigma2 ------------------------------------------------
+    status, body = post(
+        f"/episodes/{session_id}/modify/feedback",
+        {
+            "feedback_text": (
+                "It looks flat and washed out. Keep the composition but make the "
+                "lighting more dramatic."
+            )
+        },
+    )
+    check("POST /modify/feedback -> 200", status == 200, f"HTTP {status}")
+    if status != 200:
+        print("   detail:", str(body)[:400])
+        return
+    modify = body["modify"]
+    check("feedback parsed into dissatisfaction axes", len(modify["dissatisfaction_axes"]) > 0,
+          str(modify["dissatisfaction_axes"]))
+    check("preservation constraints captured", len(modify["preserve_constraints"]) > 0)
+    check("repair hypotheses built", len(modify["hypotheses"]) > 0,
+          f"{len(modify['hypotheses'])} hypotheses")
+
+    probes = modify["probes"]
+    check("HCS draws exactly three probes", len(probes) == 3, f"{len(probes)}")
+    regimes = [probe["regime"] for probe in probes]
+    check("regimes cover close/exploratory/far",
+          set(regimes) == {"close", "exploratory", "far"}, str(regimes))
+    check("probes are ranked by score (PBO argmax first)",
+          all(probes[i]["score"] >= probes[i + 1]["score"] for i in range(len(probes) - 1)),
+          str([probe["score"] for probe in probes]))
+    check("every probe carries a score rationale", all(probe["rationale"] for probe in probes))
+    for probe in probes:
+        print(f"  probe {probe['probe_id']} [{probe['regime']}] score={probe['score']:+.2f} "
+              f"family={probe['patch_family']}")
+
+    # --- Sigma2 -> Sigma3 -> Sigma4 --------------------------------------
+    chosen = probes[0]["probe_id"]
+    status, body = post(f"/episodes/{session_id}/modify/select", {"probe_id": chosen})
+    check("POST /modify/select -> 200", status == 200, f"HTTP {status}")
+    modify = body["modify"]
+    check("selected probe recorded", modify["selected_probe_id"] == chosen, modify["selected_probe_id"])
+    schema_before = json.dumps(modify["baseline"]["schema"], sort_keys=True)
+
+    status, body = post(f"/episodes/{session_id}/modify/preview")
+    check("POST /modify/preview -> 200", status == 200, f"HTTP {status}")
+    modify = body["modify"]
+    check("preview produced a payload", bool(modify["preview"].get("probe_id")))
+    check(
+        "preview leaves the committed schema untouched (thesis 4.3.4)",
+        json.dumps(modify["baseline"]["schema"], sort_keys=True) == schema_before,
+    )
+
+    # --- Sigma4 -> Sigma5 -> Sigma6 -> Sigma7 ----------------------------
+    status, body = post(f"/episodes/{session_id}/modify/commit")
+    check("POST /modify/commit -> 200", status == 200, f"HTTP {status}")
+    modify = body["modify"]
+    check("patch committed", bool(modify["committed_patch"].get("patch_id")),
+          str(modify["committed_patch"].get("patch_id")))
+    check("commit changed the schema",
+          json.dumps(modify["baseline"]["schema"], sort_keys=True) != schema_before)
+
+    status, body = post(f"/episodes/{session_id}/modify/execute")
+    check("POST /modify/execute -> 200", status == 200, f"HTTP {status}")
+    modify = body["modify"]
+    check("execution produced a result", bool(modify["result"].get("payload", {}).get("result_id")))
+
+    status, body = post(f"/episodes/{session_id}/modify/verify")
+    check("POST /modify/verify -> 200", status == 200, f"HTTP {status}")
+    modify = body["modify"]
+    check("verifier emitted confidence/continuation", "confidence" in modify["verifier"])
+    check("round advanced", modify["round_index"] == 1, str(modify["round_index"]))
+    print(f"  verifier: improved={modify['verifier'].get('improved')} "
+          f"confidence={modify['verifier'].get('confidence')} "
+          f"continue={modify['continue_recommended']}")
+
+    # Complete the remaining rounds, then confirm the cap.
+    for round_no in (2, 3):
+        status, body = post(
+            f"/episodes/{session_id}/modify/feedback",
+            {"feedback_text": "warmer colours, keep the lighting and the composition"},
+        )
+        if status != 200:
+            check(f"round {round_no} feedback accepted", False, f"HTTP {status}")
+            return
+        probe_id = body["modify"]["probes"][0]["probe_id"]
+        post(f"/episodes/{session_id}/modify/select", {"probe_id": probe_id})
+        post(f"/episodes/{session_id}/modify/preview")
+        post(f"/episodes/{session_id}/modify/commit")
+        post(f"/episodes/{session_id}/modify/execute")
+        status, body = post(f"/episodes/{session_id}/modify/verify")
+        check(
+            f"round {round_no} completed",
+            status == 200 and body["modify"]["round_index"] == round_no,
+            f"round_index={body.get('modify', {}).get('round_index')}",
+        )
+
+    status, body = post(f"/episodes/{session_id}/modify/feedback", {"feedback_text": "one more pass"})
+    check("a fourth round is refused (thesis 5.1)", status == 409, f"HTTP {status}")
+
+
 if __name__ == "__main__":
     # A vague intent exercises the clarification dialogue path.
     run_episode("画点什么好看的", "VAGUE INTENT (expect clarification)")
@@ -209,6 +323,7 @@ if __name__ == "__main__":
         "两个巨大的歼星舰在深空相撞，爆炸与碎片，电影级打光，超写实",
         "SPECIFIC INTENT",
     )
+    run_modify_loop()
 
     print("\n" + "=" * 60)
     if failures:

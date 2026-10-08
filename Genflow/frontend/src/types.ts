@@ -197,33 +197,6 @@ export interface RemediationItem {
   message: string;
 }
 
-export interface RefinementHistoryEntry {
-  round: number;
-  candidates: number[];
-  best_slot: number | null;
-  worst_slot: number | null;
-  skipped: boolean;
-}
-
-export interface RefinementState {
-  active: boolean;
-  finished: boolean;
-  seed_indices: number[];
-  round_index: number;
-  consecutive_skips: number;
-  batch_size: number;
-  pending_candidates: RuntimeCandidate[];
-  history: RefinementHistoryEntry[];
-  best_index: number | null;
-}
-
-export interface RefineResponse {
-  session: RuntimeSession;
-  refinement: RefinementState;
-  anchor_summary: string;
-  selected_reference_ids: number[];
-}
-
 export interface GalleryImage {
   index: number;
   id: string;
@@ -239,4 +212,54 @@ export interface GalleryListing {
 export interface ShowcaseResponse {
   session: RuntimeSession;
   wall: RuntimeWall;
+}
+
+/* ---------- shift/modify refinement loop (thesis 4.3) ---------- */
+
+export interface ModifyHypothesis {
+  hypothesis_id: string;
+  summary: string;
+  patch_family: string;
+  changed_axes: string[];
+  preserved_axes: string[];
+  rank: number;
+}
+
+/** One Hyper Candidate Strategy probe: close, exploratory or far. */
+export interface ModifyProbe {
+  probe_id: string;
+  summary: string;
+  regime: string;
+  patch_family: string;
+  source_kind: string;
+  target_axes: string[];
+  preserve_axes: string[];
+  score: number;
+  rationale: string[];
+}
+
+export interface ModifyState {
+  stage: string;
+  round_index: number;
+  max_rounds: number;
+  feedback_text: string;
+  dissatisfaction_axes: string[];
+  preserve_constraints: string[];
+  requested_changes: string[];
+  uncertainty: number;
+  hypotheses: ModifyHypothesis[];
+  probes: ModifyProbe[];
+  selected_probe_id: string;
+  preview: Record<string, any>;
+  committed_patch: Record<string, any>;
+  result: Record<string, any>;
+  verifier: Record<string, any>;
+  continue_recommended: boolean;
+  benchmark_summary: string;
+  baseline: Record<string, any>;
+}
+
+export interface ModifyResponse {
+  session: RuntimeSession;
+  modify: ModifyState;
 }

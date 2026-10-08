@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+import json
+
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
@@ -30,7 +32,14 @@ from app.agent.workflow_graph_patch_builder import (
     materialize_workflow_graph_patch_from_candidate,
 )
 from app.agent.workflow_patch_commit_selector import select_commit_patch_winner
-from app.agent.runtime_models import ExecutionRecoveryDirective, ExecutionSourceEvidenceSummary, PreviewProbe
+from app.agent.runtime_models import (
+    ExecutionRecoveryDirective,
+    ExecutionSourceEvidenceSummary,
+    NormalizedSchema,
+    PreviewProbe,
+    ResultPayload,
+    ResultSummary,
+)
 from app.agent.workflow_runtime_models import WorkflowExecutionConfig, WorkflowIdentity, WorkflowStateSnapshot
 from app.agent.workflow_snapshot_builder import build_surrogate_workflow_snapshot
 from app.agents.creative_agent import CandidateWall, CreativeIntentPlan
@@ -345,6 +354,105 @@ class AgentRuntimeService:
             flat_indices=list(requested),
             query_labels=[f"Showcase group {position}" for position in range(1, len(groups) + 1)],
         )
+        return self.memory_service.save_session(session)
+
+    def start_showcase_modify_session(
+        self,
+        gallery_index: Optional[int] = None,
+        label: str = "Modify showcase",
+    ) -> AgentSessionState:
+        """Create a session with a baseline result to modify.
+
+        The create path is skipped: the baseline schema and result are taken from
+        a gallery record, so the shift/modify loop can be exercised without the
+        planner or an LLM call.
+        """
+        rows = self.search_service.search_repo.get_all_data()
+        total = len(rows)
+        if total == 0:
+            raise ValueError("The gallery is empty.")
+
+        index = 0 if gallery_index is None else int(gallery_index)
+        if not 0 <= index < total:
+            raise ValueError(f"Gallery index out of range: {index}")
+
+        row = rows.iloc[index]
+
+        def _text(key: str, fallback: str) -> str:
+            value = row.get(key)
+            if value is None:
+                return fallback
+            text = str(value).strip()
+            return fallback if text.lower() in {"", "nan", "none"} else text
+
+        schema = NormalizedSchema(
+            prompt=_text("prompt", "a cinematic image"),
+            negative_prompt=_text("negative_prompt", "blurry, low quality, watermark"),
+            cfgscale=_text("cfgscale", "7"),
+            steps=_text("steps", "30"),
+            sampler=_text("sampler", "Euler a"),
+            seed=_text("seed", "0"),
+            model=_text("model", "UNKNOWN"),
+            clipskip=_text("clipskip", "2"),
+            style=[],
+            lora=[],
+        )
+        summary = (
+            f"Showcase baseline from gallery index {index}: "
+            f"model={schema.model}, sampler={schema.sampler}."
+        )
+
+        session = self.memory_service.create_session(label)
+        session.clarified_intent = label
+        session.plan = CreativeIntentPlan(
+            user_intent=label,
+            fixed_constraints={},
+            free_variables=[],
+            locked_axes=[],
+            unclear_axes=[],
+            next_action="modify",
+            clarification_questions=[],
+            reasoning_summary=(
+                "Showcase session: the baseline schema came from a gallery record, so "
+                "the shift/modify loop runs without the planner."
+            ),
+        )
+        session.selected_gallery_index = index
+        session.current_schema = schema
+        session.current_schema_raw = json.dumps(schema.__dict__, ensure_ascii=False)
+        session.current_result_id = f"showcase-{index}"
+        session.current_result_payload = ResultPayload(
+            result_id=f"showcase-{index}",
+            result_type="showcase_baseline",
+            content={
+                "gallery_index": index,
+                "image_url": f"/api/v1/gallery/image/{index}?w=768",
+            },
+        )
+        session.current_result_summary = ResultSummary(summary_text=summary)
+        session.previous_result_summary = ResultSummary(summary_text=summary)
+        session.accepted_results.append(session.current_result_payload)
+        session.modify_stage = "baseline"
+        self._sync_workflow_state(session, execution_kind="showcase_baseline", preview=False)
+        return self.memory_service.save_session(session)
+
+    def advance_modify_round(self, session_id: str) -> AgentSessionState:
+        """Mark one shift/modify round complete (thesis 4.3: at most three)."""
+        session = self.memory_service.get_session(session_id)
+        session.modify_round_index += 1
+        return self.memory_service.save_session(session)
+
+    def mark_modify_stage(
+        self,
+        session_id: str,
+        stage: str,
+        feedback_text: Optional[str] = None,
+    ) -> AgentSessionState:
+        """Record where the Σ state machine currently sits."""
+        session = self.memory_service.get_session(session_id)
+        session.modify_stage = stage
+        if feedback_text is not None:
+            session.modify_feedback_text = feedback_text
         return self.memory_service.save_session(session)
 
     def generate_initial_schema(self, session_id: str) -> AgentSessionState:
@@ -1064,6 +1172,7 @@ class AgentRuntimeService:
                     preserve_axes=list(probe.preserve_axes),
                     preview_execution_spec=preview_execution_spec,
                     source_kind="graph_payload_enrichment",
+                    hcs_regime=probe.hcs_regime,
                 )
             )
         return rewritten_probes

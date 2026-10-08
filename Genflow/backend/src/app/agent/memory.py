@@ -134,6 +134,11 @@ class AgentSessionState:
     pbo_history: List[Dict[str, Any]] = field(default_factory=list)
     pbo_finished: bool = False
     pbo_best_index: Optional[int] = None
+    # Shift/modify refinement loop (thesis 4.3): feedback -> hypotheses ->
+    # probes -> preview -> commit -> execute -> verify, at most three rounds.
+    modify_round_index: int = 0
+    modify_feedback_text: str = ""
+    modify_stage: str = "idle"
 
 
 class AgentMemoryService:

@@ -9,14 +9,12 @@ Genflow agent plans the intent (may ask clarifying questions over several rounds
    ↓
 Retrieves a divergent wall of 16 candidate images (shufflable, never repeating)
    ↓
-User selects one or more seed images
+User picks the reference image → schema + initial result
    ↓
-Optional: preference search (PBO) — rounds of 6 images, marked best/worst,
-each round steering the next, until the model converges on the best match
+Refine: feedback → repair hypotheses → three HCS probes (close / exploratory /
+far) → preview → commit → execute → verify, at most three rounds
    ↓
-Generates metadata / schema (prompt, model, sampler, steps, cfg, seed, lora…)
-   ↓
-Converts it into ComfyUI workflow JSON → pushes it to the ComfyUI queue
+Converts the schema into ComfyUI workflow JSON → pushes it to the ComfyUI queue
 ```
 
 ## Quick start
@@ -53,11 +51,12 @@ back to `index.html`, so a hard refresh on `/showcase/refine` works.
 
 ### `/showcase/refine`
 
-A self-contained walkthrough of the preference search: pick seed images from the
-gallery, then run rounds of six candidates, marking **Best** and **Worst**, and
-finish to see the model's chosen match. It drives the **real** refinement
-endpoints and the real Gaussian-process fit, but skips the planner and retrieval
-pipeline — the seed wall is whatever you pick — so it costs no LLM calls.
+A self-contained walkthrough of the shift/modify loop: pick a gallery image as
+the baseline result, then give feedback and walk Σ0 → Σ7 — parsed axes, three
+ranked HCS probes, preview, commit, execute, verify. It drives the **real**
+modify endpoints and the real ranking pipeline, but skips the create path — the
+baseline schema comes straight from the gallery record — so it costs no LLM
+calls.
 
 ## LLM configuration
 
@@ -80,14 +79,16 @@ The backend uses the **DeepSeek official endpoint** by default
 | Side rail (right) | ComfyUI connection status, agent plan (locked/open axes, fixed constraints), full conversation transcript |
 
 The **Candidates** stage shows images only — no per-image metadata — grouped by
-retrieval direction. Click images to toggle them as seeds, then either run the
-preference search or use a single image directly.
+retrieval direction. Picking one image is the whole selection: it becomes the
+reference the schema is composed from.
 
-The **Refine** stage runs the PBO loop: each round proposes 6 images (two exploit
-the current best, three explore nearby, one explores a distant region). Mark one
-as **Best** and another as **Worst** to steer the next round, or skip a round
-(which widens the search). Finishing fits a Gaussian process over all feedback and
-uses its argmax as the final reference.
+The **Refine** stage implements the shift/modify loop. You describe what is wrong
+and what must stay; the system parses the feedback into dissatisfaction axes and
+preservation constraints, builds repair hypotheses, then samples **three**
+candidates at increasing distance — `close`, `exploratory`, `far` — and ranks them
+with the PBO probe score. Preview renders the proposal while the committed schema
+stays exactly as it was; only Commit applies the patch. The loop is capped at
+three rounds, matching the user study.
 
 The workflow stage offers two JSON views:
 
@@ -108,11 +109,13 @@ Routes are defined in `backend/src/app/api/v1/endpoints/runtime.py`
 | POST | `/episodes/{id}/clarify` | Submit answers (`answers: []` declines clarification) |
 | POST | `/episodes/{id}/candidates` | Generate the candidate wall |
 | POST | `/episodes/{id}/select` | Pick a candidate and build the reference bundle |
-| POST | `/episodes/{id}/refine/start` | Seed the PBO refinement loop (one or more indices) |
-| POST | `/episodes/{id}/refine/round` | Run one round, returning 6 candidates |
-| POST | `/episodes/{id}/refine/feedback` | Mark best/worst slots, or `skip: true` |
-| POST | `/episodes/{id}/refine/finish` | Fit the preference model and build the reference bundle |
-| GET | `/episodes/{id}/refine` | Current refinement state |
+| POST | `/episodes/{id}/modify/feedback` | Σ0→Σ2: parse feedback, build hypotheses, sample 3 probes |
+| POST | `/episodes/{id}/modify/select` | Σ2→Σ3: choose one HCS probe |
+| POST | `/episodes/{id}/modify/preview` | Σ3→Σ4: render without touching the committed schema |
+| POST | `/episodes/{id}/modify/commit` | Σ4→Σ5: apply the ranked patch |
+| POST | `/episodes/{id}/modify/execute` | Σ5→Σ6: run the committed patch |
+| POST | `/episodes/{id}/modify/verify` | Σ6→Σ7: verify, then close the round |
+| GET | `/episodes/{id}/modify` | Current Σ state |
 | POST | `/episodes/{id}/schema` | Generate metadata / schema |
 | POST | `/episodes/{id}/result` | Produce the initial result |
 | POST | `/episodes/{id}/workflow` | Build the workflow (without pushing) |
@@ -122,6 +125,10 @@ Routes are defined in `backend/src/app/api/v1/endpoints/runtime.py`
 | GET | `/gallery/images` | Gallery index listing (served without warming the embedding stack) |
 | GET | `/gallery/image/{index}?w=` | Original image, or a cached downscaled thumbnail |
 | POST | `/showcase/episode` | Planner-free session over hand-picked gallery images |
+| POST | `/showcase/modify` | Planner-free baseline result to run the modify loop on |
+
+The `/refine/*` PBO endpoints from an earlier iteration are still served for
+`backend/src/tests/cli_test.py`; the UI no longer uses them.
 
 Gallery originals average ~1.8 MB (some exceed 20 MB at 2560×3712), so grids
 request `?w=640` thumbnails. Those are generated once with Pillow and cached in
@@ -163,10 +170,10 @@ It runs two scenarios: a vague intent (triggers clarification) and a specific in
   but the push is refused — by design.
 - **Conversation rounds:** the frontend stops after 4 clarification rounds and
   continues; the backend itself has no cap.
-- **Refinement rounds:** the frontend targets 8 rounds (matching `cli_test.py`) but
-  you can finish after any completed round. Within a round the exploit slots
-  deliberately repeat images already rated highly; only the exploration slots bring
-  new ones, so later rounds mix confirmed picks with fresh candidates.
+- **Refinement rounds:** the modify stage is capped at three rounds (thesis §5.1).
+  The top-ranked probe is pre-selected by PBO, but you can pick any of the three.
+  A probe's position in the list is its PBO score order, not its distance — read
+  the `close` / `exploratory` / `far` badge for that.
 - **Sessions are stored in memory.** Restarting the backend loses them; start over.
 - Generation parameters (width/height/batch/seed) come from the frontend, since the
   schema carries no resolution field. Default is 1024×1024.

@@ -1,10 +1,10 @@
-export type Stage = "compose" | "clarify" | "candidates" | "refine" | "workflow";
+export type Stage = "compose" | "clarify" | "candidates" | "modify" | "workflow";
 
 const STEPS: { key: Stage; label: string }[] = [
   { key: "compose", label: "Intent" },
   { key: "clarify", label: "Clarify" },
   { key: "candidates", label: "Candidates" },
-  { key: "refine", label: "Refine" },
+  { key: "modify", label: "Refine" },
   { key: "workflow", label: "Workflow" },
 ];
 

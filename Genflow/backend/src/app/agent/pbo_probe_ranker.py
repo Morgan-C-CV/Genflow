@@ -149,4 +149,5 @@ def _clone_probe_with_pbo_annotations(
         preserve_axes=list(probe.preserve_axes),
         preview_execution_spec=preview_execution_spec,
         source_kind=probe.source_kind,
+        hcs_regime=probe.hcs_regime,
     )

@@ -10,10 +10,10 @@ import type {
   CandidatesResponse,
   ComfyStatus,
   GalleryListing,
+  ModifyResponse,
   PlanResponse,
   PromptResult,
   PushResponse,
-  RefineResponse,
   ResultResponse,
   SchemaResponse,
   SelectResponse,
@@ -155,43 +155,6 @@ export const api = {
     return request<ComfyStatus>("/runtime/comfyui/status");
   },
 
-  startRefinement(sessionId: string, seedIndices: number[]) {
-    return request<RefineResponse>(
-      `/runtime/episodes/${encodeURIComponent(sessionId)}/refine/start`,
-      { method: "POST", body: JSON.stringify({ seed_indices: seedIndices }) },
-    );
-  },
-
-  refinementRound(sessionId: string, batchSize = 6) {
-    return request<RefineResponse>(
-      `/runtime/episodes/${encodeURIComponent(sessionId)}/refine/round`,
-      { method: "POST", body: JSON.stringify({ batch_size: batchSize }) },
-    );
-  },
-
-  refinementFeedback(
-    sessionId: string,
-    payload: { best_slot?: number; worst_slot?: number; skip?: boolean },
-  ) {
-    return request<RefineResponse>(
-      `/runtime/episodes/${encodeURIComponent(sessionId)}/refine/feedback`,
-      { method: "POST", body: JSON.stringify(payload) },
-    );
-  },
-
-  finishRefinement(sessionId: string) {
-    return request<RefineResponse>(
-      `/runtime/episodes/${encodeURIComponent(sessionId)}/refine/finish`,
-      { method: "POST" },
-    );
-  },
-
-  refinementState(sessionId: string) {
-    return request<RefineResponse>(
-      `/runtime/episodes/${encodeURIComponent(sessionId)}/refine`,
-    );
-  },
-
   /** Gallery listings are served without warming the embedding stack. */
   galleryImages(limit = 48, offset = 0) {
     return request<GalleryListing>(
@@ -208,6 +171,64 @@ export const api = {
         label,
         size: Math.max(galleryIndices.length, 16),
       }),
+    });
+  },
+
+  /* ---------- shift/modify loop (thesis 4.3) ---------- */
+
+  modifyState(sessionId: string) {
+    return request<ModifyResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}/modify`,
+    );
+  },
+
+  modifyFeedback(sessionId: string, feedbackText: string) {
+    return request<ModifyResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}/modify/feedback`,
+      { method: "POST", body: JSON.stringify({ feedback_text: feedbackText }) },
+    );
+  },
+
+  modifySelect(sessionId: string, probeId: string) {
+    return request<ModifyResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}/modify/select`,
+      { method: "POST", body: JSON.stringify({ probe_id: probeId }) },
+    );
+  },
+
+  modifyPreview(sessionId: string) {
+    return request<ModifyResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}/modify/preview`,
+      { method: "POST" },
+    );
+  },
+
+  modifyCommit(sessionId: string) {
+    return request<ModifyResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}/modify/commit`,
+      { method: "POST" },
+    );
+  },
+
+  modifyExecute(sessionId: string) {
+    return request<ModifyResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}/modify/execute`,
+      { method: "POST" },
+    );
+  },
+
+  modifyVerify(sessionId: string) {
+    return request<ModifyResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}/modify/verify`,
+      { method: "POST" },
+    );
+  },
+
+  /** Baseline session for the modify walkthrough (no planner, no LLM). */
+  startShowcaseModify(galleryIndex: number | null, label = "Modify showcase") {
+    return request<ModifyResponse>("/runtime/showcase/modify", {
+      method: "POST",
+      body: JSON.stringify({ gallery_index: galleryIndex, label }),
     });
   },
 };
