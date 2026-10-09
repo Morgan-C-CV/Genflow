@@ -128,10 +128,10 @@ class RunAgentDemoArtifactTest(unittest.TestCase):
             payload["workflow_graph_patch_candidates"][0]["candidate_id"],
         )
         self.assertIn("pbo_score", payload["workflow_graph_patch_candidates"][0]["metadata"])
-        self.assertEqual(
-            payload["top_schema_patch_candidate"]["patch_id"],
-            payload["accepted_patch"]["patch_id"],
-        )
+        # Commit applies the schema the preview composed, so the accepted patch is
+        # no longer the same object as the ranked schema patch candidate.
+        self.assertTrue(payload["accepted_patch"]["patch_id"].startswith("composed-"))
+        self.assertTrue(payload["top_schema_patch_candidate"]["patch_id"])
         self.assertEqual(
             payload["top_workflow_graph_patch_candidate"]["candidate_id"],
             payload["workflow_graph_patch_candidates"][0]["candidate_id"],

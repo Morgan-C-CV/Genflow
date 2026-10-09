@@ -91,6 +91,12 @@ class AgentSessionState:
     preview_probe_candidates: List[PreviewProbe] = field(default_factory=list)
     preview_probe_results: List[PreviewResult] = field(default_factory=list)
     selected_probe: PreviewProbe = field(default_factory=PreviewProbe)
+    # One picked gallery reference per modification axis.
+    selected_probes: Dict[str, PreviewProbe] = field(default_factory=dict)
+    # The schema the composer proposed for the current selection. Preview writes
+    # this without touching current_schema; commit is what applies it.
+    composed_schema: NormalizedSchema = field(default_factory=NormalizedSchema)
+    composed_schema_source: str = ""
     patch_history: List[CommittedPatch] = field(default_factory=list)
     accepted_patch: CommittedPatch = field(default_factory=CommittedPatch)
     top_schema_patch_candidate: CommittedPatch = field(default_factory=CommittedPatch)

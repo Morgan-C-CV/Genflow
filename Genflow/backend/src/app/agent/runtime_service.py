@@ -9,8 +9,11 @@ import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
 
+from app.agent.axis_reference_retriever import retrieve_axis_references
 from app.agent.execution_adapter import ExecutionAdapter
 from app.agent.feedback_parser import FeedbackParser
+from app.agent.refine_intent_interpreter import RefineIntentInterpreter
+from app.agent.refine_schema_composer import RefineSchemaComposer
 from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.benchmark_comparison_summary import build_benchmark_comparison_summary
 from app.agent.orchestration_policy import PolicyDecision, decide_next_action
@@ -33,10 +36,12 @@ from app.agent.workflow_graph_patch_builder import (
 )
 from app.agent.workflow_patch_commit_selector import select_commit_patch_winner
 from app.agent.runtime_models import (
+    CommittedPatch,
     ExecutionRecoveryDirective,
     ExecutionSourceEvidenceSummary,
     NormalizedSchema,
     PreviewProbe,
+    PreviewResult,
     ResultPayload,
     ResultSummary,
 )
@@ -85,6 +90,9 @@ class AgentRuntimeService:
         pbo_workflow_graph_patch_ranker=None,
         patch_planner: Optional[PatchPlanner] = None,
         verifier: Optional[Verifier] = None,
+        intent_interpreter: Optional[RefineIntentInterpreter] = None,
+        schema_composer: Optional[RefineSchemaComposer] = None,
+        axis_reference_retriever=None,
     ):
         self.memory_service = memory_service
         self.orchestration_service = orchestration_service
@@ -92,6 +100,14 @@ class AgentRuntimeService:
         self.execution_adapter = execution_adapter
         self.schema_normalizer = schema_normalizer or parse_and_normalize_metadata
         self.feedback_parser = feedback_parser or FeedbackParser()
+        # Deterministic by default. The composition root (the API wiring, the demo
+        # script) injects LLM-backed instances; constructing the service directly
+        # must not reach the network, so unit tests stay offline and repeatable.
+        self.intent_interpreter = intent_interpreter or RefineIntentInterpreter(
+            fallback_parser=self.feedback_parser, enabled=False
+        )
+        self.schema_composer = schema_composer or RefineSchemaComposer(enabled=False)
+        self.axis_reference_retriever = axis_reference_retriever or retrieve_axis_references
         self.hypothesis_builder = hypothesis_builder or RepairHypothesisBuilder()
         self.probe_generator = probe_generator or PreviewProbeGenerator()
         self.pbo_probe_ranker = pbo_probe_ranker or rank_probe_candidates
@@ -486,10 +502,10 @@ class AgentRuntimeService:
 
     def submit_feedback(self, session_id: str, feedback_text: str) -> AgentSessionState:
         session = self.memory_service.get_session(session_id)
-        evidence = self.feedback_parser.parse(
+        evidence = self.intent_interpreter.interpret(
             feedback_text=feedback_text,
+            current_schema=session.current_schema,
             current_result_summary=session.current_result_summary.summary_text,
-            current_schema_prompt=session.current_schema.prompt,
         )
         session.feedback_history.append(feedback_text)
         session.latest_feedback = feedback_text
@@ -523,14 +539,18 @@ class AgentRuntimeService:
 
     def generate_local_probes(self, session_id: str) -> AgentSessionState:
         session = self.memory_service.get_session(session_id)
-        probes = self.probe_generator.generate(
-            current_schema=session.current_schema,
-            parsed_feedback=session.parsed_feedback,
-            repair_hypotheses=session.repair_hypotheses,
-            selected_gallery_index=session.selected_gallery_index,
-            selected_reference_ids=session.selected_reference_ids,
-            refinement_benchmark_set=session.refinement_benchmark_set,
-        )
+        # Probes are real gallery records retrieved along each modification axis:
+        # three per axis, at increasing distance from the current result.
+        probes = self._build_axis_reference_probes(session)
+        if not probes:
+            probes = self.probe_generator.generate(
+                current_schema=session.current_schema,
+                parsed_feedback=session.parsed_feedback,
+                repair_hypotheses=session.repair_hypotheses,
+                selected_gallery_index=session.selected_gallery_index,
+                selected_reference_ids=session.selected_reference_ids,
+                refinement_benchmark_set=session.refinement_benchmark_set,
+            )
         probes = self._apply_execution_recovery_directive_to_probes(
             probes,
             session.latest_execution_recovery_directive,
@@ -568,17 +588,84 @@ class AgentRuntimeService:
         return self.memory_service.save_session(session)
 
     def preview_selected_probe(self, session_id: str) -> AgentSessionState:
+        """Compose one schema from the references the user picked, without committing.
+
+        This is the reversibility point: the composition lands in
+        ``session.composed_schema`` and ``current_schema`` is left exactly as it
+        was, so the user can look at the proposal and still walk away from it.
+        """
         session = self.memory_service.get_session(session_id)
-        if not session.selected_probe.probe_id:
-            raise ValueError("No selected probe available for preview.")
-        return self.preview_probe(session_id, session.selected_probe.probe_id)
+        picks = self._selected_probes(session)
+        if not picks:
+            raise ValueError("No selected reference available for preview.")
+
+        references = [self._reference_from_probe(probe) for probe in picks]
+        composed = self.schema_composer.compose(
+            current_schema=session.current_schema,
+            evidence=session.parsed_feedback,
+            selected_references=references,
+        )
+        if composed is not None:
+            session.composed_schema = composed
+            session.composed_schema_source = "llm"
+            summary_text = (
+                f"Composition model unified {len(picks)} selected reference(s) into a new schema."
+            )
+        else:
+            patch = self._plan_patch(session)
+            session.composed_schema = self._apply_patch_to_schema(session.current_schema, patch)
+            session.composed_schema_source = "rules"
+            reason = getattr(self.schema_composer, "last_error", "")
+            summary_text = patch.rationale or "Patch planner composed a fallback schema."
+            if reason:
+                summary_text = f"{summary_text} (composition model unavailable: {reason})"
+
+        axes = [probe.axis for probe in picks if probe.axis]
+        composed_schema = session.composed_schema
+        preview_result = PreviewResult(
+            probe_id=session.selected_probe.probe_id,
+            summary=ResultSummary(
+                summary_text=summary_text,
+                changed_axes=axes,
+                preserved_axes=list(session.preserve_constraints),
+                notes=[
+                    f"composed_by={session.composed_schema_source}",
+                    f"model={composed_schema.model}",
+                    f"sampler={composed_schema.sampler}",
+                    f"references={','.join(str(probe.gallery_index) for probe in picks)}",
+                ],
+            ),
+            payload=ResultPayload(
+                result_id=f"composed-{session.session_id[:8]}",
+                result_type="composed_schema_preview",
+                content=_schema_snapshot(composed_schema),
+                artifacts={"render_mode": "preview_only", "committed_schema_unchanged": True},
+            ),
+            comparison_notes=[
+                probe.preview_execution_spec.get("retrieval_rationale", probe.summary)
+                for probe in picks
+            ],
+        )
+        session.preview_results.append(preview_result)
+        session.preview_probe_results.append(preview_result)
+        self._sync_workflow_state(session, execution_kind="preview", preview=True)
+        return self.memory_service.save_session(session)
 
     def select_probe(self, session_id: str, probe_id: str) -> AgentSessionState:
         session = self.memory_service.get_session(session_id)
         probe = next((item for item in session.preview_probe_candidates if item.probe_id == probe_id), None)
         if probe is None:
             raise ValueError(f"Preview probe not found: {probe_id}")
-        session.selected_probe = probe
+        # Selection is per axis: picking a reference replaces that axis's choice.
+        if probe.axis:
+            session.selected_probes[probe.axis] = probe
+            picks = list(session.selected_probes.values())
+            session.selected_probe = max(
+                picks,
+                key=lambda item: float(item.preview_execution_spec.get("pbo_score", 0.0)),
+            )
+        else:
+            session.selected_probe = probe
         session.workflow_graph_patch_candidates = self.pbo_workflow_graph_patch_ranker(
             build_workflow_graph_patch_candidates(session),
             session,
@@ -603,7 +690,15 @@ class AgentRuntimeService:
             if session.workflow_graph_patch_candidates
             else type(session.top_workflow_graph_patch_candidate)()
         )
-        patch = ranked_patch_candidates[0]
+        # The preview composed a schema; commit is what applies it. Without a
+        # preview (or when the composer was unavailable) the ranked schema patch
+        # candidate is the fallback.
+        if session.composed_schema.prompt and session.composed_schema_source:
+            patch = self._patch_from_composed_schema(session)
+        elif ranked_patch_candidates:
+            patch = ranked_patch_candidates[0]
+        else:
+            patch = CommittedPatch()
         session.accepted_patch = patch
         self._annotate_patch_winner_alignment(session)
         commit_selection = select_commit_patch_winner(
@@ -923,6 +1018,11 @@ class AgentRuntimeService:
         graph_axes = set(graph_winner.target_axes)
         aligned = bool(schema_axes) and schema_axes == graph_axes
         if aligned:
+            # select_commit_patch_winner() reads these from the *schema winner*.
+            # accepted_patch used to be the same object, so writing only there
+            # worked by accident; annotate both now that they can differ.
+            schema_winner.metadata["graph_native_aligned_winner"] = True
+            schema_winner.metadata["aligned_graph_candidate_id"] = graph_winner.candidate_id
             session.accepted_patch.metadata["graph_native_aligned_winner"] = True
             session.accepted_patch.metadata["aligned_graph_candidate_id"] = graph_winner.candidate_id
 
@@ -1053,17 +1153,181 @@ class AgentRuntimeService:
 
     @staticmethod
     def _select_default_probe(session: AgentSessionState) -> None:
-        if not session.preview_probe_candidates:
+        """Let PBO pre-pick one reference per axis; the user can change any of them."""
+        candidates = list(session.preview_probe_candidates)
+        if not candidates:
             return
-        if session.selected_probe.probe_id:
-            matched_probe = next(
-                (probe for probe in session.preview_probe_candidates if probe.probe_id == session.selected_probe.probe_id),
-                None,
+        # Candidates arrive ranked by PBO score, so the first one seen for an
+        # axis is that axis's best.
+        best_per_axis: dict[str, PreviewProbe] = {}
+        for probe in candidates:
+            if probe.axis:
+                best_per_axis.setdefault(probe.axis, probe)
+        if best_per_axis:
+            session.selected_probes = best_per_axis
+        session.selected_probe = candidates[0]
+
+    # -- axis reference retrieval ---------------------------------------
+
+    def _search_engine(self):
+        search_repo = getattr(self.search_service, "search_repo", None)
+        return getattr(search_repo, "search_engine", None)
+
+    @staticmethod
+    def _numeric_profile(schema: NormalizedSchema) -> dict:
+        def number(value, default):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        return {
+            "cfgscale": number(schema.cfgscale, 7.0),
+            "steps": number(schema.steps, 20.0),
+            "clipskip": number(schema.clipskip, 2.0),
+            "sampler": schema.sampler or None,
+            "model": schema.model or None,
+        }
+
+    def _build_axis_reference_probes(self, session: AgentSessionState) -> list[PreviewProbe]:
+        engine = self._search_engine()
+        axes = list(session.dissatisfaction_axes)
+        if engine is None or not axes:
+            return []
+
+        profile = self._numeric_profile(session.current_schema)
+        probes: list[PreviewProbe] = []
+        for axis in axes:
+            query = session.parsed_feedback.axis_queries.get(axis, "")
+            references = self.axis_reference_retriever(
+                search_engine=engine,
+                axis=axis,
+                query_text=query,
+                current_index=session.selected_gallery_index,
+                per_axis=3,
+                numeric_profile=profile,
             )
-            if matched_probe is not None:
-                session.selected_probe = matched_probe
-                return
-        session.selected_probe = session.preview_probe_candidates[0]
+            probes.extend(self._probe_from_reference(session, reference) for reference in references)
+        return probes
+
+    @staticmethod
+    def _probe_from_reference(session: AgentSessionState, reference) -> PreviewProbe:
+        prompt_excerpt = " ".join(str(reference.prompt).split())[:110]
+        return PreviewProbe(
+            probe_id=reference.probe_id,
+            summary=f"{reference.axis} · {reference.band} — gallery #{reference.gallery_index}: {prompt_excerpt}",
+            target_axes=[reference.axis],
+            preserve_axes=list(session.preserve_constraints),
+            preview_execution_spec={
+                "retrieval": "axis_direction",
+                "retrieval_rationale": reference.retrieval_rationale,
+                "axis": reference.axis,
+                "band": reference.band,
+                "gallery_index": reference.gallery_index,
+                "alignment": reference.alignment,
+                "axis_distance": reference.axis_distance,
+                "reference_anchor": session.selected_gallery_index,
+            },
+            source_kind="gallery_axis_reference",
+            hcs_regime=reference.band,
+            axis=reference.axis,
+            band=reference.band,
+            gallery_index=reference.gallery_index,
+            alignment=reference.alignment,
+            axis_distance=reference.axis_distance,
+            record={
+                "prompt": reference.prompt,
+                "negative_prompt": reference.negative_prompt,
+                "model": reference.model,
+                "sampler": reference.sampler,
+                "cfgscale": reference.cfgscale,
+                "steps": reference.steps,
+                "clipskip": reference.clipskip,
+                "loras": reference.loras,
+                "gallery_index": reference.gallery_index,
+            },
+        )
+
+    @staticmethod
+    def _reference_from_probe(probe: PreviewProbe):
+        from app.agent.axis_reference_retriever import AxisReference
+
+        record = dict(probe.record or {})
+        return AxisReference(
+            probe_id=probe.probe_id,
+            axis=probe.axis,
+            band=probe.band,
+            gallery_index=probe.gallery_index,
+            prompt=str(record.get("prompt", "")),
+            negative_prompt=str(record.get("negative_prompt", "")),
+            model=str(record.get("model", "")),
+            sampler=str(record.get("sampler", "")),
+            cfgscale=float(record.get("cfgscale") or 0.0),
+            steps=float(record.get("steps") or 0.0),
+            clipskip=float(record.get("clipskip") or 0.0),
+            loras=str(record.get("loras", "")),
+            alignment=probe.alignment,
+            axis_distance=probe.axis_distance,
+        )
+
+    @staticmethod
+    def _selected_probes(session: AgentSessionState) -> list[PreviewProbe]:
+        picks = [probe for probe in session.selected_probes.values() if probe.probe_id]
+        if picks:
+            return picks
+        if session.selected_probe.probe_id:
+            return [session.selected_probe]
+        return []
+
+    def _plan_patch(self, session: AgentSessionState) -> CommittedPatch:
+        """Deterministic fallback used when the composition model is unavailable."""
+        candidates = self._generate_patch_candidates(session)
+        ranked = self.pbo_patch_ranker(
+            candidates,
+            session.parsed_feedback,
+            benchmark_comparison_summary=session.benchmark_comparison_summary,
+            refinement_benchmark_set=session.refinement_benchmark_set,
+        )
+        if ranked:
+            return ranked[0]
+        return candidates[0] if candidates else CommittedPatch()
+
+    @staticmethod
+    def _patch_from_composed_schema(session: AgentSessionState) -> CommittedPatch:
+        current = session.current_schema
+        composed = session.composed_schema
+        changes: dict[str, object] = {}
+        for name in (
+            "prompt",
+            "negative_prompt",
+            "cfgscale",
+            "steps",
+            "sampler",
+            "seed",
+            "model",
+            "clipskip",
+            "style",
+            "lora",
+        ):
+            before = getattr(current, name)
+            after = getattr(composed, name)
+            if after != before:
+                changes[name] = after
+
+        axes = [probe.axis for probe in session.selected_probes.values() if probe.axis]
+        rationale = (
+            f"Composition model unified {len(session.selected_probes) or 1} selected "
+            f"reference(s) along {', '.join(axes) or 'the requested axes'} into a new schema."
+        )
+        return CommittedPatch(
+            patch_id=f"composed-{session.session_id[:8]}",
+            target_fields=sorted(changes),
+            target_axes=axes or list(session.dissatisfaction_axes),
+            preserve_axes=list(session.preserve_constraints),
+            changes=changes,
+            rationale=rationale,
+            metadata={"composed_by": session.composed_schema_source},
+        )
 
     def _generate_patch_candidates(self, session: AgentSessionState):
         generator = self.patch_candidate_generator
@@ -1173,6 +1437,12 @@ class AgentRuntimeService:
                     preview_execution_spec=preview_execution_spec,
                     source_kind="graph_payload_enrichment",
                     hcs_regime=probe.hcs_regime,
+                    axis=probe.axis,
+                    band=probe.band,
+                    gallery_index=probe.gallery_index,
+                    alignment=probe.alignment,
+                    axis_distance=probe.axis_distance,
+                    record=dict(probe.record),
                 )
             )
         return rewritten_probes
@@ -1212,3 +1482,19 @@ class AgentRuntimeService:
             }
         )
         return updated
+
+
+def _schema_snapshot(schema: NormalizedSchema) -> dict:
+    """Plain dict view of a schema, used inside preview payloads."""
+    return {
+        "prompt": schema.prompt,
+        "negative_prompt": schema.negative_prompt,
+        "cfgscale": schema.cfgscale,
+        "steps": schema.steps,
+        "sampler": schema.sampler,
+        "seed": schema.seed,
+        "model": schema.model,
+        "clipskip": schema.clipskip,
+        "style": list(schema.style),
+        "lora": list(schema.lora),
+    }

@@ -11,8 +11,8 @@ Retrieves a divergent wall of 16 candidate images (shufflable, never repeating)
    ↓
 User picks the reference image → schema + initial result
    ↓
-Refine: feedback → repair hypotheses → three HCS probes (close / exploratory /
-far) → preview → commit → execute → verify, at most three rounds
+Refine: feedback → LLM reads the axes → three gallery references per axis
+(near / mid / far) → you pick one per axis → LLM composes one schema → commit
    ↓
 Converts the schema into ComfyUI workflow JSON → pushes it to the ComfyUI queue
 ```
@@ -89,13 +89,23 @@ The **Candidates** stage shows images only — no per-image metadata — grouped
 retrieval direction. Picking one image is the whole selection: it becomes the
 reference the schema is composed from.
 
-The **Refine** stage implements the shift/modify loop. You describe what is wrong
-and what must stay; the system parses the feedback into dissatisfaction axes and
-preservation constraints, builds repair hypotheses, then samples **three**
-candidates at increasing distance — `close`, `exploratory`, `far` — and ranks them
-with the PBO probe score. Preview renders the proposal while the committed schema
-stays exactly as it was; only Commit applies the patch. The loop is capped at
-three rounds, matching the user study.
+The **Refine** stage works on an existing result:
+
+1. You describe what is wrong and what must stay. An **interpretation model** reads
+   it and splits it into modification axes. This is semantic, not keyword matching,
+   so "flat and washed out" resolves to `lighting_vibe` and `color_palette` even
+   though it names neither. If the model is unavailable the keyword parser is the
+   fallback, and the UI shows which one was used.
+2. For **each axis**, a retrieval query from that reading is projected into the
+   PBO space and three **real gallery images** are returned at increasing distance
+   from the current result along that axis: `near`, `mid`, `far`. The PBO scorer
+   pre-picks one per axis; you can override any of them.
+3. Once you have picked one reference per axis, the **composition model** unifies
+   them into a single schema. Preview shows that proposal while the committed
+   schema stays exactly as it was.
+4. Commit is what applies it, then execute and verify close the round.
+
+The loop is capped at three rounds, matching the user study.
 
 The workflow stage offers two JSON views:
 
@@ -116,10 +126,10 @@ Routes are defined in `backend/src/app/api/v1/endpoints/runtime.py`
 | POST | `/episodes/{id}/clarify` | Submit answers (`answers: []` declines clarification) |
 | POST | `/episodes/{id}/candidates` | Generate the candidate wall |
 | POST | `/episodes/{id}/select` | Pick a candidate and build the reference bundle |
-| POST | `/episodes/{id}/modify/feedback` | Σ0→Σ2: parse feedback, build hypotheses, sample 3 probes |
-| POST | `/episodes/{id}/modify/select` | Σ2→Σ3: choose one HCS probe |
-| POST | `/episodes/{id}/modify/preview` | Σ3→Σ4: render without touching the committed schema |
-| POST | `/episodes/{id}/modify/commit` | Σ4→Σ5: apply the ranked patch |
+| POST | `/episodes/{id}/modify/feedback` | Read the axes, retrieve 3 gallery references per axis |
+| POST | `/episodes/{id}/modify/select` | Choose one reference for one axis |
+| POST | `/episodes/{id}/modify/preview` | Compose a schema without touching the committed one |
+| POST | `/episodes/{id}/modify/commit` | Apply the composed schema |
 | POST | `/episodes/{id}/modify/execute` | Σ5→Σ6: run the committed patch |
 | POST | `/episodes/{id}/modify/verify` | Σ6→Σ7: verify, then close the round |
 | GET | `/episodes/{id}/modify` | Current Σ state |
@@ -180,10 +190,13 @@ It runs two scenarios: a vague intent (triggers clarification) and a specific in
   but the push is refused — by design.
 - **Conversation rounds:** the frontend stops after 4 clarification rounds and
   continues; the backend itself has no cap.
-- **Refinement rounds:** the modify stage is capped at three rounds (thesis §5.1).
-  The top-ranked probe is pre-selected by PBO, but you can pick any of the three.
-  A probe's position in the list is its PBO score order, not its distance — read
-  the `close` / `exploratory` / `far` badge for that.
+- **Refinement rounds:** the modify stage is capped at three rounds. Within a
+  round, PBO pre-picks one gallery reference per axis and you can change any of
+  them. References are shown `near` → `mid` → `far`, which is increasing distance
+  from the current result; the PBO score is a separate ranking shown on each card.
+- **Refine spends LLM calls:** one to read the feedback, one to compose the schema
+  per preview. Both fall back to deterministic rules if the model is unavailable,
+  which the UI reports as "read by rules" / a composition source of `rules`.
 - **Sessions are stored in memory.** Restarting the backend loses them; start over.
 - Generation parameters (width/height/batch/seed) come from the frontend, since the
   schema carries no resolution field. Default is 1024×1024.

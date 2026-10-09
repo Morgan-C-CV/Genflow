@@ -255,6 +255,8 @@ class RuntimeHypothesisView(BaseModel):
 
 
 class RuntimeProbeView(BaseModel):
+    """One gallery reference retrieved along one modification axis."""
+
     probe_id: str = ""
     summary: str = ""
     regime: str = ""
@@ -264,6 +266,25 @@ class RuntimeProbeView(BaseModel):
     preserve_axes: List[str] = Field(default_factory=list)
     score: float = 0.0
     rationale: List[str] = Field(default_factory=list)
+    axis: str = ""
+    # near / mid / far from the current result along the axis direction.
+    band: str = ""
+    gallery_index: int = -1
+    image_url: str = ""
+    alignment: float = 0.0
+    axis_distance: float = 0.0
+    reference_prompt: str = ""
+    reference_model: str = ""
+    reference_sampler: str = ""
+
+
+class RuntimeAxisGroupView(BaseModel):
+    """The three references proposed for one modification axis."""
+
+    axis: str = ""
+    query: str = ""
+    probes: List[RuntimeProbeView] = Field(default_factory=list)
+    selected_probe_id: str = ""
 
 
 class RuntimeModifyState(BaseModel):
@@ -279,7 +300,14 @@ class RuntimeModifyState(BaseModel):
     uncertainty: float = 0.0
     hypotheses: List[RuntimeHypothesisView] = Field(default_factory=list)
     probes: List[RuntimeProbeView] = Field(default_factory=list)
+    axis_groups: List[RuntimeAxisGroupView] = Field(default_factory=list)
     selected_probe_id: str = ""
+    # axis -> probe_id, one entry per dissatisfaction axis.
+    selected_probe_ids: Dict[str, str] = Field(default_factory=dict)
+    # "llm" when the interpretation model read the feedback, "rules" on fallback.
+    interpreted_by: str = ""
+    # The schema the preview composed; commit is what applies it.
+    composition: Dict[str, Any] = Field(default_factory=dict)
     preview: Dict[str, Any] = Field(default_factory=dict)
     committed_patch: Dict[str, Any] = Field(default_factory=dict)
     result: Dict[str, Any] = Field(default_factory=dict)

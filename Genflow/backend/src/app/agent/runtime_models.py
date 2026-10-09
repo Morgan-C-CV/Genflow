@@ -42,6 +42,10 @@ class ParsedFeedbackEvidence:
     uncertainty_estimate: float = 0.0
     raw_feedback: str = ""
     parser_notes: List[str] = field(default_factory=list)
+    # Per-axis retrieval query used to find gallery references along that axis.
+    axis_queries: Dict[str, str] = field(default_factory=dict)
+    # "llm" when the interpretation model read the feedback, "rules" on fallback.
+    interpreted_by: str = ""
 
 
 @dataclass
@@ -63,8 +67,15 @@ class PreviewProbe:
     preview_execution_spec: Dict[str, Any] = field(default_factory=dict)
     source_kind: str = ""
     # Hyper Candidate Strategy regime: "close", "exploratory" or "far".
-    # HCS draws three candidates at increasing distance from the current result.
     hcs_regime: str = ""
+    # A probe is a real gallery record retrieved along one modification axis:
+    # near / mid / far from the current result in that axis's direction.
+    axis: str = ""
+    band: str = ""
+    gallery_index: int = -1
+    alignment: float = 0.0
+    axis_distance: float = 0.0
+    record: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

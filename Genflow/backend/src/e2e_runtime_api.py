@@ -201,22 +201,23 @@ def run_episode(intent, label):
             )
 
 
-def run_modify_loop(label="SHIFT/MODIFY LOOP (thesis 4.3)"):
-    """feedback -> hypotheses -> 3 HCS probes -> preview -> commit -> execute -> verify."""
+def run_modify_loop(label="SHIFT/MODIFY LOOP (LLM axes -> gallery refs -> LLM compose)"):
+    """feedback -> LLM axes -> per-axis gallery references -> select -> LLM compose
+    -> commit -> execute -> verify."""
     print(f"\n=== {label} ===")
 
-    status, body = post("/showcase/modify", {"gallery_index": 12, "label": "Modify showcase"})
+    status, body = post("/showcase/modify", {"gallery_index": 12, "label": "Refine"})
     check("POST /showcase/modify -> 200", status == 200, f"HTTP {status}")
     if status != 200:
         print("   detail:", str(body)[:400])
         return
     session_id = body["session"]["session_id"]
     modify = body["modify"]
-    check("baseline schema present", bool(modify["baseline"]["schema"]["prompt"]))
+    check("current result schema present", bool(modify["baseline"]["schema"]["prompt"]))
     check("modify stage caps at three rounds", modify["max_rounds"] == 3, str(modify["max_rounds"]))
     check("starts at round 0", modify["round_index"] == 0, str(modify["round_index"]))
 
-    # --- Sigma0 -> Sigma2 ------------------------------------------------
+    # --- feedback -> axes -> references ----------------------------------
     status, body = post(
         f"/episodes/{session_id}/modify/feedback",
         {
@@ -231,50 +232,84 @@ def run_modify_loop(label="SHIFT/MODIFY LOOP (thesis 4.3)"):
         print("   detail:", str(body)[:400])
         return
     modify = body["modify"]
-    check("feedback parsed into dissatisfaction axes", len(modify["dissatisfaction_axes"]) > 0,
+
+    check("feedback split into axes", len(modify["dissatisfaction_axes"]) > 0,
           str(modify["dissatisfaction_axes"]))
+    check("interpretation recorded", modify["interpreted_by"] in {"llm", "rules"},
+          modify["interpreted_by"])
     check("preservation constraints captured", len(modify["preserve_constraints"]) > 0)
-    check("repair hypotheses built", len(modify["hypotheses"]) > 0,
-          f"{len(modify['hypotheses'])} hypotheses")
+    # "flat"/"washed out" name no axis, so only a semantic reading finds these.
+    if modify["interpreted_by"] == "llm":
+        check("semantic axes found (not just keywords)",
+              {"lighting_vibe", "color_palette"} & set(modify["dissatisfaction_axes"]),
+              str(modify["dissatisfaction_axes"]))
 
-    probes = modify["probes"]
-    check("HCS draws exactly three probes", len(probes) == 3, f"{len(probes)}")
-    regimes = [probe["regime"] for probe in probes]
-    check("regimes cover close/exploratory/far",
-          set(regimes) == {"close", "exploratory", "far"}, str(regimes))
-    check("probes are ranked by score (PBO argmax first)",
-          all(probes[i]["score"] >= probes[i + 1]["score"] for i in range(len(probes) - 1)),
-          str([probe["score"] for probe in probes]))
-    check("every probe carries a score rationale", all(probe["rationale"] for probe in probes))
-    for probe in probes:
-        print(f"  probe {probe['probe_id']} [{probe['regime']}] score={probe['score']:+.2f} "
-              f"family={probe['patch_family']}")
+    groups = modify["axis_groups"]
+    check("one reference group per axis", len(groups) == len(modify["dissatisfaction_axes"]),
+          f"{len(groups)} groups")
+    for group in groups:
+        axis = group["axis"]
+        probes = group["probes"]
+        check(f"{axis}: three references", len(probes) == 3, str(len(probes)))
+        check(f"{axis}: bands are near/mid/far",
+              [p["band"] for p in probes] == ["near", "mid", "far"],
+              str([p["band"] for p in probes]))
+        check(f"{axis}: references are real gallery images",
+              all(p["gallery_index"] >= 0 and p["image_url"] for p in probes),
+              str([p["gallery_index"] for p in probes]))
+        distances = [p["axis_distance"] for p in probes]
+        check(f"{axis}: distance increases along the axis", distances == sorted(distances), str(distances))
+        check(f"{axis}: retrieval query recorded", bool(group["query"]), group["query"][:60])
+        print(f"  {axis}: refs={[p['gallery_index'] for p in probes]} "
+              f"distances={[round(d, 2) for d in distances]} bands={[p['band'] for p in probes]}")
 
-    # --- Sigma2 -> Sigma3 -> Sigma4 --------------------------------------
-    chosen = probes[0]["probe_id"]
-    status, body = post(f"/episodes/{session_id}/modify/select", {"probe_id": chosen})
+    check("PBO pre-picked one reference per axis",
+          len(modify["selected_probe_ids"]) == len(groups), str(modify["selected_probe_ids"]))
+
+    # --- select: override PBO on the first axis --------------------------
+    group = groups[0]
+    override = next(p for p in group["probes"] if p["band"] == "near")
+    status, body = post(f"/episodes/{session_id}/modify/select", {"probe_id": override["probe_id"]})
     check("POST /modify/select -> 200", status == 200, f"HTTP {status}")
     modify = body["modify"]
-    check("selected probe recorded", modify["selected_probe_id"] == chosen, modify["selected_probe_id"])
-    schema_before = json.dumps(modify["baseline"]["schema"], sort_keys=True)
+    check("selection is per axis",
+          modify["selected_probe_ids"].get(group["axis"]) == override["probe_id"],
+          f"{group['axis']} -> {modify['selected_probe_ids'].get(group['axis'])}")
 
+    # --- preview: LLM composes one schema, committed state untouched -----
+    schema_before = json.dumps(modify["baseline"]["schema"], sort_keys=True)
     status, body = post(f"/episodes/{session_id}/modify/preview")
     check("POST /modify/preview -> 200", status == 200, f"HTTP {status}")
+    if status != 200:
+        print("   detail:", str(body)[:400])
+        return
     modify = body["modify"]
+    composition = modify.get("composition") or {}
+    check("composition produced", bool(composition.get("schema")),
+          str(composition.get("source")))
+    check("composition names its source", composition.get("source") in {"llm", "rules"},
+          str(composition.get("source")))
+    check("composition changed something", bool(composition.get("differs_from_committed")),
+          str(composition.get("differs_from_committed")))
     check("preview produced a payload", bool(modify["preview"].get("probe_id")))
     check(
-        "preview leaves the committed schema untouched (thesis 4.3.4)",
+        "preview leaves the committed schema untouched",
         json.dumps(modify["baseline"]["schema"], sort_keys=True) == schema_before,
     )
+    if composition.get("source") == "llm":
+        check("composed prompt is non-trivial", len(composition["schema"]["prompt"]) > 20)
 
-    # --- Sigma4 -> Sigma5 -> Sigma6 -> Sigma7 ----------------------------
+    # --- commit applies the composition ----------------------------------
     status, body = post(f"/episodes/{session_id}/modify/commit")
     check("POST /modify/commit -> 200", status == 200, f"HTTP {status}")
     modify = body["modify"]
-    check("patch committed", bool(modify["committed_patch"].get("patch_id")),
+    check("commit recorded a patch", bool(modify["committed_patch"].get("patch_id")),
           str(modify["committed_patch"].get("patch_id")))
     check("commit changed the schema",
           json.dumps(modify["baseline"]["schema"], sort_keys=True) != schema_before)
+    if composition.get("schema"):
+        check("committed schema is the composition",
+              modify["baseline"]["schema"]["prompt"] == composition["schema"]["prompt"])
 
     status, body = post(f"/episodes/{session_id}/modify/execute")
     check("POST /modify/execute -> 200", status == 200, f"HTTP {status}")
@@ -299,8 +334,9 @@ def run_modify_loop(label="SHIFT/MODIFY LOOP (thesis 4.3)"):
         if status != 200:
             check(f"round {round_no} feedback accepted", False, f"HTTP {status}")
             return
-        probe_id = body["modify"]["probes"][0]["probe_id"]
-        post(f"/episodes/{session_id}/modify/select", {"probe_id": probe_id})
+        first_group = body["modify"]["axis_groups"][0]
+        post(f"/episodes/{session_id}/modify/select",
+             {"probe_id": first_group["probes"][0]["probe_id"]})
         post(f"/episodes/{session_id}/modify/preview")
         post(f"/episodes/{session_id}/modify/commit")
         post(f"/episodes/{session_id}/modify/execute")

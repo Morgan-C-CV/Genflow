@@ -208,7 +208,11 @@ export interface ModifyHypothesis {
   rank: number;
 }
 
-/** One Hyper Candidate Strategy probe: close, exploratory or far. */
+/**
+ * One retrieved gallery reference: a real gallery record picked along one
+ * modification axis. `band` says how far it sits from the current result in
+ * that axis direction (near -> mid -> far).
+ */
 export interface ModifyProbe {
   probe_id: string;
   summary: string;
@@ -219,6 +223,57 @@ export interface ModifyProbe {
   preserve_axes: string[];
   score: number;
   rationale: string[];
+  /** The dissatisfaction axis this reference was retrieved for. */
+  axis: string;
+  /** "near" | "mid" | "far" — proximity along the axis direction. */
+  band: string;
+  gallery_index: number;
+  /** Real gallery image, e.g. `/api/v1/gallery/image/77?w=640`. */
+  image_url: string;
+  /** Cosine similarity between the gallery record and the axis query. */
+  alignment: number;
+  /** Distance from the current result along the axis direction. */
+  axis_distance: number;
+  reference_prompt: string;
+  reference_model: string;
+  reference_sampler: string;
+}
+
+/** One dissatisfaction axis and the three references retrieved along it. */
+export interface ModifyAxisGroup {
+  axis: string;
+  /** The LLM's retrieval query for this axis. */
+  query: string;
+  /** Exactly three references, sorted near -> mid -> far. */
+  probes: ModifyProbe[];
+  /** PBO's pre-pick for this axis. */
+  selected_probe_id: string;
+}
+
+/** The schema the preview composed (mirrors the normalized pipeline schema). */
+export interface ModifyCompositionSchema {
+  prompt: string;
+  negative_prompt: string;
+  cfgscale: string;
+  steps: string;
+  sampler: string;
+  seed: string;
+  model: string;
+  clipskip: string;
+  style: string[];
+  lora: string[];
+}
+
+/**
+ * The unified schema the preview composed from the selected references.
+ * `composition` is `{}` until preview has run.
+ */
+export interface ModifyComposition {
+  /** "llm" when the composition model wrote the schema, "rules" on fallback. */
+  source: string;
+  schema: ModifyCompositionSchema;
+  /** Schema fields that differ from the committed schema. */
+  differs_from_committed: string[];
 }
 
 export interface ModifyState {
@@ -232,7 +287,15 @@ export interface ModifyState {
   uncertainty: number;
   hypotheses: ModifyHypothesis[];
   probes: ModifyProbe[];
+  /** One group per dissatisfaction axis, each with three references. */
+  axis_groups: ModifyAxisGroup[];
   selected_probe_id: string;
+  /** axis -> probe_id: the current pick for every axis. */
+  selected_probe_ids: Record<string, string>;
+  /** "llm" when the interpretation model read the feedback, "rules" on fallback. */
+  interpreted_by: string;
+  /** `{}` until the preview step composes a schema. */
+  composition: ModifyComposition | Record<string, never>;
   preview: Record<string, any>;
   committed_patch: Record<string, any>;
   result: Record<string, any>;

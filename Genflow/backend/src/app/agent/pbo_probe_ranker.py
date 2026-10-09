@@ -150,4 +150,10 @@ def _clone_probe_with_pbo_annotations(
         preview_execution_spec=preview_execution_spec,
         source_kind=probe.source_kind,
         hcs_regime=probe.hcs_regime,
+        axis=probe.axis,
+        band=probe.band,
+        gallery_index=probe.gallery_index,
+        alignment=probe.alignment,
+        axis_distance=probe.axis_distance,
+        record=dict(probe.record),
     )

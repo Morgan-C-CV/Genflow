@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse
 from app.agent.memory import AgentMemoryService, AgentSessionState
 from app.agent.runtime_models import PreviewProbe
 from app.agent.runtime_schemas import (
+    RuntimeAxisGroupView,
     ComfyUIStatusResponse,
     RuntimeCandidatesRequest,
     RuntimeCandidatesResponse,
@@ -95,6 +96,8 @@ def get_runtime_service():
 
 def _build_runtime_service():
     from app.agent.feedback_parser import FeedbackParser
+    from app.agent.refine_intent_interpreter import RefineIntentInterpreter
+    from app.agent.refine_schema_composer import RefineSchemaComposer
     from app.agent.patch_planner import PatchPlanner
     from app.agent.probe_generator import PreviewProbeGenerator
     from app.agent.repair_hypothesis import RepairHypothesisBuilder
@@ -120,6 +123,8 @@ def _build_runtime_service():
         search_service=SearchService(search_repo=search_repo, llm_repo=LLMRepository()),
         execution_adapter=ResultExecutor(),
         feedback_parser=FeedbackParser(),
+        intent_interpreter=RefineIntentInterpreter(),
+        schema_composer=RefineSchemaComposer(),
         hypothesis_builder=RepairHypothesisBuilder(),
         probe_generator=PreviewProbeGenerator(),
         patch_planner=PatchPlanner(),
@@ -208,6 +213,23 @@ def _image_url_for(gallery_index: int) -> str:
     # The dedicated gallery route serves a cached thumbnail without touching the
     # embedding stack, so grids render fast even before the search service is warm.
     return gallery_catalog.image_url(gallery_index)
+
+
+def _schema_diff(before, after) -> List[str]:
+    """Names of the schema fields the composition actually changes."""
+    fields = (
+        "prompt",
+        "negative_prompt",
+        "cfgscale",
+        "steps",
+        "sampler",
+        "seed",
+        "model",
+        "clipskip",
+        "style",
+        "lora",
+    )
+    return [name for name in fields if getattr(before, name) != getattr(after, name)]
 
 
 def _candidate_view(service, gallery_index: int, slot: int, group_index: int, group_label: str) -> RuntimeCandidateView:
@@ -646,17 +668,48 @@ MODIFY_MAX_ROUNDS = 3
 
 def _probe_view(probe: PreviewProbe) -> RuntimeProbeView:
     spec = probe.preview_execution_spec or {}
+    record = dict(probe.record or {})
     return RuntimeProbeView(
         probe_id=probe.probe_id,
         summary=probe.summary,
-        regime=probe.hcs_regime or str(spec.get("hcs_regime", "")),
+        regime=probe.hcs_regime or probe.band or str(spec.get("hcs_regime", "")),
         patch_family=str(spec.get("patch_family", "")),
         source_kind=probe.source_kind,
         target_axes=list(probe.target_axes),
         preserve_axes=list(probe.preserve_axes),
         score=float(spec.get("pbo_score", 0.0) or 0.0),
         rationale=[str(item) for item in (spec.get("pbo_rationale") or [])],
+        axis=probe.axis,
+        band=probe.band,
+        gallery_index=probe.gallery_index,
+        image_url=_image_url_for(probe.gallery_index) if probe.gallery_index >= 0 else "",
+        alignment=probe.alignment,
+        axis_distance=probe.axis_distance,
+        reference_prompt=str(record.get("prompt", "")),
+        reference_model=str(record.get("model", "")),
+        reference_sampler=str(record.get("sampler", "")),
     )
+
+
+def _axis_groups_view(session: AgentSessionState) -> List[RuntimeAxisGroupView]:
+    """Group the ranked probes by axis, remembering each axis's current pick."""
+    groups: Dict[str, RuntimeAxisGroupView] = {}
+    for probe in session.preview_probe_candidates:
+        axis = probe.axis or "style"
+        group = groups.get(axis)
+        if group is None:
+            group = RuntimeAxisGroupView(axis=axis, query=session.parsed_feedback.axis_queries.get(axis, ""))
+            groups[axis] = group
+        group.probes.append(_probe_view(probe))
+    for axis, probe in session.selected_probes.items():
+        if axis in groups:
+            groups[axis].selected_probe_id = probe.probe_id
+    # Probes arrive ranked by PBO score; present them near -> mid -> far so the
+    # three references read as increasing distance, which is what they mean.
+    order = {"near": 0, "mid": 1, "far": 2}
+    for group in groups.values():
+        group.probes.sort(key=lambda probe: order.get(probe.band, 99))
+    return list(groups.values())
 
 
 def _modify_view(session: AgentSessionState) -> RuntimeModifyState:
@@ -693,7 +746,23 @@ def _modify_view(session: AgentSessionState) -> RuntimeModifyState:
             for item in session.repair_hypotheses
         ],
         probes=[_probe_view(item) for item in session.preview_probe_candidates],
+        axis_groups=_axis_groups_view(session),
         selected_probe_id=session.selected_probe.probe_id,
+        selected_probe_ids={
+            axis: probe.probe_id for axis, probe in session.selected_probes.items()
+        },
+        interpreted_by=evidence.interpreted_by,
+        composition=(
+            {
+                "source": session.composed_schema_source,
+                "schema": _to_serializable(session.composed_schema),
+                "differs_from_committed": _schema_diff(
+                    session.current_schema, session.composed_schema
+                ),
+            }
+            if session.composed_schema_source
+            else {}
+        ),
         preview=preview,
         committed_patch=(
             _to_serializable(session.accepted_patch) if session.accepted_patch.patch_id else {}

@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
     LLM_REQUEST_TIMEOUT: float = float(os.getenv("LLM_REQUEST_TIMEOUT", "300"))
+    # Refine falls back to the deterministic patch planner when the model is
+    # slow, so a long hang is worse than a prompt fallback. Kept separate from
+    # LLM_REQUEST_TIMEOUT, which also governs schema generation.
+    REFINE_COMPOSITION_TIMEOUT: float = float(os.getenv("REFINE_COMPOSITION_TIMEOUT", "120"))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

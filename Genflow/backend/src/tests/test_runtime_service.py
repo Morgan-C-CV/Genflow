@@ -857,7 +857,11 @@ class RuntimeServiceTest(unittest.TestCase):
         session = service.preview_selected_probe(session.session_id)
         session = service.commit_patch(session.session_id)
 
-        self.assertEqual(session.accepted_patch.patch_id, "cp_p_002")
+        # Preview composes a schema and commit applies it, so the accepted patch is
+        # the composition. The ranked schema patch candidate stays tracked, and is
+        # still what the commit-authority selector compares against the graph.
+        self.assertTrue(session.accepted_patch.patch_id.startswith("composed-"))
+        self.assertEqual(session.composed_schema_source, "rules")
         self.assertEqual(len(session.patch_history), 1)
         self.assertEqual(session.top_schema_patch_candidate.patch_id, "cp_p_002")
         self.assertTrue(session.top_workflow_graph_patch_candidate.candidate_id)
@@ -867,13 +871,19 @@ class RuntimeServiceTest(unittest.TestCase):
             session.top_workflow_graph_patch_candidate.candidate_id,
         )
         self.assertTrue(session.selected_workflow_graph_patch.patch_id)
-        self.assertIn("pbo_score", session.accepted_patch.metadata)
-        self.assertIn("pbo_rationale", session.accepted_patch.metadata)
-        self.assertEqual(session.current_workflow_graph_patch.patch_id, "cp_p_002")
+        # PBO evidence belongs to the ranked schema candidate; the accepted patch
+        # is the composition the preview produced.
+        self.assertIn("pbo_score", session.top_schema_patch_candidate.metadata)
+        self.assertIn("pbo_rationale", session.top_schema_patch_candidate.metadata)
+        # The graph patch mirrors the committed patch, which is now the composition.
+        self.assertEqual(
+            session.current_workflow_graph_patch.patch_id,
+            session.accepted_patch.patch_id,
+        )
         self.assertTrue(session.current_workflow_graph_patch.edge_patches)
         self.assertTrue(session.current_workflow_graph_patch.region_patches)
         self.assertIn("graph_native_aligned_winner", session.accepted_patch.metadata)
-        self.assertEqual(session.accepted_patch.patch_id, session.top_schema_patch_candidate.patch_id)
+        self.assertTrue(session.accepted_patch.patch_id.startswith("composed-"))
         self.assertEqual(session.commit_execution_mode, "graph_native_execution_handoff")
         self.assertEqual(session.commit_execution_authority, "graph_authoritative")
         self.assertEqual(session.commit_execution_implementation_mode, "graph_primary_execution")

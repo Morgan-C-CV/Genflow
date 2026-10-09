@@ -127,6 +127,8 @@ def build_execution_adapter(mode: str = "mock", backend_client=None):
 def build_runtime_service(execution_mode: str = "mock", backend_client=None) -> "AgentRuntimeService":
     from app.agent.feedback_parser import FeedbackParser
     from app.agent.patch_planner import PatchPlanner
+    from app.agent.refine_intent_interpreter import RefineIntentInterpreter
+    from app.agent.refine_schema_composer import RefineSchemaComposer
     from app.agent.probe_generator import PreviewProbeGenerator
     from app.agent.repair_hypothesis import RepairHypothesisBuilder
     from app.agent.runtime_service import AgentRuntimeService
@@ -145,6 +147,10 @@ def build_runtime_service(execution_mode: str = "mock", backend_client=None) -> 
         probe_generator=PreviewProbeGenerator(),
         patch_planner=PatchPlanner(),
         verifier=Verifier(),
+        # Refine reads feedback and composes schemas with the model; the rule
+        # parser and patch planner remain the fallbacks.
+        intent_interpreter=RefineIntentInterpreter(),
+        schema_composer=RefineSchemaComposer(),
     )
 
 
