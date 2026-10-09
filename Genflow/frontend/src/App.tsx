@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "./api";
 import CandidatesStage from "./components/CandidatesStage";
 import ClarifyStage from "./components/ClarifyStage";
@@ -40,7 +40,16 @@ function imageUrlFor(galleryIndex: number): string {
   return `/api/v1/gallery/image/${galleryIndex}?w=768`;
 }
 
-export default function App() {
+interface AppProps {
+  /**
+   * Refine operates on an existing result, so the refine entry point seeds one
+   * from a gallery record and opens straight into the modify stage. The rest of
+   * the app is unchanged.
+   */
+  seedRefineFromGallery?: boolean;
+}
+
+export default function App({ seedRefineFromGallery = false }: AppProps) {
   const [stage, setStage] = useState<Stage>("compose");
   const [session, setSession] = useState<RuntimeSession | null>(null);
   const [plan, setPlan] = useState<RuntimePlan | null>(null);
@@ -106,6 +115,62 @@ export default function App() {
   useEffect(() => {
     void refreshComfyStatus();
   }, [refreshComfyStatus]);
+
+  // /showcase/refine: refine acts on an existing result, so seed one from a
+  // gallery record (override with ?start=<index>) and open the modify stage.
+  // StrictMode invokes effects twice, so the request is created once and both
+  // invocations subscribe to the same promise; the backend sees a single call.
+  const seedPromiseRef = useRef<Promise<{
+    session: RuntimeSession;
+    modify: ModifyState;
+    plan: RuntimePlan;
+  }> | null>(null);
+
+  useEffect(() => {
+    if (!seedRefineFromGallery) return;
+
+    if (!seedPromiseRef.current) {
+      seedPromiseRef.current = (async () => {
+        const requested = Number.parseInt(
+          new URLSearchParams(window.location.search).get("start") ?? "",
+          10,
+        );
+        let index: number | null = Number.isFinite(requested) ? requested : null;
+        if (index === null) {
+          const { total } = await api.galleryCount();
+          index = total > 0 ? Math.floor(Math.random() * total) : null;
+        }
+
+        const seeded = await api.startRefineFromGallery(index);
+        const episode = await api.episode(seeded.session.session_id);
+        return {
+          session: seeded.session,
+          modify: seeded.modify,
+          plan: episode.plan,
+        };
+      })();
+    }
+
+    let active = true;
+    seedPromiseRef.current
+      .then((data) => {
+        if (!active) return;
+        setSession(data.session);
+        setModify(data.modify);
+        setPlan(data.plan);
+        setStage("modify");
+      })
+      .catch((error) => {
+        if (!active) return;
+        log("system", describeError(error, "Could not open the refine loop."), {
+          tone: "error",
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [seedRefineFromGallery, describeError, log]);
 
   // Poll ComfyUI for rendered images once a prompt has been queued.
   useEffect(() => {

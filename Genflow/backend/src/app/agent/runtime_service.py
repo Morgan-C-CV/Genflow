@@ -305,7 +305,7 @@ class AgentRuntimeService:
     def start_showcase_session(
         self,
         gallery_indices: Optional[list[int]] = None,
-        label: str = "Refine showcase",
+        label: str = "Refine",
         size: int = 16,
     ) -> AgentSessionState:
         """Create a session over hand-picked gallery images.
@@ -343,8 +343,8 @@ class AgentRuntimeService:
             next_action="retrieve_resources",
             clarification_questions=[],
             reasoning_summary=(
-                "Showcase session: the candidate wall was supplied directly, so the "
-                "preference search runs without the planner or retrieval pipeline."
+                "The candidate wall was supplied directly, so the preference search "
+                "runs without the planner or retrieval pipeline."
             ),
         )
 
@@ -352,14 +352,14 @@ class AgentRuntimeService:
         session.latest_wall = CandidateWall(
             groups=groups,
             flat_indices=list(requested),
-            query_labels=[f"Showcase group {position}" for position in range(1, len(groups) + 1)],
+            query_labels=[f"Group {position}" for position in range(1, len(groups) + 1)],
         )
         return self.memory_service.save_session(session)
 
     def start_showcase_modify_session(
         self,
         gallery_index: Optional[int] = None,
-        label: str = "Modify showcase",
+        label: str = "Refine",
     ) -> AgentSessionState:
         """Create a session with a baseline result to modify.
 
@@ -398,7 +398,7 @@ class AgentRuntimeService:
             lora=[],
         )
         summary = (
-            f"Showcase baseline from gallery index {index}: "
+            f"Current result from gallery index {index}: "
             f"model={schema.model}, sampler={schema.sampler}."
         )
 
@@ -413,17 +413,17 @@ class AgentRuntimeService:
             next_action="modify",
             clarification_questions=[],
             reasoning_summary=(
-                "Showcase session: the baseline schema came from a gallery record, so "
-                "the shift/modify loop runs without the planner."
+                "The current result was taken from the selected reference, so the "
+                "modify loop can refine it directly."
             ),
         )
         session.selected_gallery_index = index
         session.current_schema = schema
         session.current_schema_raw = json.dumps(schema.__dict__, ensure_ascii=False)
-        session.current_result_id = f"showcase-{index}"
+        session.current_result_id = f"result-{index}"
         session.current_result_payload = ResultPayload(
-            result_id=f"showcase-{index}",
-            result_type="showcase_baseline",
+            result_id=f"result-{index}",
+            result_type="current_result",
             content={
                 "gallery_index": index,
                 "image_url": f"/api/v1/gallery/image/{index}?w=768",
@@ -433,7 +433,7 @@ class AgentRuntimeService:
         session.previous_result_summary = ResultSummary(summary_text=summary)
         session.accepted_results.append(session.current_result_payload)
         session.modify_stage = "baseline"
-        self._sync_workflow_state(session, execution_kind="showcase_baseline", preview=False)
+        self._sync_workflow_state(session, execution_kind="current_result", preview=False)
         return self.memory_service.save_session(session)
 
     def advance_modify_round(self, session_id: str) -> AgentSessionState:

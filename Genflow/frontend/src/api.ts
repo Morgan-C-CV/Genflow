@@ -9,7 +9,6 @@
 import type {
   CandidatesResponse,
   ComfyStatus,
-  GalleryListing,
   ModifyResponse,
   PlanResponse,
   PromptResult,
@@ -17,7 +16,6 @@ import type {
   ResultResponse,
   SchemaResponse,
   SelectResponse,
-  ShowcaseResponse,
   StartResponse,
   WorkflowOptions,
   WorkflowResponse,
@@ -155,22 +153,28 @@ export const api = {
     return request<ComfyStatus>("/runtime/comfyui/status");
   },
 
-  /** Gallery listings are served without warming the embedding stack. */
-  galleryImages(limit = 48, offset = 0) {
-    return request<GalleryListing>(
-      `/gallery/images?limit=${limit}&offset=${offset}`,
+  /** Number of records in the gallery. */
+  galleryCount() {
+    return request<{ total: number }>("/gallery/images?limit=1");
+  },
+
+  /** Session snapshot including its plan, used to restore the side panel. */
+  episode(sessionId: string) {
+    return request<PlanResponse>(
+      `/runtime/episodes/${encodeURIComponent(sessionId)}`,
     );
   },
 
-  /** Planner-free session over hand-picked gallery images (showcase pages). */
-  startShowcaseEpisode(galleryIndices: number[], label = "Refine showcase") {
-    return request<ShowcaseResponse>("/runtime/showcase/episode", {
+  /**
+   * Refine acts on an existing result, so one has to exist before the loop can
+   * start. This seeds it from a gallery record: that record's prompt, sampler and
+   * model become the current schema and result. Everything after this point is
+   * the ordinary modify flow.
+   */
+  startRefineFromGallery(galleryIndex: number | null) {
+    return request<ModifyResponse>("/runtime/showcase/modify", {
       method: "POST",
-      body: JSON.stringify({
-        gallery_indices: galleryIndices,
-        label,
-        size: Math.max(galleryIndices.length, 16),
-      }),
+      body: JSON.stringify({ gallery_index: galleryIndex, label: "Refine" }),
     });
   },
 
@@ -222,13 +226,5 @@ export const api = {
       `/runtime/episodes/${encodeURIComponent(sessionId)}/modify/verify`,
       { method: "POST" },
     );
-  },
-
-  /** Baseline session for the modify walkthrough (no planner, no LLM). */
-  startShowcaseModify(galleryIndex: number | null, label = "Modify showcase") {
-    return request<ModifyResponse>("/runtime/showcase/modify", {
-      method: "POST",
-      body: JSON.stringify({ gallery_index: galleryIndex, label }),
-    });
   },
 };

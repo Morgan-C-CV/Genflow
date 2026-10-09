@@ -7,6 +7,7 @@ runnable ComfyUI workflow.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -61,6 +62,7 @@ from app.services.comfyui_service import ComfyUIService
 router = APIRouter()
 
 _runtime_service = None
+_runtime_service_lock = threading.Lock()
 _comfy_service: Optional[ComfyUIService] = None
 
 
@@ -74,11 +76,24 @@ def get_runtime_service():
 
     Mirrors ``run_agent_demo.build_runtime_service`` without importing the CLI
     script, so the API layer only depends on ``app.*``.
+
+    The lock matters: construction loads CLIP onto MPS, and two concurrent
+    first requests would otherwise compile the same Metal kernels from two
+    threads. Apple's MPS kernel DAG raises an Objective-C exception when that
+    happens, which aborts the whole process rather than raising in Python.
     """
     global _runtime_service
     if _runtime_service is not None:
         return _runtime_service
 
+    with _runtime_service_lock:
+        if _runtime_service is not None:
+            return _runtime_service
+        _runtime_service = _build_runtime_service()
+    return _runtime_service
+
+
+def _build_runtime_service():
     from app.agent.feedback_parser import FeedbackParser
     from app.agent.patch_planner import PatchPlanner
     from app.agent.probe_generator import PreviewProbeGenerator
@@ -99,7 +114,7 @@ def get_runtime_service():
         tools_service=AgentToolsService(creative_agent=CreativeAgent(), search_repo=search_repo),
         memory_service=memory,
     )
-    _runtime_service = AgentRuntimeService(
+    return AgentRuntimeService(
         memory_service=memory,
         orchestration_service=orchestration,
         search_service=SearchService(search_repo=search_repo, llm_repo=LLMRepository()),
@@ -110,7 +125,6 @@ def get_runtime_service():
         patch_planner=PatchPlanner(),
         verifier=Verifier(),
     )
-    return _runtime_service
 
 
 def get_comfy_service() -> ComfyUIService:

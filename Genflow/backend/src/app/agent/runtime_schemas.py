@@ -231,7 +231,7 @@ class RuntimeShowcaseRequest(BaseModel):
     """Hand-picked gallery images for a planner-free refinement session."""
 
     gallery_indices: List[int] = Field(default_factory=list)
-    label: str = "Refine showcase"
+    label: str = "Refine"
     size: int = Field(default=16, ge=2, le=64)
 
 
@@ -306,4 +306,4 @@ class RuntimeShowcaseModifyRequest(BaseModel):
     """Baseline gallery record to modify, for the planner-free walkthrough."""
 
     gallery_index: Optional[int] = Field(default=None, ge=0)
-    label: str = "Modify showcase"
+    label: str = "Refine"

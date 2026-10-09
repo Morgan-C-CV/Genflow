@@ -197,23 +197,6 @@ export interface RemediationItem {
   message: string;
 }
 
-export interface GalleryImage {
-  index: number;
-  id: string;
-  url: string;
-}
-
-export interface GalleryListing {
-  total: number;
-  offset: number;
-  images: GalleryImage[];
-}
-
-export interface ShowcaseResponse {
-  session: RuntimeSession;
-  wall: RuntimeWall;
-}
-
 /* ---------- shift/modify refinement loop (thesis 4.3) ---------- */
 
 export interface ModifyHypothesis {

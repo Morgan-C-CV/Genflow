@@ -1,21 +1,18 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { usePathname } from "./router";
-import ModifyShowcase from "./showcase/ModifyShowcase";
 import "./styles.css";
 
-/** Two entry points: the studio, and the refine showcase. */
-function Root() {
-  const path = usePathname();
-  if (path === "/showcase/refine" || path === "/showcase/modify") {
-    return <ModifyShowcase />;
-  }
-  return <App />;
-}
+/**
+ * `/showcase/refine` renders the same app as `/`. Refine needs an existing result
+ * to act on, so that entry point seeds one from a gallery record and opens the
+ * modify stage directly; nothing else differs.
+ */
+const path = window.location.pathname.replace(/\/+$/, "");
+const seedRefineFromGallery = path === "/showcase/refine";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <Root />
+    <App seedRefineFromGallery={seedRefineFromGallery} />
   </React.StrictMode>
 );
